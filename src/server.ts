@@ -1,15 +1,6 @@
-import app from "./index.js"
-import dotenv from "dotenv"
-dotenv.config()
+import app from "./index";
+const PORT = process.env.PORT || 5000;
 
-
-const port = process.env.PORT || 4000
-
-
-app.get("/", (req, res) => {
-  res.send("Server is sakib sarkar running!")
-})
-
-app.listen(port, () => {
-  console.log("Server running on port 5000")
-})
+app.listen(PORT, () => {
+  console.log(`✅ Server is running at http://localhost:${PORT}`);
+});
