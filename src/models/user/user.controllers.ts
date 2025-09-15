@@ -3,7 +3,7 @@ import User from "../user/user.model";
 import type { IUser } from "../user/user.model";
 import generateToken from "../../utils/genaretetoken";
 
-// Cookie options
+// Cookie 
 const cookieOptions = {
   httpOnly: true, 
   secure: process.env.NODE_ENV === "production", 
@@ -25,14 +25,14 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     const user: IUser = await User.create({ name, email, password });
     const token = generateToken(user.id);
 
-    // Set token in cookie
+    //  cookie
     res.cookie("token", token, cookieOptions);
 
     res.status(201).json({
       id: user._id,
       name: user.name,
       email: user.email,
-      isAdmin: user.isAdmin,
+      role: user.role,
     });
   } catch (error: any) {
     res.status(500).json({ message: error.message });
@@ -55,7 +55,7 @@ export const authUser = async (req: Request, res: Response): Promise<void> => {
         id: user._id,
         name: user.name,
         email: user.email,
-        isAdmin: user.isAdmin,
+        role: user.role,
       });
     } else {
       res.status(401).json({ message: "Invalid email or password" });

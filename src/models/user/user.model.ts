@@ -1,20 +1,92 @@
-import mongoose, { Document, Schema } from "mongoose";
+import mongoose, { Document, Schema , Types  } from "mongoose";
 import bcrypt from "bcryptjs";
 
 export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
-  isAdmin: boolean;
+  mobile?: number | null;
+  refresh_token?: string;
+  verify_email?: boolean;
+  last_login_date?: Date | null;
+  status: "Active" | "Inactive" | "Suspended";
+  address_details: Types.ObjectId[];
+  shopping_cart: Types.ObjectId[];
+  orderHistory: Types.ObjectId[];
+  forgot_password_otp?: string | null;
+  forgot_password_expiry?: Date | null;
+  role: "ADMIN" | "USER";
+  createdAt?: Date;
+  updatedAt?: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
 const userSchema: Schema<IUser> = new mongoose.Schema(
   {
-    name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    isAdmin: { type: Boolean, default: false },
+    name: { 
+      type: String,
+       required: true 
+      },
+    email: { 
+      type: String,
+      required: true,
+      unique: true },
+    password: { 
+      type: String, 
+      required: true
+     },
+    mobile : {
+        type : Number,
+        default : null
+    },
+    refresh_token : {
+        type : String,
+        default : ""
+    },
+    verify_email : {
+        type : Boolean,
+        default : false
+    },
+    last_login_date : {
+        type : Date,
+        default : ""
+    },
+    status : {
+        type : String,
+        enum : ["Active","Inactive","Suspended"],
+        default : "Active"
+    },
+    address_details : [
+        {
+            type : mongoose.Schema.ObjectId,
+            ref : 'address'
+        }
+    ],
+    shopping_cart : [
+        {
+            type : mongoose.Schema.ObjectId,
+            ref : 'cartProduct'
+        }
+    ],
+    orderHistory : [
+        {
+            type : mongoose.Schema.ObjectId,
+            ref : 'order'
+        }
+    ],
+    forgot_password_otp : {
+        type : String,
+        default : null
+    },
+    forgot_password_expiry : {
+        type : Date,
+        default : ""
+    },
+    role : {
+        type : String,
+        enum : ['ADMIN',"USER"],
+        default : "USER"
+    }
   },
   { timestamps: true }
 );
