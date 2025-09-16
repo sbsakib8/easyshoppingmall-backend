@@ -2,7 +2,6 @@ import { Document, Types } from "mongoose";
 
 export interface IProduct extends Document {
   name: string;
-  sku?: string;  // SKU field
   image: string[];
   category: Types.ObjectId[];
   subCategory: Types.ObjectId[];
