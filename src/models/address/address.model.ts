@@ -1,8 +1,6 @@
 import mongoose, { Document, Schema, Model } from "mongoose";
 import { IAddress } from "./interface";
 
-
-
 const addressSchema = new Schema<IAddress>(
   {
     address_line: {

@@ -63,7 +63,6 @@ const orderSchema = new Schema<IOrder>(
   }
 );
 
-// 3. Pre-save hook: auto-calc totals
 orderSchema.pre("save", function (next) {
   if (this.products && this.products.length > 0) {
     this.products.forEach((p) => {
