@@ -18,7 +18,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
     const userExists = await User.findOne({ email });
     if (userExists) {
-      res.status(400).json({ message: "User already exists" });
+      res.status(400).json({ message: "User already exists", success: false });
       return;
     }
 
@@ -29,11 +29,13 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     res.cookie("token", token, cookieOptions);
 
     res.status(201).json({
+       success: true,       
+        message: "User registered successfully",
       id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
-    });
+    },);
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }
@@ -48,10 +50,11 @@ export const authUser = async (req: Request, res: Response): Promise<void> => {
     if (user && (await user.comparePassword(password))) {
       const token = generateToken(user.id);
 
-      // Set token in cookie
       res.cookie("token", token, cookieOptions);
 
       res.json({
+        success: true,       
+        message: "User Signin successfully",
         id: user._id,
         name: user.name,
         email: user.email,

@@ -5,7 +5,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
-  mobile?: number | null;
+  mobile?: string | null;
   refresh_token?: string;
   verify_email?: boolean;
   last_login_date?: Date | null;
@@ -36,7 +36,7 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
       required: true
      },
     mobile : {
-        type : Number,
+        type : String,
         default : null
     },
     refresh_token : {

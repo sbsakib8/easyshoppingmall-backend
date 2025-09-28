@@ -1,5 +1,6 @@
 import express from "express"
 import type { Application, Request, Response } from "express";
+import cors from "cors";
 import connectDB from "./config/db.connect";
 import userRoutes from "./models/user/user.routs";
 import cookieParser from "cookie-parser";
@@ -9,6 +10,12 @@ import addressRouter from "./models/address/address.routs";
 const app: Application = express();
 app.use(express.json());
 app.use(cookieParser());
+app.use(cors(
+  {
+    origin: ["http://localhost:3000","https://easyshopingmall-b14r.vercel.app/"],
+    credentials: true,
+  }
+));
 // mongodb 
 connectDB()
 
