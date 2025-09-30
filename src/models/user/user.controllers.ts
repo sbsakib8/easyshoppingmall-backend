@@ -3,7 +3,8 @@ import User from "../user/user.model";
 import type { IUser } from "../user/user.model";
 import generateToken from "../../utils/genaretetoken";
 import { sendEmail } from "../../utils/nodemailer";
-import bcrypt from "bcryptjs";
+import { AuthRequest } from "../../middlewares/isauth";
+
 // Cookie 
 const cookieOptions = {
   httpOnly: true, 
@@ -25,9 +26,14 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
 
     const user: IUser = await User.create({ name, email, password });
     const token = generateToken(user._id.toString());
-
     //  cookie
-    res.cookie("token", token, cookieOptions);
+     res.cookie("token", token,{
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production", 
+    sameSite: "lax", 
+    maxAge: 30 * 24 * 60 * 60 * 1000, 
+  });;
+
 
     res.status(201).json({
        success: true,       
@@ -59,7 +65,12 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
     }   
       const token = generateToken(user._id.toString());
 
-      res.cookie("token", token, cookieOptions);
+      res.cookie("token", token,{
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production", 
+    sameSite: "lax", 
+    maxAge: 30 * 24 * 60 * 60 * 1000, 
+  });;
 
       res.json({
         success: true,       
@@ -91,21 +102,6 @@ export const signOut = async (req: Request, res: Response): Promise<void> => {
     });
   }
 };
-
-// Get User Profile (password excluded)
-export const getUserProfile = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const user = await User.findById(req.params.id).select("-password");
-    if (user) {
-      res.json(user);
-    } else {
-      res.status(404).json({ message: "User not found" });
-    }
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
 
 // OTP send
 export const sendotp = async (req: Request, res: Response): Promise<void> => {
@@ -190,6 +186,66 @@ export const resetpassword = async (req: Request, res: Response): Promise<void> 
 
     res.status(200).json({ success: true, message: "Password reset successfully" });
 
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
+// google login
+export const googleAuth = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name, email, mobile , image } = req.body;
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = new User({ name, email, mobile ,image });
+      await user.save();
+    }
+    const token = generateToken(user._id.toString());
+    res.cookie("token", token, cookieOptions);
+    res.status(200).json({
+      success: true,
+      message: "User logged in with Google successfully",
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      image: user.image,
+      role: user.role,
+    }); 
+
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: (error as Error).message,
+    }); 
+  }
+}
+
+
+// user controller 
+
+export const getUserProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
+    }
+
+    const user = await User.findById(userId).select(
+      "-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified"
+    );
+
+    if (!user) {
+      res.status(404).json({ success: false, message: "User not found" });
+      return;
+    }
+
+    res.status(200).json({ success: true, user });
   } catch (error) {
     res.status(500).json({
       success: false,
