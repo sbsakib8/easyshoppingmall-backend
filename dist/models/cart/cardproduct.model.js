@@ -34,80 +34,40 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const productSchema = new mongoose_1.default.Schema({
-    name: {
-        type: String,
+// 2. Schema
+const cartProductSchema = new mongoose_1.Schema({
+    productId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Product",
         required: true,
     },
-    image: {
-        type: [String],
-        default: [],
-    },
-    category: [
-        {
-            type: mongoose_1.default.Schema.ObjectId,
-            ref: "category",
-        },
-    ],
-    subCategory: [
-        {
-            type: mongoose_1.default.Schema.ObjectId,
-            ref: "subCategory",
-        },
-    ],
-    brand: {
-        type: String,
-        default: "",
-    },
-    tags: {
-        type: [String],
-        default: [],
-    },
-    featured: {
-        type: Boolean,
-        default: false,
-    },
-    unit: {
-        type: String,
-        default: "",
-    },
-    weight: {
+    quantity: {
         type: Number,
-        default: null,
+        default: 1,
+        min: [1, "Quantity can not be less than 1"],
     },
-    size: {
-        type: String,
-        default: "",
-    },
-    rank: {
-        type: Number,
-        default: 0,
-    },
-    stock: {
-        type: Number,
-        default: null,
+    userId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
     },
     price: {
         type: Number,
-        default: null,
+        default: 0,
     },
-    discount: {
+    totalPrice: {
         type: Number,
-        default: null,
-    },
-    description: {
-        type: String,
-        default: "",
-    },
-    more_details: {
-        type: Object,
-        default: {},
-    },
-    publish: {
-        type: Boolean,
-        default: true,
+        default: 0,
     },
 }, {
     timestamps: true,
 });
-exports.default = (0, mongoose_1.model)("Product", productSchema);
+cartProductSchema.pre("save", function (next) {
+    if (this.price && this.quantity) {
+        this.totalPrice = this.price * this.quantity;
+    }
+    next();
+});
+// 4. Model type
+const CartProductModel = mongoose_1.default.model("CartProduct", cartProductSchema);
+exports.default = CartProductModel;

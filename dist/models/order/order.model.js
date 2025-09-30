@@ -34,80 +34,72 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const productSchema = new mongoose_1.default.Schema({
-    name: {
-        type: String,
+// 2. Schema
+const orderSchema = new mongoose_1.Schema({
+    userId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "User",
         required: true,
     },
-    image: {
-        type: [String],
-        default: [],
+    orderId: {
+        type: String,
+        required: [true, "Provide orderId"],
+        unique: true,
     },
-    category: [
+    products: [
         {
-            type: mongoose_1.default.Schema.ObjectId,
-            ref: "category",
+            productId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Product", required: true },
+            name: { type: String, required: true },
+            image: { type: [String], default: [] },
+            quantity: { type: Number, default: 1 },
+            price: { type: Number, required: true },
+            totalPrice: { type: Number, default: 0 },
         },
     ],
-    subCategory: [
-        {
-            type: mongoose_1.default.Schema.ObjectId,
-            ref: "subCategory",
-        },
-    ],
-    brand: {
+    paymentId: {
         type: String,
         default: "",
     },
-    tags: {
-        type: [String],
-        default: [],
-    },
-    featured: {
-        type: Boolean,
-        default: false,
-    },
-    unit: {
+    payment_status: {
         type: String,
-        default: "",
+        enum: ["pending", "paid", "failed", "refunded"],
+        default: "pending",
     },
-    weight: {
-        type: Number,
-        default: null,
+    delivery_address: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Address",
+        required: true,
     },
-    size: {
-        type: String,
-        default: "",
-    },
-    rank: {
+    subTotalAmt: {
         type: Number,
         default: 0,
     },
-    stock: {
+    totalAmt: {
         type: Number,
-        default: null,
+        default: 0,
     },
-    price: {
-        type: Number,
-        default: null,
-    },
-    discount: {
-        type: Number,
-        default: null,
-    },
-    description: {
+    invoice_receipt: {
         type: String,
         default: "",
     },
-    more_details: {
-        type: Object,
-        default: {},
-    },
-    publish: {
-        type: Boolean,
-        default: true,
+    order_status: {
+        type: String,
+        enum: ["pending", "processing", "shipped", "delivered", "cancelled"],
+        default: "pending",
     },
 }, {
     timestamps: true,
 });
-exports.default = (0, mongoose_1.model)("Product", productSchema);
+orderSchema.pre("save", function (next) {
+    if (this.products && this.products.length > 0) {
+        this.products.forEach((p) => {
+            p.totalPrice = p.quantity * p.price;
+        });
+        this.subTotalAmt = this.products.reduce((sum, p) => sum + p.totalPrice, 0);
+        this.totalAmt = this.subTotalAmt;
+    }
+    next();
+});
+// 4. Model type
+const OrderModel = mongoose_1.default.model("Order", orderSchema);
+exports.default = OrderModel;

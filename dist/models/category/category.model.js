@@ -34,80 +34,32 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const productSchema = new mongoose_1.default.Schema({
+// 2. Schema
+const categorySchema = new mongoose_1.Schema({
     name: {
         type: String,
         required: true,
+        unique: true,
+        trim: true,
     },
     image: {
-        type: [String],
-        default: [],
-    },
-    category: [
-        {
-            type: mongoose_1.default.Schema.ObjectId,
-            ref: "category",
-        },
-    ],
-    subCategory: [
-        {
-            type: mongoose_1.default.Schema.ObjectId,
-            ref: "subCategory",
-        },
-    ],
-    brand: {
         type: String,
         default: "",
     },
-    tags: {
-        type: [String],
-        default: [],
-    },
-    featured: {
-        type: Boolean,
-        default: false,
-    },
-    unit: {
+    slug: {
         type: String,
-        default: "",
-    },
-    weight: {
-        type: Number,
-        default: null,
-    },
-    size: {
-        type: String,
-        default: "",
-    },
-    rank: {
-        type: Number,
-        default: 0,
-    },
-    stock: {
-        type: Number,
-        default: null,
-    },
-    price: {
-        type: Number,
-        default: null,
-    },
-    discount: {
-        type: Number,
-        default: null,
-    },
-    description: {
-        type: String,
-        default: "",
-    },
-    more_details: {
-        type: Object,
-        default: {},
-    },
-    publish: {
-        type: Boolean,
-        default: true,
+        lowercase: true,
+        unique: true,
+        trim: true,
     },
 }, {
     timestamps: true,
 });
-exports.default = (0, mongoose_1.model)("Product", productSchema);
+categorySchema.pre("save", function (next) {
+    if (this.isModified("name")) {
+        this.slug = this.name.toLowerCase().replace(/ /g, "-");
+    }
+    next();
+});
+const CategoryModel = mongoose_1.default.model("Category", categorySchema);
+exports.default = CategoryModel;

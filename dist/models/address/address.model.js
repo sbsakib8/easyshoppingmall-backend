@@ -34,80 +34,41 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const productSchema = new mongoose_1.default.Schema({
-    name: {
-        type: String,
-        required: true,
-    },
-    image: {
-        type: [String],
-        default: [],
-    },
-    category: [
-        {
-            type: mongoose_1.default.Schema.ObjectId,
-            ref: "category",
-        },
-    ],
-    subCategory: [
-        {
-            type: mongoose_1.default.Schema.ObjectId,
-            ref: "subCategory",
-        },
-    ],
-    brand: {
+const addressSchema = new mongoose_1.Schema({
+    address_line: {
         type: String,
         default: "",
     },
-    tags: {
-        type: [String],
-        default: [],
-    },
-    featured: {
-        type: Boolean,
-        default: false,
-    },
-    unit: {
+    city: {
         type: String,
         default: "",
     },
-    weight: {
-        type: Number,
-        default: null,
-    },
-    size: {
+    state: {
         type: String,
         default: "",
     },
-    rank: {
-        type: Number,
-        default: 0,
-    },
-    stock: {
-        type: Number,
-        default: null,
-    },
-    price: {
-        type: Number,
-        default: null,
-    },
-    discount: {
-        type: Number,
-        default: null,
-    },
-    description: {
+    pincode: {
         type: String,
-        default: "",
     },
-    more_details: {
-        type: Object,
-        default: {},
+    country: {
+        type: String,
     },
-    publish: {
+    mobile: {
+        type: Number,
+        default: null,
+    },
+    status: {
         type: Boolean,
         default: true,
+    },
+    userId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
     },
 }, {
     timestamps: true,
 });
-exports.default = (0, mongoose_1.model)("Product", productSchema);
+// 3. Model type
+const AddressModel = mongoose_1.default.model("Address", addressSchema);
+exports.default = AddressModel;

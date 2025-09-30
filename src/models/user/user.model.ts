@@ -2,6 +2,7 @@ import mongoose, { Document, Schema , Types  } from "mongoose";
 import bcrypt from "bcryptjs";
 
 export interface IUser extends Document {
+  _id: Types.ObjectId;
   name: string;
   email: string;
   password: string;
@@ -15,6 +16,7 @@ export interface IUser extends Document {
   orderHistory: Types.ObjectId[];
   forgot_password_otp?: string | null;
   forgot_password_expiry?: Date | null;
+  isotpverified?: boolean;
   role: "ADMIN" | "USER";
   createdAt?: Date;
   updatedAt?: Date;
@@ -33,7 +35,6 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
       unique: true },
     password: { 
       type: String, 
-      required: true
      },
     mobile : {
         type : String,
@@ -81,6 +82,10 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
     forgot_password_expiry : {
         type : Date,
         default : ""
+    },
+    isotpverified : {
+        type : Boolean,
+        default : false
     },
     role : {
         type : String,

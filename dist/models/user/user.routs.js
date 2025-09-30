@@ -6,7 +6,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const user_controllers_1 = require("./user.controllers");
 const router = express_1.default.Router();
-router.post("/register", user_controllers_1.registerUser);
-router.post("/login", user_controllers_1.authUser);
-router.get("/:id", user_controllers_1.getUserProfile);
+router.post("/signup", user_controllers_1.signUp);
+router.post("/signin", user_controllers_1.signIn);
+router.get("/signout", user_controllers_1.signOut);
+router.get("/:userid", user_controllers_1.getUserProfile);
+// reset password
+router.post("/send-otp", user_controllers_1.sendotp);
+router.post("/verify-otp", user_controllers_1.verifyotp);
+router.post("/reset-password", user_controllers_1.resetpassword);
 exports.default = router;
