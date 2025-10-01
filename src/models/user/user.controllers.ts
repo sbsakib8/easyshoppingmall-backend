@@ -3,7 +3,7 @@ import User from "../user/user.model";
 import type { IUser } from "../user/user.model";
 import generateToken from "../../utils/genaretetoken";
 import { sendEmail } from "../../utils/nodemailer";
-import { AuthRequest } from "../../middlewares/isauth";
+import { AuthRequest } from "../../middlewares/isAuth";
 
 // Cookie 
 const cookieOptions = {
@@ -89,7 +89,12 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
 // Sign out user
 export const signOut = async (req: Request, res: Response): Promise<void> => {
   try {
-    res.clearCookie("token");
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      path: "/", 
+    });
 
     res.status(200).json({
       success: true,
@@ -102,6 +107,7 @@ export const signOut = async (req: Request, res: Response): Promise<void> => {
     });
   }
 };
+
 
 // OTP send
 export const sendotp = async (req: Request, res: Response): Promise<void> => {
