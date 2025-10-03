@@ -22,34 +22,29 @@ export const createProductController = async (
 ): Promise<void> => {
   try {
     const {
-      name,
-      image,
+      productName,
+      description,
       category,
       subCategory,
-      brand,
-      tags,
       featured,
-      unit,
-      weight,
-      size,
-      rank,
-      stock,
+      brand,
+      productWeight,
+      productSize,
+      color,
       price,
+      productStock,
+      productRank,
       discount,
-      description,
+      ratings,
+      tags,
+      images,
       more_details,
       publish,
-    } = req.body as IProduct;
+    } = req.body;
 
     // Validation
     if (
-      !name ||
-      !image?.[0] ||
-      !category?.[0] ||
-      !subCategory?.[0] ||
-      !unit ||
-      !price ||
-      !description
+      !productName 
     ) {
       res.status(400).json({
         message: "Enter required fields",
@@ -59,27 +54,30 @@ export const createProductController = async (
       return;
     }
 
-  
+    // Auto-generate unique SKU
+    const sku = `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     // Product create and save
     const product = await ProductModel.create({
-      name,
-      image,
+      productName,
+      description,
       category,
       subCategory,
-      brand,
-      tags,
       featured,
-      unit,
-      weight,
-      size,
-      rank,
-      stock,
+      brand,
+      productWeight,
+      productSize,
+      color,
       price,
+      productStock,
+      productRank,
       discount,
-      description,
+      ratings,
+      tags,
+      images,
       more_details,
       publish,
+      sku,
     });
 
     res.json({
@@ -89,8 +87,18 @@ export const createProductController = async (
       success: true,
     });
   } catch (error: any) {
+    // Duplicate SKU handle
+    if (error.code === 11000) {
+      res.status(400).json({
+        message: "SKU must be unique",
+        error: true,
+        success: false,
+      });
+      return;
+    }
+
     res.status(500).json({
-      message: error.message || error,
+      message: error.message || "Server Error",
       error: true,
       success: false,
     });

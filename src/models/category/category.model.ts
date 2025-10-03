@@ -20,6 +20,19 @@ const categorySchema = new Schema<ICategory>(
       unique: true,
       trim: true,
     },
+    icon:{
+    type:String
+    },
+    isActive:{
+      type:Boolean,
+      default:true
+    },
+    metaDescription:{
+      type:String
+    },
+    metaTitle:{
+      type:String
+    }
   },
   {
     timestamps: true,

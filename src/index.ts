@@ -6,6 +6,7 @@ import userRoutes from "./models/user/user.routs";
 import cookieParser from "cookie-parser";
 import productRouter from "./models/product/product.routs";
 import addressRouter from "./models/address/address.routs";
+import categoryRoutes from "./models/category/category.routs"
 // middleware
 const app: Application = express();
 app.use(express.json());
@@ -23,9 +24,11 @@ connectDB()
 app.use("/api/users", userRoutes); 
 app.use("/api/products", productRouter );
 app.use("/api/address", addressRouter );
+app.use("/api/categories", categoryRoutes);
+
 
 app.get("/", (req: Request, res: Response) => {
-  res.send("APi sarkar is running...");
+  res.send("APi  is running...");
 });
 
 export default app;

@@ -3,69 +3,74 @@ import { IProduct } from "./type";
 
 const productSchema: Schema<IProduct> = new mongoose.Schema(
   {
-    name: {
+    productName: {
       type: String,
       required: true,
+      trim: true,
     },
-    image: {
-      type: [String], 
-      default: [],
+    description: {
+      type: String,
+      default: "",
     },
     category: [
       {
-        type: mongoose.Schema.ObjectId,
-        ref: "category",
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Category",
       },
     ],
     subCategory: [
       {
-        type: mongoose.Schema.ObjectId,
-        ref: "subCategory",
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "SubCategory",
       },
     ],
-    brand: {
-      type: String,
-      default: "",
-    },
-    tags: {
-      type: [String], 
-      default: [],
-    },
     featured: {
       type: Boolean,
       default: false,
     },
-    unit: {
+    brand: {
       type: String,
       default: "",
     },
-    weight: {
-      type: Number, 
-      default: null,
-    },
-    size: {
-      type: String, 
-      default: "",
-    },
-    rank: {
-      type: Number, 
-      default: 0,
-    },
-    stock: {
+    productWeight: {
       type: Number,
       default: null,
+    },
+    productSize: {
+      type: String,
+      default: "",
+    },
+    color: {
+      type: [String],
+      default: [],
     },
     price: {
       type: Number,
       default: null,
     },
+    productStock: {
+      type: Number,
+      default: null,
+    },
+    productRank: {
+      type: Number,
+      default: 0,
+    },
     discount: {
       type: Number,
       default: null,
     },
-    description: {
-      type: String,
-      default: "",
+    ratings: {
+      type: Number,
+      default: 5,
+    },
+    tags: {
+      type: [String],
+      default: [],
+    },
+    images: {
+      type: [String],
+      default: [],
     },
     more_details: {
       type: Object,
@@ -75,11 +80,15 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    sku: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
   },
   {
     timestamps: true,
   }
 );
-
 
 export default model<IProduct>("Product", productSchema);

@@ -1,46 +1,25 @@
 import { Document, Types } from "mongoose";
 
 export interface IProduct extends Document {
-  name: string;
-  image: string[];
+  productName: string;
+  description: string;
   category: Types.ObjectId[];
   subCategory: Types.ObjectId[];
-  brand?: string;
-  tags?: string[];
-  featured?: boolean;
-  unit?: string;
-  weight?: number | null;
-  size?: string;
-  rank?: number;
-  stock?: number | null;
-  price?: number | null;
-  discount?: number | null;
-  description?: string;
+  featured: boolean;
+  brand: string;
+  productWeight: number | null;
+  productSize: string;
+  color: string[];
+  price: number | null;
+  productStock: number | null;
+  productRank: number;
+  discount: number | null;
+  ratings: number;
+  tags: string[];
+  images: string[];
   more_details?: Record<string, any>;
   publish?: boolean;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-// product/type.ts
-export interface IProduct extends Document {
-  name: string;
-  image: string[];
-  category: Types.ObjectId[];
-  subCategory: Types.ObjectId[];
-  brand?: string;
-  tags?: string[];
-  featured?: boolean;
-  unit?: string;
-  weight?: number | null;
-  size?: string;
-  rank?: number;
-  stock?: number | null;
-  price?: number | null;
-  discount?: number | null;
-  description?: string;
-  more_details?: Record<string, any>;
-  publish?: boolean;
+  sku?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
