@@ -1,20 +1,14 @@
-import mongoose, { Document, Schema, Model } from "mongoose";
+import mongoose, { Schema, Model } from "mongoose";
 import { ISubCategory } from "./interface";
 
-
-
-// 2. Schema
+// Schema
 const subCategorySchema = new Schema<ISubCategory>(
   {
     name: {
       type: String,
       required: true,
-      unique: true, 
       trim: true,
-    },
-    image: {
-      type: String,
-      default: "",
+      unique: true,
     },
     slug: {
       type: String,
@@ -22,19 +16,36 @@ const subCategorySchema = new Schema<ISubCategory>(
       unique: true,
       trim: true,
     },
-    category: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "Category", 
-        required: true,
-      },
-    ],
+    image: {
+      type: String,
+      default: "",
+    },
+    icon: {
+      type: String,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    metaDescription: {
+      type: String,
+    },
+    metaTitle: {
+      type: String,
+    },
+    // Reference to Category
+    category: {
+      type: Schema.Types.ObjectId,
+      ref: "Category",
+      required: true,
+    },
   },
   {
     timestamps: true,
   }
 );
 
+// Generate slug automatically
 subCategorySchema.pre("save", function (next) {
   if (this.isModified("name")) {
     this.slug = this.name.toLowerCase().replace(/ /g, "-");
@@ -42,7 +53,6 @@ subCategorySchema.pre("save", function (next) {
   next();
 });
 
-// 4. Model type
 const SubCategoryModel: Model<ISubCategory> = mongoose.model<ISubCategory>(
   "SubCategory",
   subCategorySchema
