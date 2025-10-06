@@ -6,22 +6,24 @@ import {
   updateSubCategory,
   deleteSubCategory,
 } from "./subcategory.controllers";
+import { isAuth } from "../../middlewares/isAuth";
+import { isAdmin } from "../../middlewares/isAdmin";
 
 const router = express.Router();
 
 // Create SubCategory
-router.post("/create", createSubCategory);
+router.post("/create",isAuth,isAdmin, createSubCategory);
 
 // Get All SubCategories
-router.get("/", getSubCategories);
+router.get("/",isAuth,isAdmin, getSubCategories);
 
 // Get Single SubCategory
-router.get("/:id", getSubCategoryById);
+router.get("/:id",isAuth,isAdmin, getSubCategoryById);
 
 // Update SubCategory
-router.put("/:id", updateSubCategory);
+router.put("/:id",isAuth,isAdmin, updateSubCategory);
 
 // Delete SubCategory
-router.delete("/:id", deleteSubCategory);
+router.delete("/:id",isAuth,isAdmin, deleteSubCategory);
 
 export default router;

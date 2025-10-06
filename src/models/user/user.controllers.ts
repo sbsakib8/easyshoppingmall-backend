@@ -4,6 +4,7 @@ import type { IUser } from "../user/user.model";
 import generateToken from "../../utils/genaretetoken";
 import { sendEmail } from "../../utils/nodemailer";
 import { AuthRequest } from "../../middlewares/isAuth";
+import uploadClouinary from "../../utils/cloudinary";
 
 // Cookie 
 const cookieOptions = {
@@ -256,6 +257,46 @@ export const getUserProfile = async (req: AuthRequest, res: Response): Promise<v
     res.status(500).json({
       success: false,
       message: (error as Error).message,
+    });
+  }
+};
+
+// user imge push 
+export const userImage = async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id;
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
+
+    let imageUrl: string | undefined;
+    if (req.file) {
+      imageUrl = await uploadClouinary(req.file.path);
+    } else {
+      return res.status(400).json({ message: "No image file provided" });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { image: imageUrl },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      message: "Profile image updated successfully ✅",
+      success: true,
+      image: imageUrl,
+      user: updatedUser,
+    });
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({
+      message: error.message || "Server error",
+      success: false,
     });
   }
 };

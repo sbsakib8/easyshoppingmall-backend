@@ -1,6 +1,7 @@
 import express from "express";
-import { getUserProfile, googleAuth, resetpassword, sendotp, signIn, signOut, signUp, verifyotp } from "./user.controllers";
+import { getUserProfile, googleAuth, resetpassword, sendotp, signIn, signOut, signUp, userImage, verifyotp } from "./user.controllers";
 import { isAuth } from "../../middlewares/isAuth";
+import { upload } from "../../middlewares/multer";
 
 const router = express.Router();
 
@@ -18,5 +19,7 @@ router.post("/reset-password", resetpassword);
 
 //  user routes
 router.get("/userprofile",isAuth, getUserProfile);
+router.post("/user-image/:id",isAuth,upload.single("image"), userImage);
+
 
 export default router;

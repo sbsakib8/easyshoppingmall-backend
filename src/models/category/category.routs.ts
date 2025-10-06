@@ -6,22 +6,24 @@ import {
   updateCategory,
   deleteCategory,
 } from "./category.controllers";
+import { isAuth } from "../../middlewares/isAuth";
+import { isAdmin } from "../../middlewares/isAdmin";
 
 const router = express.Router();
 
 // Create Category
-router.post("/create", createCategory);
+router.post("/create",isAuth,isAdmin, createCategory);
 
 // Get All Categories
-router.get("/", getCategories);
+router.get("/",isAuth,isAdmin, getCategories);
 
 // Get Single Category
-router.get("/:id", getCategoryById);
+router.get("/:id",isAuth,isAdmin, getCategoryById);
 
 // Update Category
-router.put("/:id", updateCategory);
+router.put("/:id",isAuth,isAdmin, updateCategory);
 
 // Delete Category
-router.delete("/:id", deleteCategory);
+router.delete("/:id",isAuth,isAdmin, deleteCategory);
 
 export default router;
