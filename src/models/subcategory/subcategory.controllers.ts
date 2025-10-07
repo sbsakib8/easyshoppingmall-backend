@@ -21,6 +21,8 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
       return;
     }
 
+    
+
     const subCategory = new SubCategoryModel({
       name,
       image,
