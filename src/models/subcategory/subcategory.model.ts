@@ -4,6 +4,7 @@ import { ISubCategory } from "./interface";
 // Schema
 const subCategorySchema = new Schema<ISubCategory>(
   {
+   
     name: {
       type: String,
       required: true,
