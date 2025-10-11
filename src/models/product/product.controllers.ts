@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import ProductModel from "./product.model";
 import { IProduct } from "./type";
+import uploadClouinary from "../../utils/cloudinary";
 
 interface PaginationRequest extends Request {
   body: {
@@ -14,6 +15,8 @@ interface PaginationRequest extends Request {
     _id?: string;
   };
 }
+
+
 
 // Create Product
 export const createProductController = async (
@@ -37,7 +40,6 @@ export const createProductController = async (
       discount,
       ratings,
       tags,
-      images,
       more_details,
       publish,
     } = req.body;
@@ -53,6 +55,19 @@ export const createProductController = async (
       });
       return;
     }
+
+    // ✅ Multiple image upload
+    const files = req.files as Express.Multer.File[];
+    let imageUrls: string[] = [];
+
+   if (files && files.length > 0) {
+  for (const file of files) {
+    if (file.path) { // safe check
+      const uploadedUrl = await uploadClouinary(file.path!);
+      imageUrls.push(uploadedUrl);
+    }
+  }
+}
 
     // Auto-generate unique SKU
     const sku = `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -74,7 +89,7 @@ export const createProductController = async (
       discount,
       ratings,
       tags,
-      images,
+      images: imageUrls,
       more_details,
       publish,
       sku,

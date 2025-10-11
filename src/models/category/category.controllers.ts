@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import CategoryModel from "./category.model";
+import uploadClouinary from "../../utils/cloudinary";
 
 // ✅ Create Category
 export const createCategory = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, image, icon, isActive, metaDescription, metaTitle } = req.body;
+    const { name, icon, isActive, metaDescription, metaTitle } = req.body;
 
     // Check if category exists
     const existingCategory = await CategoryModel.findOne({ name });
@@ -12,10 +13,17 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
       res.status(400).json({ success: false, message: "Category already exists" });
       return;
     }
+    let imageUrl: string | undefined;
+        if (req.file) {
+          imageUrl = await uploadClouinary(req.file.path);
+        } else {
+          res.status(400).json({ success: false, message: "not image file provided" });
+          return;
+        }
 
     const category = new CategoryModel({
       name,
-      image,
+      image:imageUrl,
       icon,
       isActive,
       metaDescription,
@@ -68,6 +76,10 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
     }
 
     const { _id, slug, ...updateData } = req.body;
+     if (req.file) {
+          const imageUrl = await uploadClouinary(req.file.path);
+          updateData.image = imageUrl;
+        }
 
     const updatedCategory = await CategoryModel.findByIdAndUpdate(
       id,
