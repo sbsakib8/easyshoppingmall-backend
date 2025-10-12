@@ -2,10 +2,11 @@ import { Router } from 'express'
 import { createProductController, deleteProductDetails, getProductByCategory, getProductByCategoryAndSubCategory, getProductController, getProductDetails, searchProduct, updateProductDetails } from './product.controllers'
 import { isAuth } from '../../middlewares/isAuth'
 import { isAdmin } from '../../middlewares/isAdmin'
+import { upload } from '../../middlewares/multer'
 
 const productRouter = Router()
 
-productRouter.post("/create",isAuth,isAdmin,createProductController)
+productRouter.post("/create",isAuth,isAdmin,upload.array("images", 4),createProductController)
 productRouter.post('/get',isAuth,isAdmin,getProductController)
 productRouter.post("/get-product-by-category",isAuth,isAdmin,getProductByCategory)
 productRouter.post('/get-pruduct-by-category-and-subcategory',isAuth,isAdmin,getProductByCategoryAndSubCategory)
