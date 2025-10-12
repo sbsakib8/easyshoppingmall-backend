@@ -96,7 +96,6 @@ export const updateSubCategory = async (req: Request, res: Response): Promise<vo
 
     const { _id, slug, ...updateData } = req.body;
 
-    // যদি নতুন image আসে
     if (req.file) {
       const imageUrl = await uploadClouinary(req.file.path);
       updateData.image = imageUrl;
