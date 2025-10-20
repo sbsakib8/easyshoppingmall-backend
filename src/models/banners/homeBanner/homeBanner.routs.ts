@@ -19,3 +19,4 @@ router.put("/:id",isAuth, isAdmin, upload.array("images"), updateHomeBanner);
 router.delete("/:id",isAuth, isAdmin, deleteHomeBanner);
 
 export default router;
+ 
