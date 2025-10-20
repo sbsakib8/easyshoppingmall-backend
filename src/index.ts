@@ -8,6 +8,7 @@ import productRouter from "./models/product/product.routs";
 import addressRouter from "./models/address/address.routs";
 import categoryRoutes from "./models/category/category.routs"
 import subcategoriesRoutes from "./models/subcategory/subcategory.routs"
+import homeBannerRoutes from "./models/banners/homeBanner/homeBanner.routs";
 // middleware
 const app: Application = express();
 app.use(express.json());
@@ -27,6 +28,8 @@ app.use("/api/products", productRouter );
 app.use("/api/address", addressRouter );
 app.use("/api/categories", categoryRoutes);
 app.use("/api/subcategories", subcategoriesRoutes);
+app.use("/api/homeBannerRoutes", homeBannerRoutes);
+
 
 
 app.get("/", (req: Request, res: Response) => {
