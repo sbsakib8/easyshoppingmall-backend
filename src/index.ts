@@ -9,6 +9,9 @@ import addressRouter from "./models/address/address.routs";
 import categoryRoutes from "./models/category/category.routs"
 import subcategoriesRoutes from "./models/subcategory/subcategory.routs"
 import homeBannerRoutes from "./models/banners/homeBanner/homeBanner.routs";
+import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routs";
+import leftBannerRoutes from "./models/banners/leftBanner/leftBanner.routs";
+import RightBannerRoutes from "./models/banners/rightBanner/rightBanner.routs";
 // middleware
 const app: Application = express();
 app.use(express.json());
@@ -29,6 +32,9 @@ app.use("/api/address", addressRouter );
 app.use("/api/categories", categoryRoutes);
 app.use("/api/subcategories", subcategoriesRoutes);
 app.use("/api/homeBannerRoutes", homeBannerRoutes);
+app.use("/api/CenterBanner", centerBannerRoutes);
+app.use("/api/LeftBanner", leftBannerRoutes);
+app.use("/api/RightBanner", RightBannerRoutes);
 
 
 
