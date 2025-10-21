@@ -22,6 +22,10 @@ const userSchema = new mongoose_1.default.Schema({
         type: String,
         default: null
     },
+    image: {
+        type: String,
+        default: null
+    },
     refresh_token: {
         type: String,
         default: ""

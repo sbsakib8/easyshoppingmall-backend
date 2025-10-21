@@ -5,18 +5,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.searchProduct = exports.deleteProductDetails = exports.updateProductDetails = exports.getProductDetails = exports.getProductByCategoryAndSubCategory = exports.getProductByCategory = exports.getProductController = exports.createProductController = void 0;
 const product_model_1 = __importDefault(require("./product.model"));
+const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 // Create Product
 const createProductController = async (req, res) => {
     try {
-        const { name, image, category, subCategory, brand, tags, featured, unit, weight, size, rank, stock, price, discount, description, more_details, publish, } = req.body;
+        const { productName, description, category, subCategory, featured, brand, productWeight, productSize, color, price, productStock, productRank, discount, ratings, tags, more_details, publish, } = req.body;
         // Validation
-        if (!name ||
-            !image?.[0] ||
-            !category?.[0] ||
-            !subCategory?.[0] ||
-            !unit ||
-            !price ||
-            !description) {
+        if (!productName) {
             res.status(400).json({
                 message: "Enter required fields",
                 error: true,
@@ -24,25 +19,40 @@ const createProductController = async (req, res) => {
             });
             return;
         }
+        // ✅ Multiple image upload
+        const files = req.files;
+        let imageUrls = [];
+        if (files && files.length > 0) {
+            for (const file of files) {
+                if (file.path) { // safe check
+                    const uploadedUrl = await (0, cloudinary_1.default)(file.path);
+                    imageUrls.push(uploadedUrl);
+                }
+            }
+        }
+        // Auto-generate unique SKU
+        const sku = `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         // Product create and save
         const product = await product_model_1.default.create({
-            name,
-            image,
+            productName,
+            description,
             category,
             subCategory,
-            brand,
-            tags,
             featured,
-            unit,
-            weight,
-            size,
-            rank,
-            stock,
+            brand,
+            productWeight,
+            productSize,
+            color,
             price,
+            productStock,
+            productRank,
             discount,
-            description,
+            ratings,
+            tags,
+            images: imageUrls,
             more_details,
             publish,
+            sku,
         });
         res.json({
             message: "Product Created Successfully",
@@ -52,8 +62,17 @@ const createProductController = async (req, res) => {
         });
     }
     catch (error) {
+        // Duplicate SKU handle
+        if (error.code === 11000) {
+            res.status(400).json({
+                message: "SKU must be unique",
+                error: true,
+                success: false,
+            });
+            return;
+        }
         res.status(500).json({
-            message: error.message || error,
+            message: error.message || "Server Error",
             error: true,
             success: false,
         });

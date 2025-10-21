@@ -34,17 +34,13 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-// 2. Schema
+// Schema
 const subCategorySchema = new mongoose_1.Schema({
     name: {
         type: String,
         required: true,
-        unique: true,
         trim: true,
-    },
-    image: {
-        type: String,
-        default: "",
+        unique: true,
     },
     slug: {
         type: String,
@@ -52,22 +48,38 @@ const subCategorySchema = new mongoose_1.Schema({
         unique: true,
         trim: true,
     },
-    category: [
-        {
-            type: mongoose_1.Schema.Types.ObjectId,
-            ref: "Category",
-            required: true,
-        },
-    ],
+    image: {
+        type: String,
+        default: "",
+    },
+    icon: {
+        type: String,
+    },
+    isActive: {
+        type: Boolean,
+        default: true,
+    },
+    metaDescription: {
+        type: String,
+    },
+    metaTitle: {
+        type: String,
+    },
+    // Reference to Category
+    category: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Category",
+        required: true,
+    },
 }, {
     timestamps: true,
 });
+// Generate slug automatically
 subCategorySchema.pre("save", function (next) {
     if (this.isModified("name")) {
         this.slug = this.name.toLowerCase().replace(/ /g, "-");
     }
     next();
 });
-// 4. Model type
 const SubCategoryModel = mongoose_1.default.model("SubCategory", subCategorySchema);
 exports.default = SubCategoryModel;

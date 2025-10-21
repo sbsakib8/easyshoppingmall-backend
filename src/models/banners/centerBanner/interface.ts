@@ -6,7 +6,7 @@ export interface ICenterBanner {
   Description: string;
   images: string[];
   Link_URL?: string;
-  active: boolean;
+  status: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
