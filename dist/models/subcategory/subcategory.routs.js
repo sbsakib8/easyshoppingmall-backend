@@ -12,9 +12,9 @@ const router = express_1.default.Router();
 // Create SubCategory
 router.post("/create", isAuth_1.isAuth, isAdmin_1.isAdmin, multer_1.upload.single("image"), subcategory_controllers_1.createSubCategory);
 // Get All SubCategories
-router.get("/", isAuth_1.isAuth, isAdmin_1.isAdmin, subcategory_controllers_1.getSubCategories);
+router.get("/", subcategory_controllers_1.getSubCategories);
 // Get Single SubCategory
-router.get("/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, subcategory_controllers_1.getSubCategoryById);
+router.get("/:id", subcategory_controllers_1.getSubCategoryById);
 // Update SubCategory
 router.put("/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, multer_1.upload.single("image"), subcategory_controllers_1.updateSubCategory);
 // Delete SubCategory
