@@ -4,25 +4,26 @@ import { ICenterBanner } from "./interface";
 const centerBannerSchema = new Schema<ICenterBanner>(
   {
     title:
-     { 
-        type: String,
-        default: ""
-     },
+    {
+      type: String,
+      default: ""
+    },
     Description: {
-        type: String, 
-        default: "" 
+      type: String,
+      default: ""
     },
     images: {
-         type: [String],
-          default: [] 
-        },
+      type: [String],
+      default: []
+    },
     Link_URL: {
-         type: String 
-        },
-    active: {
-         type: Boolean,
-          default: true
-     },
+      type: String
+    },
+    status: {
+      type: String,
+      enum: ['active', 'inactive'],
+      default: 'active'
+    }
   },
   { timestamps: true }
 );

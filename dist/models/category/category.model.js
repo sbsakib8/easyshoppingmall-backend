@@ -52,6 +52,19 @@ const categorySchema = new mongoose_1.Schema({
         unique: true,
         trim: true,
     },
+    icon: {
+        type: String
+    },
+    isActive: {
+        type: Boolean,
+        default: true
+    },
+    metaDescription: {
+        type: String
+    },
+    metaTitle: {
+        type: String
+    }
 }, {
     timestamps: true,
 });

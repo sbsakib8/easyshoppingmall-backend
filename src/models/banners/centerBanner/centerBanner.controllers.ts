@@ -6,7 +6,7 @@ import fs from "fs";
 // Create Home Banner
 export const createCenterBanner = async (req: Request, res: Response) => {
   try {
-    const { title, Description, Link_URL, active } = req.body;
+    const { title, Description, Link_URL, status } = req.body;
     const files = req.files as Express.Multer.File[];
 
     let imageUrls: string[] = [];
@@ -25,13 +25,13 @@ export const createCenterBanner = async (req: Request, res: Response) => {
       title,
       Description,
       Link_URL,
-      active,
+      status,
       images: imageUrls,
     });
 
     return res.status(201).json({
       success: true,
-      message: "Home banner created successfully",
+      message: "Center banner created successfully",
       data: newBanner,
     });
   } catch (error: any) {
@@ -66,7 +66,7 @@ export const getSingleCenterBanner = async (req: Request, res: Response) => {
 //  Update Banner
 export const updateCenterBanner= async (req: Request, res: Response) => {
   try {
-    const { title, Description, Link_URL, active } = req.body;
+    const { title, Description, Link_URL, status } = req.body;
     const files = req.files as Express.Multer.File[];
 
     let imageUrls: string[] = [];
@@ -87,7 +87,7 @@ export const updateCenterBanner= async (req: Request, res: Response) => {
         title,
         Description,
         Link_URL,
-        active,
+        status,
         ...(imageUrls.length > 0 && { images: imageUrls }),
       },
       { new: true }

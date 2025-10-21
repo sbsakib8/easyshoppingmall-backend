@@ -34,90 +34,26 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const productSchema = new mongoose_1.default.Schema({
-    productName: {
+const leftBannerSchema = new mongoose_1.Schema({
+    title: {
         type: String,
-        required: true,
-        trim: true,
+        default: ""
     },
-    description: {
+    Description: {
         type: String,
-        default: "",
-    },
-    category: [
-        {
-            type: mongoose_1.default.Schema.Types.ObjectId,
-            ref: "Category",
-        },
-    ],
-    subCategory: [
-        {
-            type: mongoose_1.default.Schema.Types.ObjectId,
-            ref: "SubCategory",
-        },
-    ],
-    featured: {
-        type: Boolean,
-        default: false,
-    },
-    brand: {
-        type: String,
-        default: "",
-    },
-    productWeight: {
-        type: Number,
-        default: null,
-    },
-    productSize: {
-        type: String,
-        default: "",
-    },
-    color: {
-        type: [String],
-        default: [],
-    },
-    price: {
-        type: Number,
-        default: null,
-    },
-    productStock: {
-        type: Number,
-        default: null,
-    },
-    productRank: {
-        type: Number,
-        default: 0,
-    },
-    discount: {
-        type: Number,
-        default: null,
-    },
-    ratings: {
-        type: Number,
-        default: 5,
-    },
-    tags: {
-        type: [String],
-        default: [],
+        default: ""
     },
     images: {
         type: [String],
-        default: [],
+        default: []
     },
-    more_details: {
-        type: Object,
-        default: {},
+    Link_URL: {
+        type: String
     },
-    publish: {
+    active: {
         type: Boolean,
-        default: true,
+        default: true
     },
-    sku: {
-        type: String,
-        unique: true,
-        sparse: true,
-    },
-}, {
-    timestamps: true,
-});
-exports.default = (0, mongoose_1.model)("Product", productSchema);
+}, { timestamps: true });
+exports.default = mongoose_1.default.models.LeftBanner ||
+    mongoose_1.default.model("LeftBanner", leftBannerSchema);
