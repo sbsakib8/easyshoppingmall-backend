@@ -6,7 +6,7 @@ export interface IRightBanner {
   Description: string;
   images: string[];
   Link_URL?: string;
-  active: boolean;
+  status: string;
   createdAt?: Date;
   updatedAt?: Date;
 }

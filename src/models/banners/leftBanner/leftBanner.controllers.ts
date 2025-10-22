@@ -6,7 +6,7 @@ import fs from "fs";
 // Create Home Banner
 export const createLeftBanner = async (req: Request, res: Response) => {
   try {
-    const { title, Description, Link_URL, active } = req.body;
+    const { title, Description, Link_URL, status } = req.body;
     const files = req.files as Express.Multer.File[];
 
     let imageUrls: string[] = [];
@@ -25,7 +25,7 @@ export const createLeftBanner = async (req: Request, res: Response) => {
       title,
       Description,
       Link_URL,
-      active,
+      status,
       images: imageUrls,
     });
 
@@ -66,7 +66,7 @@ export const getSingleLeftBanner = async (req: Request, res: Response) => {
 //  Update Banner
 export const updateLeftBanner = async (req: Request, res: Response) => {
   try {
-    const { title, Description, Link_URL, active } = req.body;
+    const { title, Description, Link_URL, status } = req.body;
     const files = req.files as Express.Multer.File[];
 
     let imageUrls: string[] = [];
@@ -87,7 +87,7 @@ export const updateLeftBanner = async (req: Request, res: Response) => {
         title,
         Description,
         Link_URL,
-        active,
+        status,
         ...(imageUrls.length > 0 && { images: imageUrls }),
       },
       { new: true }

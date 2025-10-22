@@ -10,7 +10,7 @@ const fs_1 = __importDefault(require("fs"));
 // Create Home Banner
 const createLeftBanner = async (req, res) => {
     try {
-        const { title, Description, Link_URL, active } = req.body;
+        const { title, Description, Link_URL, status } = req.body;
         const files = req.files;
         let imageUrls = [];
         if (files && files.length > 0) {
@@ -26,7 +26,7 @@ const createLeftBanner = async (req, res) => {
             title,
             Description,
             Link_URL,
-            active,
+            status,
             images: imageUrls,
         });
         return res.status(201).json({
@@ -69,7 +69,7 @@ exports.getSingleLeftBanner = getSingleLeftBanner;
 //  Update Banner
 const updateLeftBanner = async (req, res) => {
     try {
-        const { title, Description, Link_URL, active } = req.body;
+        const { title, Description, Link_URL, status } = req.body;
         const files = req.files;
         let imageUrls = [];
         if (files && files.length > 0) {
@@ -85,7 +85,7 @@ const updateLeftBanner = async (req, res) => {
             title,
             Description,
             Link_URL,
-            active,
+            status,
             ...(imageUrls.length > 0 && { images: imageUrls }),
         }, { new: true });
         if (!updatedBanner) {

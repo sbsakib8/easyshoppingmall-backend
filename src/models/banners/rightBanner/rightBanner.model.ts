@@ -20,10 +20,11 @@ const rightBannerSchema = new Schema<IRightBanner>(
     Link_URL: {
          type: String 
         },
-    active: {
-         type: Boolean,
-          default: true
-     },
+    status: {
+      type: String,
+      enum: ['active', 'inactive'],
+      default: 'active'
+    }
   },
   { timestamps: true }
 );
