@@ -50,10 +50,11 @@ const leftBannerSchema = new mongoose_1.Schema({
     Link_URL: {
         type: String
     },
-    active: {
-        type: Boolean,
-        default: true
-    },
+    status: {
+        type: String,
+        enum: ['active', 'inactive'],
+        default: 'active'
+    }
 }, { timestamps: true });
 exports.default = mongoose_1.default.models.LeftBanner ||
     mongoose_1.default.model("LeftBanner", leftBannerSchema);

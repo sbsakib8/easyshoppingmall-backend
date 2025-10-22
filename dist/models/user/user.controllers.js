@@ -18,13 +18,13 @@ const cookieOptions = {
 // Register User
 const signUp = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { name, email, password, role } = req.body;
         const userExists = await user_model_1.default.findOne({ email });
         if (userExists) {
             res.status(400).json({ message: "User already exists", success: false });
             return;
         }
-        const user = await user_model_1.default.create({ name, email, password });
+        const user = await user_model_1.default.create({ name, email, password, role });
         const token = (0, genaretetoken_1.default)(user._id.toString());
         //  cookie
         res.cookie("token", token, {
