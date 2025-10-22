@@ -17,7 +17,7 @@ const cookieOptions = {
 // Register User
 export const signUp = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password , role } = req.body;
 
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -25,7 +25,7 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const user: IUser = await User.create({ name, email, password });
+    const user: IUser = await User.create({ name, email, password , role });
     const token = generateToken(user._id.toString());
     //  cookie
      res.cookie("token", token,{
