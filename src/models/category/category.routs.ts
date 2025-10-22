@@ -16,7 +16,7 @@ const router = express.Router();
 router.post("/create",isAuth,isAdmin,upload.single("image"), createCategory);
 
 // Get All Categories
-router.get("/",isAuth,isAdmin, getCategories);
+router.get("/", getCategories);
 
 // Get Single Category
 router.get("/:id",isAuth,isAdmin, getCategoryById);

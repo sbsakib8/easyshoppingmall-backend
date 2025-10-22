@@ -16,10 +16,10 @@ const router = express.Router();
 router.post("/create",isAuth,isAdmin,upload.single("image"), createSubCategory);
 
 // Get All SubCategories
-router.get("/",isAuth,isAdmin, getSubCategories);
+router.get("/", getSubCategories);
 
 // Get Single SubCategory
-router.get("/:id",isAuth,isAdmin, getSubCategoryById);
+router.get("/:id", getSubCategoryById);
 
 // Update SubCategory
 router.put("/:id",isAuth,isAdmin,upload.single("image"), updateSubCategory);
