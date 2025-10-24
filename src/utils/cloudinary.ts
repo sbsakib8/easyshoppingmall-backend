@@ -1,8 +1,8 @@
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
+import path from "path";
 import processdata from "../config";
 
-// ✅ Type-safe cloudinary uploader
 const uploadClouinary = async (file: string): Promise<string> => {
   if (!file) throw new Error("Invalid file path");
 
@@ -13,9 +13,17 @@ const uploadClouinary = async (file: string): Promise<string> => {
     api_secret: processdata.cloudapisecret,
   });
 
+  const resolvedPath = path.resolve(file); 
+
   try {
-    const result = await cloudinary.uploader.upload(file);
-    if (fs.existsSync(file)) fs.unlinkSync(file); // cleanup local file
+    const result = await cloudinary.uploader.upload(resolvedPath, {
+      resource_type: "image",
+      timeout: 120000, 
+    });
+
+   
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+
     return result.secure_url;
   } catch (error) {
     if (fs.existsSync(file)) fs.unlinkSync(file);
