@@ -10,6 +10,7 @@ const processdata = {
     mongodburl: process.env.MONGODB_URL || " ",
     pass: process.env.APP_PASS || " ",
     email: process.env.EMAIL || " ",
+    receiveremail: process.env.RECEIVER_EMAIL || " ",
     cloudname: process.env.CLOUD_NAME || " ",
     cloudapikey: process.env.CLOUD_API_KEY || " ",
     cloudapisecret: process.env.CLOUD_API_SECRET || " ",
