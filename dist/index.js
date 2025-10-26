@@ -18,6 +18,7 @@ const leftBanner_routs_1 = __importDefault(require("./models/banners/leftBanner/
 const rightBanner_routs_1 = __importDefault(require("./models/banners/rightBanner/rightBanner.routs"));
 const blogs_routs_1 = __importDefault(require("./models/content/blogs/blogs.routs"));
 const websiteinfo_routs_1 = __importDefault(require("./models/content/websiteInfo/websiteinfo.routs"));
+const contact_routs_1 = __importDefault(require("./models/content/contact/contact.routs"));
 // middleware
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
@@ -40,6 +41,7 @@ app.use("/api/LeftBanner", leftBanner_routs_1.default);
 app.use("/api/RightBanner", rightBanner_routs_1.default);
 app.use("/api/blog", blogs_routs_1.default);
 app.use("/api/websiteinfo", websiteinfo_routs_1.default);
+app.use("/api/contact", contact_routs_1.default);
 app.get("/", (req, res) => {
     res.send("APi  is running...");
 });
