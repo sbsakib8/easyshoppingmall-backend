@@ -27,7 +27,8 @@
     "nodemailer": "^7.0.6",
     "nodemon": "^3.1.10",
     "sslcommerz-lts": "^1.2.0",
-    "ts-node-dev": "^2.0.0"
+    "ts-node-dev": "^2.0.0",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.9",
