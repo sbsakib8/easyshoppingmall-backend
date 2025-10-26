@@ -13,6 +13,7 @@ import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routs
 import leftBannerRoutes from "./models/banners/leftBanner/leftBanner.routs";
 import RightBannerRoutes from "./models/banners/rightBanner/rightBanner.routs";
 import blogRoutes from "./models/content/blogs/blogs.routs";
+import websiteInfo from "./models/content/websiteInfo/websiteinfo.routs"
 // middleware
 const app: Application = express();
 app.use(express.json());
@@ -37,7 +38,7 @@ app.use("/api/CenterBanner", centerBannerRoutes);
 app.use("/api/LeftBanner", leftBannerRoutes);
 app.use("/api/RightBanner", RightBannerRoutes);
 app.use("/api/blog", blogRoutes);
-
+app.use("/api/websiteinfo", websiteInfo);
 
 
 app.get("/", (req: Request, res: Response) => {
