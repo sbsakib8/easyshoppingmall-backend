@@ -3,13 +3,9 @@ import { Request, Response } from "express";
 import Notification from "./notification.model";
 import { INotification } from "./interface";
 
-// Extend request to possibly include socket.io instance
 type SocketRequest = Request & { app: any };
 
-/**
- * Create a notification
- * body: { title, message, type, referenceId, meta }
- */
+// createNotification notification 
 export const createNotification = asyncHandler(
   async (req: SocketRequest, res: Response): Promise<void> => {
     const { title, message, type, referenceId, meta } = req.body;
@@ -34,10 +30,7 @@ export const createNotification = asyncHandler(
   }
 );
 
-/**
- * Get list of notifications
- * ?page=1&limit=20&unreadOnly=true
- */
+// getNotifications notification 
 export const getNotifications = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const page = parseInt((req.query.page as string) || "1", 10);
@@ -62,10 +55,7 @@ export const getNotifications = asyncHandler(
   }
 );
 
-/**
- * Mark a single notification as read
- * POST /api/notifications/:id/read
- */
+/// markAsRead notification 
 export const markAsRead = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
@@ -84,10 +74,7 @@ export const markAsRead = asyncHandler(
   }
 );
 
-/**
- * Mark all unread notifications as read
- * POST /api/notifications/mark-all-read
- */
+// markAllAsRead notification 
 export const markAllAsRead = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     await Notification.updateMany({ isRead: false }, { isRead: true });
@@ -95,10 +82,7 @@ export const markAllAsRead = asyncHandler(
   }
 );
 
-/**
- * Delete notification (Admin)
- * DELETE /api/notifications/:id
- */
+  // Delete notification 
 export const deleteNotification = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const notif = await Notification.findByIdAndDelete(req.params.id);
