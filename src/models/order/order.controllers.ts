@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { v4 as uuidv4 } from "uuid";
+const { v4: uuidv4 } = require('uuid');
 import mongoose from "mongoose";
 import { IOrder, AuthUser } from "./interface";
 import { CartModel } from "../cart/cardproduct.model"; // ✅ fix typo (card → cart)
@@ -17,73 +17,86 @@ interface RequestWithUser extends Request {
  * @route POST /api/orders/create
  * @access Private (User)
  */
-export const createOrder = async (req: RequestWithUser, res: Response): Promise<void> => {
+export const createOrder = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = req.user?._id;
-    const { addressId } = req.body;
+    const { userId, delivery_address } = req.body;
 
-    if (!userId) {
-      res.status(401).json({ success: false, message: "Unauthorized user" });
+    if (!userId || !delivery_address) {
+      res.status(400).json({
+        success: false,
+        message: "Missing required fields (userId, delivery_address)",
+      });
       return;
     }
 
-    if (!addressId) {
-      res.status(400).json({ success: false, message: "Delivery address is required" });
-      return;
-    }
-
-    // ✅ Find single cart for this user
+    // Fetch cart with populated product info
     const cart = await CartModel.findOne({ userId }).populate("products.productId");
+
     if (!cart || cart.products.length === 0) {
-      res.status(400).json({ success: false, message: "Cart is empty" });
+      res.status(404).json({ success: false, message: "Cart is empty" });
       return;
     }
 
-    // ✅ Map products
-    const products = cart.products.map((item) => {
-      const product: any = item.productId;
+    // Filter valid, populated products
+    const validProducts = cart.products.filter(
+      (item: any) =>
+        item.productId &&
+        typeof item.productId === "object" &&
+        "_id" in item.productId
+    );
+
+    if (validProducts.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: "No valid products found in the cart",
+      });
+      return;
+    }
+
+    // Transform cart items into order format
+    const orderProducts = validProducts.map((item: any) => {
+      const product = item.productId;
       return {
-        productId: product?._id ?? item.productId,
-        name: product?.productName ?? "Unknown Product",
-        image: product?.images ?? [],
+        productId: product._id,
+        name: product.name ?? "Unknown Product",
+        image: product.image ?? [],
         quantity: item.quantity,
         price: item.price,
-        totalPrice: item.totalPrice ?? item.price * item.quantity,
+        totalPrice: item.totalPrice,
       };
     });
 
-    // ✅ Calculate totals
-    const subTotalAmt = products.reduce((acc, p) => acc + (p.totalPrice || 0), 0);
-    const totalAmt = subTotalAmt; // You can add tax/shipping logic later
-
-    // ✅ Create new order
-    const newOrder = await OrderModel.create({
+    // Create the order
+    const order = new OrderModel({
       userId,
-      orderId: `ORD-${uuidv4()}`,
-      products,
-      delivery_address: addressId,
-      payment_status: "pending",
-      order_status: "pending",
-      subTotalAmt,
-      totalAmt,
-    } as IOrder);
+      orderId: uuidv4(),
+      products: orderProducts,
+      subTotalAmt: cart.subTotalAmt,
+      totalAmt: cart.totalAmt,
+      delivery_address,
+    });
 
-    // ✅ Clear cart after order
-    await CartModel.deleteMany({ userId });
+    await order.save();
+
+    // Clear the cart
+    cart.products = [];
+    cart.subTotalAmt = 0;
+    cart.totalAmt = 0;
+    await cart.save();
 
     res.status(201).json({
       success: true,
-      message: "Order created successfully",
-      data: newOrder,
+      message: "Order placed successfully",
+      data: order,
     });
   } catch (error: any) {
+    console.error("Order Creation Error:", error);
     res.status(500).json({
       success: false,
       message: error.message || "Internal Server Error",
     });
   }
 };
-
 /**
  * @desc Get all orders for logged-in user
  * @route GET /api/orders/my-orders

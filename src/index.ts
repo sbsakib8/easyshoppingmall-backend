@@ -47,8 +47,8 @@ app.use("/api/blog", blogRoutes);
 app.use("/api/websiteinfo", websiteInfo);
 app.use("/api/contact", contactRoutes);
 app.use("/api/notification", notifications);
-app.use('/api/cart', cartRouter)
-app.use('/api/order', orderRoute)
+app.use("/api/cart", cartRouter)
+app.use("/api/orders", orderRoute)
 
 app.get("/", (req: Request, res: Response) => {
   res.send("APi  is running...");

@@ -14,7 +14,7 @@ const router = express.Router();
  * @desc    Create a new order from user's cart
  * @access  Private (User)
  */
-router.post("/create", isAuth, createOrder);
+router.post("/create", createOrder);
 
 /**
  * @route   GET /api/orders/my-orders
