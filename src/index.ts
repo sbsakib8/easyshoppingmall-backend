@@ -12,13 +12,16 @@ import homeBannerRoutes from "./models/banners/homeBanner/homeBanner.routs";
 import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routs";
 import leftBannerRoutes from "./models/banners/leftBanner/leftBanner.routs";
 import RightBannerRoutes from "./models/banners/rightBanner/rightBanner.routs";
+import cartRouter from "./models/cart/cart.routs"
+import orderRouter from "./models/order/order.routs"
+import wishlistRouter from "./models/wishlist/wishlist.routs"
 // middleware
 const app: Application = express();
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors(
   {
-    origin: ["http://localhost:3000","https://easyshopingmall-b14r.vercel.app/"],
+    origin: ["http://localhost:3000", "https://easyshopingmall-b14r.vercel.app/"],
     credentials: true,
   }
 ));
@@ -26,16 +29,19 @@ app.use(cors(
 connectDB()
 
 //  route
-app.use("/api/users", userRoutes); 
-app.use("/api/products", productRouter );
-app.use("/api/address", addressRouter );
+app.use("/api/users", userRoutes);
+app.use("/api/products", productRouter);
+app.use("/api/address", addressRouter);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/subcategories", subcategoriesRoutes);
 app.use("/api/homeBannerRoutes", homeBannerRoutes);
 app.use("/api/CenterBanner", centerBannerRoutes);
 app.use("/api/LeftBanner", leftBannerRoutes);
 app.use("/api/RightBanner", RightBannerRoutes);
-
+// 🛒 Cart, Order, Wishlist
+app.use("/api/cart", cartRouter);
+app.use("/api/orders", orderRouter);
+app.use("/api/wishlist", wishlistRouter);
 
 
 app.get("/", (req: Request, res: Response) => {

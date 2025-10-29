@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { v4 as uuidv4 } from "uuid";
+const { v4: uuidv4 } = require("uuid");
 import mongoose from "mongoose";
 import { IOrder, AuthUser } from "./interface";
 import { CartModel } from "../cart/cardproduct.model"; // ✅ fix typo (card → cart)
@@ -17,64 +17,45 @@ interface RequestWithUser extends Request {
  * @route POST /api/orders/create
  * @access Private (User)
  */
-export const createOrder = async (req: RequestWithUser, res: Response): Promise<void> => {
+export const createOrder = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = req.user?._id;
-    const { addressId } = req.body;
+    const { userId, delivery_address } = req.body;
 
-    if (!userId) {
-      res.status(401).json({ success: false, message: "Unauthorized user" });
+    if (!userId || !delivery_address) {
+      res.status(400).json({
+        success: false,
+        message: "Missing required fields (userId, delivery_address)",
+      });
       return;
     }
 
-    if (!addressId) {
-      res.status(400).json({ success: false, message: "Delivery address is required" });
-      return;
-    }
+    const cart = await CartModel.findOne({ userId });
 
-    // ✅ Find single cart for this user
-    const cart = await CartModel.findOne({ userId }).populate("products.productId");
     if (!cart || cart.products.length === 0) {
-      res.status(400).json({ success: false, message: "Cart is empty" });
+      res.status(404).json({ success: false, message: "Cart is empty" });
       return;
     }
 
-    // ✅ Map products
-    const products = cart.products.map((item) => {
-      const product: any = item.productId;
-      return {
-        productId: product?._id ?? item.productId,
-        name: product?.productName ?? "Unknown Product",
-        image: product?.images ?? [],
-        quantity: item.quantity,
-        price: item.price,
-        totalPrice: item.totalPrice ?? item.price * item.quantity,
-      };
+    const order = new OrderModel({
+      userId,
+      items: cart.products,
+      subTotalAmt: cart.subTotalAmt,
+      totalAmt: cart.totalAmt,
+      delivery_address,
     });
 
-    // ✅ Calculate totals
-    const subTotalAmt = products.reduce((acc, p) => acc + (p.totalPrice || 0), 0);
-    const totalAmt = subTotalAmt; // You can add tax/shipping logic later
+    await order.save();
 
-    // ✅ Create new order
-    const newOrder = await OrderModel.create({
-      userId,
-      orderId: `ORD-${uuidv4()}`,
-      products,
-      delivery_address: addressId,
-      payment_status: "pending",
-      order_status: "pending",
-      subTotalAmt,
-      totalAmt,
-    } as IOrder);
-
-    // ✅ Clear cart after order
-    await CartModel.deleteMany({ userId });
+    // Clear cart after placing order
+    cart.products = [];
+    cart.subTotalAmt = 0;
+    cart.totalAmt = 0;
+    await cart.save();
 
     res.status(201).json({
       success: true,
-      message: "Order created successfully",
-      data: newOrder,
+      message: "Order placed successfully",
+      data: order,
     });
   } catch (error: any) {
     res.status(500).json({
