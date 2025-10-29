@@ -16,6 +16,8 @@ import blogRoutes from "./models/content/blogs/blogs.routs";
 import websiteInfo from "./models/content/websiteInfo/websiteinfo.routs"
 import contactRoutes from "./models/content/contact/contact.routs";
 import notifications from "./models/notification/notification.routs";
+import cartRouter from './models/cart/cart.routs'
+import orderRoute from './models/order/order.routs'
 // middleware
 const app: Application = express();
 app.use(express.json());
@@ -45,7 +47,8 @@ app.use("/api/blog", blogRoutes);
 app.use("/api/websiteinfo", websiteInfo);
 app.use("/api/contact", contactRoutes);
 app.use("/api/notification", notifications);
-
+app.use('/api/cart', cartRouter)
+app.use('/api/order', orderRoute)
 
 app.get("/", (req: Request, res: Response) => {
   res.send("APi  is running...");

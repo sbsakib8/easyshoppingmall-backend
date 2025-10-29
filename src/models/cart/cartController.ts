@@ -18,7 +18,7 @@ interface RequestWithUser extends Request {
  */
 export const addToCart = async (req: RequestWithUser, res: Response): Promise<void> => {
     try {
-        const userId = req.user?._id;
+        const userId = req.params?._id;
         const { productId, quantity, price } = req.body;
 
         if (!userId) {
