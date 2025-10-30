@@ -9,10 +9,20 @@ const notification_model_1 = __importDefault(require("./notification.model"));
 // createNotification notification 
 exports.createNotification = (0, express_async_handler_1.default)(async (req, res) => {
     const { title, message, type, referenceId, meta } = req.body;
-    if (!title || !message) {
+    if (!title || !message || !referenceId) {
         res.status(400);
-        throw new Error("title and message are required");
+        throw new Error("title, message & referenceId are required");
     }
+    // ✅ Prevent sending duplicate notifications
+    const exists = await notification_model_1.default.findOne({ referenceId });
+    if (exists) {
+        res.status(200).json({
+            success: false,
+            message: "Notification already sent for this product",
+        });
+        return; // ✅ MUST HAVE! Stop execution here
+    }
+    // ✅ Create Notification
     const notif = await notification_model_1.default.create({
         title,
         message,
@@ -20,10 +30,14 @@ exports.createNotification = (0, express_async_handler_1.default)(async (req, re
         referenceId,
         meta,
     });
+    // ✅ Emit socket instantly
     const io = req.app?.get("io");
     if (io)
         io.emit("notification:new", notif);
-    res.status(201).json({ success: true, data: notif });
+    res.status(201).json({
+        success: true,
+        data: notif,
+    });
 });
 // getNotifications notification 
 exports.getNotifications = (0, express_async_handler_1.default)(async (req, res) => {

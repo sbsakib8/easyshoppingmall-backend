@@ -8,8 +8,7 @@ const NotificationSchema: Schema<INotification> = new Schema(
     message: { type: String, required: true },
     type: {
       type: String,
-      enum: ["order", "user", "stock", "system", "other"],
-      default: "other",
+      required: true,
     },
     referenceId: { type: String, default: null },
     isRead: { type: Boolean, default: false },

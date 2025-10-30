@@ -10,12 +10,24 @@ export const createNotification = asyncHandler(
   async (req: SocketRequest, res: Response): Promise<void> => {
     const { title, message, type, referenceId, meta } = req.body;
 
-    if (!title || !message) {
+    if (!title || !message || !referenceId) {
       res.status(400);
-      throw new Error("title and message are required");
+      throw new Error("title, message & referenceId are required");
     }
 
-    const notif: INotification = await Notification.create({
+    // ✅ Prevent sending duplicate notifications
+    const exists = await Notification.findOne({ referenceId });
+
+    if (exists) {
+      res.status(200).json({
+        success: false,
+        message: "Notification already sent for this product",
+      });
+      return; // ✅ MUST HAVE! Stop execution here
+    }
+
+    // ✅ Create Notification
+    const notif = await Notification.create({
       title,
       message,
       type,
@@ -23,12 +35,17 @@ export const createNotification = asyncHandler(
       meta,
     });
 
+    // ✅ Emit socket instantly
     const io = req.app?.get("io");
     if (io) io.emit("notification:new", notif);
 
-    res.status(201).json({ success: true, data: notif });
+    res.status(201).json({
+      success: true,
+      data: notif,
+    });
   }
 );
+
 
 // getNotifications notification 
 export const getNotifications = asyncHandler(
