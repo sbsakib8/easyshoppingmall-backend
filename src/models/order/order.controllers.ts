@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
-const { v4: uuidv4 } = require('uuid');
 import mongoose from "mongoose";
-import { IOrder, AuthUser } from "./interface";
-import { CartModel } from "../cart/cardproduct.model"; // ✅ fix typo (card → cart)
-import OrderModel from "./order.model";
 import { AuthRequest } from "../../middlewares/isAuth";
+import { CartModel } from "../cart/cardproduct.model"; // ✅ fix typo (card → cart)
+import { AuthUser } from "./interface";
+import OrderModel from "./order.model";
+const { v4: uuidv4 } = require('uuid');
 
 /**
  * Extending Express Request to include user
@@ -30,15 +30,18 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Fetch cart with populated product info
+    // ✅ Fetch cart with populated product details
     const cart = await CartModel.findOne({ userId }).populate("products.productId");
 
     if (!cart || cart.products.length === 0) {
-      res.status(404).json({ success: false, message: "Cart is empty" });
+      res.status(404).json({
+        success: false,
+        message: "Cart is empty",
+      });
       return;
     }
 
-    // Filter valid, populated products
+    // ✅ Filter valid product entries
     const validProducts = cart.products.filter(
       (item: any) =>
         item.productId &&
@@ -54,20 +57,20 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Transform cart items into order format
+    // ✅ Map cart products to order format
     const orderProducts = validProducts.map((item: any) => {
       const product = item.productId;
       return {
         productId: product._id,
-        name: product.name ?? "Unknown Product",
-        image: product.image ?? [],
+        name: product.productName ?? "Unknown Product", // ✅ FIXED field name
+        image: product.images ?? [], // ✅ FIXED field name
         quantity: item.quantity,
         price: item.price,
         totalPrice: item.totalPrice,
       };
     });
 
-    // Create the order
+    // ✅ Create the order
     const order = new OrderModel({
       userId,
       orderId: uuidv4(),
@@ -79,7 +82,7 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
 
     await order.save();
 
-    // Clear the cart
+    // ✅ Clear the cart after order is placed
     cart.products = [];
     cart.subTotalAmt = 0;
     cart.totalAmt = 0;
