@@ -20,6 +20,9 @@ const blogs_routs_1 = __importDefault(require("./models/content/blogs/blogs.rout
 const websiteinfo_routs_1 = __importDefault(require("./models/content/websiteInfo/websiteinfo.routs"));
 const contact_routs_1 = __importDefault(require("./models/content/contact/contact.routs"));
 const notification_routs_1 = __importDefault(require("./models/notification/notification.routs"));
+const cart_routs_1 = __importDefault(require("./models/cart/cart.routs"));
+const order_routs_1 = __importDefault(require("./models/order/order.routs"));
+const wishlist_routs_1 = __importDefault(require("./models/wishlist/wishlist.routs"));
 // middleware
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
@@ -45,6 +48,9 @@ app.use("/api/blog", blogs_routs_1.default);
 app.use("/api/websiteinfo", websiteinfo_routs_1.default);
 app.use("/api/contact", contact_routs_1.default);
 app.use("/api/notification", notification_routs_1.default);
+app.use("/api/cart", cart_routs_1.default);
+app.use("/api/orders", order_routs_1.default);
+app.use("/api/wishlist", wishlist_routs_1.default);
 app.get("/", (req, res) => {
     res.send("APi  is running...");
 });

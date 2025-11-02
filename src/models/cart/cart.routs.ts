@@ -6,13 +6,15 @@ import {
   clearCart,
   getCart,
   removeFromCart,
+  updateCartItem,
 } from "../cart/cartController";
 const router = express.Router();
 
 // 🛒 Cart
-router.post("/add", isAuth, addToCart);
-router.get("/:id", isAuth, getCart);
-router.delete("/:id", isAuth, removeFromCart);
-router.delete("/cart", isAuth, clearCart);
+router.post("/add", addToCart);
+router.get("/:userId",isAuth, getCart);
+router.put("/update", updateCartItem);
+router.delete("/remove/:userId/:productId", removeFromCart);
+router.delete("/clear/:userId", clearCart);
 
 export default router;

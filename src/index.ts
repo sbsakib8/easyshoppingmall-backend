@@ -18,6 +18,7 @@ import contactRoutes from "./models/content/contact/contact.routs";
 import notifications from "./models/notification/notification.routs";
 import cartRouter from './models/cart/cart.routs'
 import orderRoute from './models/order/order.routs'
+import wishlistRouter from './models/wishlist/wishlist.routs'
 // middleware
 const app: Application = express();
 app.use(express.json());
@@ -49,6 +50,7 @@ app.use("/api/contact", contactRoutes);
 app.use("/api/notification", notifications);
 app.use("/api/cart", cartRouter)
 app.use("/api/orders", orderRoute)
+app.use("/api/wishlist", wishlistRouter)
 
 app.get("/", (req: Request, res: Response) => {
   res.send("APi  is running...");

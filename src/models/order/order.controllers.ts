@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { IOrder, AuthUser } from "./interface";
 import { CartModel } from "../cart/cardproduct.model"; // ✅ fix typo (card → cart)
 import OrderModel from "./order.model";
+import { AuthRequest } from "../../middlewares/isAuth";
 
 /**
  * Extending Express Request to include user
@@ -102,9 +103,9 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
  * @route GET /api/orders/my-orders
  * @access Private (User)
  */
-export const getMyOrders = async (req: RequestWithUser, res: Response): Promise<void> => {
+export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?._id;
+    const userId = req.userId;
     if (!userId) {
       res.status(401).json({ success: false, message: "Unauthorized user" });
       return;
@@ -112,7 +113,6 @@ export const getMyOrders = async (req: RequestWithUser, res: Response): Promise<
 
     const orders = await OrderModel.find({ userId })
       .populate("products.productId")
-      .populate("delivery_address")
       .sort({ createdAt: -1 });
 
     res.json({
