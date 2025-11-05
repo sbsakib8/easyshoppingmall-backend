@@ -30,7 +30,9 @@
     "nodemailer": "^7.0.6",
     "nodemon": "^3.1.10",
     "socket.io": "^4.8.1",
-    "ts-node-dev": "^2.0.0"
+    "sslcommerz-lts": "^1.2.0",
+    "ts-node-dev": "^2.0.0",
+    "uuid": "^8.3.2"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.9",

@@ -21,3 +21,10 @@ export interface IOrder extends Document {
   createdAt?: Date;
   updatedAt?: Date;
 }
+
+export interface AuthUser {
+  _id: string;
+  name?: string;
+  email?: string;
+  role?: "user" | "admin";
+}

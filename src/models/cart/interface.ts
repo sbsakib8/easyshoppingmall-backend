@@ -1,12 +1,17 @@
-import mongoose from "mongoose";
+import { Document, Types } from "mongoose";
 
-// 1. Interface
-export interface ICartProduct extends Document {
-  productId: mongoose.Types.ObjectId | string;
+export interface ICartProduct {
+  productId: Types.ObjectId | string;
   quantity: number;
-  userId: mongoose.Types.ObjectId | string;
-  price?: number;
-  totalPrice?: number; 
+  price: number;
+  totalPrice: number;
+}
+
+export interface ICart extends Document {
+  userId: Types.ObjectId | string;
+  products: ICartProduct[];
+  subTotalAmt: number;
+  totalAmt: number;
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -5,9 +5,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.io = void 0;
 const index_1 = __importDefault(require("./index"));
+const PORT = process.env.PORT || 5001;
 const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
-const PORT = process.env.PORT || 5000;
 const server = http_1.default.createServer(index_1.default);
 const io = new socket_io_1.Server(server, {
     cors: {
