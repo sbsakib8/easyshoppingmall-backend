@@ -1,7 +1,8 @@
 import express from "express";
-import { getUserProfile, googleAuth, resetpassword, sendotp, signIn, signOut, signUp, userImage, verifyotp } from "./user.controllers";
+import { deleteUser, getAllUsers, getUserProfile, googleAuth, resetpassword, sendotp, signIn, signOut, signUp, updateUserProfile, userImage, verifyotp } from "./user.controllers";
 import { isAuth } from "../../middlewares/isAuth";
 import { upload } from "../../middlewares/multer";
+import { isAdmin } from "../../middlewares/isAdmin";
 
 const router = express.Router();
 
@@ -19,6 +20,9 @@ router.post("/reset-password", resetpassword);
 
 //  user routes
 router.get("/userprofile",isAuth, getUserProfile);
+router.get("/getallusers",isAuth,isAdmin, getAllUsers);
+router.delete("/userdelete/:id", isAuth, isAdmin, deleteUser);
+router.put("/userupdate/:id",isAuth,isAdmin, updateUserProfile);
 router.post("/user-image/:id",isAuth,upload.single("image"), userImage);
 
 

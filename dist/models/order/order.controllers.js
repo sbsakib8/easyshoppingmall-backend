@@ -4,10 +4,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
-const { v4: uuidv4 } = require('uuid');
 const mongoose_1 = __importDefault(require("mongoose"));
 const cardproduct_model_1 = require("../cart/cardproduct.model"); // ✅ fix typo (card → cart)
 const order_model_1 = __importDefault(require("./order.model"));
+const { v4: uuidv4 } = require('uuid');
 /**
  * @desc Create a new order from user's cart
  * @route POST /api/orders/create
@@ -23,13 +23,16 @@ const createOrder = async (req, res) => {
             });
             return;
         }
-        // Fetch cart with populated product info
+        // ✅ Fetch cart with populated product details
         const cart = await cardproduct_model_1.CartModel.findOne({ userId }).populate("products.productId");
         if (!cart || cart.products.length === 0) {
-            res.status(404).json({ success: false, message: "Cart is empty" });
+            res.status(404).json({
+                success: false,
+                message: "Cart is empty",
+            });
             return;
         }
-        // Filter valid, populated products
+        // ✅ Filter valid product entries
         const validProducts = cart.products.filter((item) => item.productId &&
             typeof item.productId === "object" &&
             "_id" in item.productId);
@@ -40,19 +43,19 @@ const createOrder = async (req, res) => {
             });
             return;
         }
-        // Transform cart items into order format
+        // ✅ Map cart products to order format
         const orderProducts = validProducts.map((item) => {
             const product = item.productId;
             return {
                 productId: product._id,
-                name: product.name ?? "Unknown Product",
-                image: product.image ?? [],
+                name: product.productName ?? "Unknown Product", // ✅ FIXED field name
+                image: product.images ?? [], // ✅ FIXED field name
                 quantity: item.quantity,
                 price: item.price,
                 totalPrice: item.totalPrice,
             };
         });
-        // Create the order
+        // ✅ Create the order
         const order = new order_model_1.default({
             userId,
             orderId: uuidv4(),
@@ -62,7 +65,7 @@ const createOrder = async (req, res) => {
             delivery_address,
         });
         await order.save();
-        // Clear the cart
+        // ✅ Clear the cart after order is placed
         cart.products = [];
         cart.subTotalAmt = 0;
         cart.totalAmt = 0;

@@ -11,7 +11,8 @@ export interface IUser extends Document {
     refresh_token?: string;
     verify_email?: boolean;
     last_login_date?: Date | null;
-    status: "Active" | "Inactive" | "Suspended";
+    status: "Active" | "Inactive" | "Blocked";
+    customerstatus: "NewCustomer"| "TopCustomer" | "ReturningCustomer" | "VIPCustomer" | "WholesaleCustomer" | "Reseller" | "3starCustomer" | "4starCustomer" | "5starCustomer" ;
     address_details: Types.ObjectId[];
     shopping_cart: Types.ObjectId[];
     orderHistory: Types.ObjectId[];
@@ -60,8 +61,13 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
         },
         status: {
             type: String,
-            enum: ["Active", "Inactive", "Suspended"],
+            enum: [ 'Active', 'Inactive', 'Blocked' ],
             default: "Active"
+        },
+        customerstatus: {
+            type: String,
+            enum: [ 'NewCustomer', 'TopCustomer', 'ReturningCustomer', 'VIPCustomer', 'WholesaleCustomer', 'Reseller', '3starCustomer', '4starCustomer', '5starCustomer' ],
+            default: "NewCustomer"
         },
         address_details: [
             {
