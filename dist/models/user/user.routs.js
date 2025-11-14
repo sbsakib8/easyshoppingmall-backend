@@ -7,6 +7,7 @@ const express_1 = __importDefault(require("express"));
 const user_controllers_1 = require("./user.controllers");
 const isAuth_1 = require("../../middlewares/isAuth");
 const multer_1 = require("../../middlewares/multer");
+const isAdmin_1 = require("../../middlewares/isAdmin");
 const router = express_1.default.Router();
 router.post("/signup", user_controllers_1.signUp);
 router.post("/signin", user_controllers_1.signIn);
@@ -19,5 +20,8 @@ router.post("/reset-password", user_controllers_1.resetpassword);
 router.post("/google-auth", user_controllers_1.googleAuth);
 //  user routes
 router.get("/userprofile", isAuth_1.isAuth, user_controllers_1.getUserProfile);
+router.get("/getallusers", isAuth_1.isAuth, isAdmin_1.isAdmin, user_controllers_1.getAllUsers);
+router.delete("/userdelete/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, user_controllers_1.deleteUser);
+router.put("/userupdate/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, user_controllers_1.updateUserProfile);
 router.post("/user-image/:id", isAuth_1.isAuth, multer_1.upload.single("image"), user_controllers_1.userImage);
 exports.default = router;
