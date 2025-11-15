@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.userImage = exports.getUserProfile = exports.googleAuth = exports.resetpassword = exports.verifyotp = exports.sendotp = exports.signOut = exports.signIn = exports.signUp = void 0;
+exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.getAllUsers = exports.getUserProfile = exports.googleAuth = exports.resetpassword = exports.verifyotp = exports.sendotp = exports.signOut = exports.signIn = exports.signUp = void 0;
 const user_model_1 = __importDefault(require("../user/user.model"));
 const genaretetoken_1 = __importDefault(require("../../utils/genaretetoken"));
 const nodemailer_1 = require("../../utils/nodemailer");
@@ -243,6 +243,20 @@ const getUserProfile = async (req, res) => {
     }
 };
 exports.getUserProfile = getUserProfile;
+//  get all users
+const getAllUsers = async (req, res) => {
+    try {
+        const users = await user_model_1.default.find().select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified");
+        res.status(200).json({ success: true, users });
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+exports.getAllUsers = getAllUsers;
 // user imge push 
 const userImage = async (req, res) => {
     try {
@@ -277,3 +291,63 @@ const userImage = async (req, res) => {
     }
 };
 exports.userImage = userImage;
+// user update profile
+const updateUserProfile = async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { name, email, mobile, customerstatus, image, status, verify_email, role, } = req.body;
+        const user = await user_model_1.default.findById(userId);
+        if (!user) {
+            res.status(404).json({ success: false, message: "User not found" });
+            return;
+        }
+        if (name !== undefined)
+            user.name = name;
+        if (email !== undefined)
+            user.email = email;
+        if (mobile !== undefined)
+            user.mobile = mobile;
+        if (customerstatus !== undefined)
+            user.customerstatus = customerstatus;
+        if (image !== undefined)
+            user.image = image;
+        if (status !== undefined)
+            user.status = status;
+        if (verify_email !== undefined)
+            user.verify_email = verify_email;
+        if (role !== undefined)
+            user.role = role;
+        await user.save();
+        res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            user,
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+exports.updateUserProfile = updateUserProfile;
+// delete user
+const deleteUser = async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const user = await user_model_1.default.findByIdAndDelete(userId);
+        if (!user) {
+            res.status(404).json({ success: false, message: "User not found" });
+            return;
+        }
+        res.status(200).json({ success: true, message: "User deleted successfully" });
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+exports.deleteUser = deleteUser;

@@ -1,11 +1,11 @@
 import express from "express";
+import { isAdmin } from "../../middlewares/isAdmin";
+import { isAuth } from "../../middlewares/isAuth";
 import {
   createOrder,
   getMyOrders,
   updateOrderStatus,
 } from "../order/order.controllers";
-import { isAuth } from "../../middlewares/isAuth";
-import { isAdmin } from "../../middlewares/isAdmin";
 
 const router = express.Router();
 
@@ -14,7 +14,7 @@ const router = express.Router();
  * @desc    Create a new order from user's cart
  * @access  Private (User)
  */
-router.post("/create",  createOrder);
+router.post("/create", createOrder);
 
 /**
  * @route   GET /api/orders/my-orders

@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
-const { v4: uuidv4 } = require("uuid");
 import mongoose from "mongoose";
-import { IOrder, AuthUser } from "./interface";
+import { AuthRequest } from "../../middlewares/isAuth";
 import { CartModel } from "../cart/cardproduct.model"; // ✅ fix typo (card → cart)
+import { AuthUser } from "./interface";
 import OrderModel from "./order.model";
+const { v4: uuidv4 } = require('uuid');
 
 /**
  * Extending Express Request to include user
@@ -29,16 +30,51 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const cart = await CartModel.findOne({ userId });
+    // ✅ Fetch cart with populated product details
+    const cart = await CartModel.findOne({ userId }).populate("products.productId");
 
     if (!cart || cart.products.length === 0) {
-      res.status(404).json({ success: false, message: "Cart is empty" });
+      res.status(404).json({
+        success: false,
+        message: "Cart is empty",
+      });
       return;
     }
 
+    // ✅ Filter valid product entries
+    const validProducts = cart.products.filter(
+      (item: any) =>
+        item.productId &&
+        typeof item.productId === "object" &&
+        "_id" in item.productId
+    );
+
+    if (validProducts.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: "No valid products found in the cart",
+      });
+      return;
+    }
+
+    // ✅ Map cart products to order format
+    const orderProducts = validProducts.map((item: any) => {
+      const product = item.productId;
+      return {
+        productId: product._id,
+        name: product.productName ?? "Unknown Product", // ✅ FIXED field name
+        image: product.images ?? [], // ✅ FIXED field name
+        quantity: item.quantity,
+        price: item.price,
+        totalPrice: item.totalPrice,
+      };
+    });
+
+    // ✅ Create the order
     const order = new OrderModel({
       userId,
-      items: cart.products,
+      orderId: uuidv4(),
+      products: orderProducts,
       subTotalAmt: cart.subTotalAmt,
       totalAmt: cart.totalAmt,
       delivery_address,
@@ -46,7 +82,7 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
 
     await order.save();
 
-    // Clear cart after placing order
+    // ✅ Clear the cart after order is placed
     cart.products = [];
     cart.subTotalAmt = 0;
     cart.totalAmt = 0;
@@ -58,21 +94,21 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       data: order,
     });
   } catch (error: any) {
+    console.error("Order Creation Error:", error);
     res.status(500).json({
       success: false,
       message: error.message || "Internal Server Error",
     });
   }
 };
-
 /**
  * @desc Get all orders for logged-in user
  * @route GET /api/orders/my-orders
  * @access Private (User)
  */
-export const getMyOrders = async (req: RequestWithUser, res: Response): Promise<void> => {
+export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?._id;
+    const userId = req.userId;
     if (!userId) {
       res.status(401).json({ success: false, message: "Unauthorized user" });
       return;
@@ -80,7 +116,6 @@ export const getMyOrders = async (req: RequestWithUser, res: Response): Promise<
 
     const orders = await OrderModel.find({ userId })
       .populate("products.productId")
-      .populate("delivery_address")
       .sort({ createdAt: -1 });
 
     res.json({

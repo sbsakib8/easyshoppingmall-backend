@@ -5,8 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const cloudinary_1 = require("cloudinary");
 const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const config_1 = __importDefault(require("../config"));
-// ✅ Type-safe cloudinary uploader
 const uploadClouinary = async (file) => {
     if (!file)
         throw new Error("Invalid file path");
@@ -16,10 +16,14 @@ const uploadClouinary = async (file) => {
         api_key: config_1.default.cloudapikey,
         api_secret: config_1.default.cloudapisecret,
     });
+    const resolvedPath = path_1.default.resolve(file);
     try {
-        const result = await cloudinary_1.v2.uploader.upload(file);
+        const result = await cloudinary_1.v2.uploader.upload(resolvedPath, {
+            resource_type: "image",
+            timeout: 120000,
+        });
         if (fs_1.default.existsSync(file))
-            fs_1.default.unlinkSync(file); // cleanup local file
+            fs_1.default.unlinkSync(file);
         return result.secure_url;
     }
     catch (error) {

@@ -2,16 +2,14 @@ import express from "express";
 import {
   addToCart,
   getCart,
+  removeFromCart,
   updateCartItem,
-  clearCart,
-  removeFromCart
-} from "./cartController";
-import { isAuth } from "../../middlewares/isAuth";
-
+} from "../cart/cartController";
 const router = express.Router();
 
+// 🛒 Cart
 router.post("/add", addToCart);
-router.get("/:userId",isAuth, getCart);
+router.get("/:userId", isAuth, getCart);
 router.put("/update", updateCartItem);
 router.delete("/remove/:userId/:productId", removeFromCart);
 router.delete("/clear/:userId", clearCart);

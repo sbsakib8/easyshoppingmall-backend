@@ -36,9 +36,8 @@ const orderSchema = new Schema<IOrder>(
       default: "pending",
     },
     delivery_address: {
-      type: Schema.Types.ObjectId,
-      ref: "Address",
-      required: true,
+      type: String,
+      required: [true, "Delivery address is required"],
     },
     subTotalAmt: {
       type: Number,
@@ -69,7 +68,7 @@ orderSchema.pre("save", function (next) {
       p.totalPrice = p.quantity * p.price;
     });
     this.subTotalAmt = this.products.reduce((sum, p) => sum + p.totalPrice, 0);
-    this.totalAmt = this.subTotalAmt; 
+    this.totalAmt = this.subTotalAmt;
   }
   next();
 });

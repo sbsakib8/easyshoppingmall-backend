@@ -66,9 +66,8 @@ const orderSchema = new mongoose_1.Schema({
         default: "pending",
     },
     delivery_address: {
-        type: mongoose_1.Schema.Types.ObjectId,
-        ref: "Address",
-        required: true,
+        type: String,
+        required: [true, "Delivery address is required"],
     },
     subTotalAmt: {
         type: Number,
