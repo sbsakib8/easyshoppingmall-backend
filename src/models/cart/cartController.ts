@@ -1,14 +1,12 @@
 import { Request, Response } from "express";
-import mongoose from "mongoose";
-import { CartModel } from "./cardproduct.model";
-import { ICart } from "./interface";
 import { AuthUser } from "../order/interface";
+import { CartModel } from "./cardproduct.model";
 
 /**
  * Extending Express Request to include user
  */
 interface RequestWithUser extends Request {
-    user?: AuthUser;
+  user?: AuthUser;
 }
 
 /**
@@ -78,31 +76,32 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
  * @access Private (User)
  */
 export const getCart = async (req: RequestWithUser, res: Response): Promise<void> => {
-    try {
-        const userId = req.params?.userId;
-        console.log('userId', userId);
-        
+  try {
+    const userId = req.params?.userId;
+    console.log('userId', userId);
+    console.log('res', res)
 
-        if (!userId) {
-            res.status(401).json({ success: false, message: "Unauthorized user" });
-            return;
-        }
 
-        const cart = await CartModel.findOne({ userId }).populate("products.productId");
-
-        if (!cart) {
-            res.status(404).json({ success: false, message: "Cart not found" });
-            return;
-        }
-
-        res.status(200).json({
-            success: true,
-            message: "Cart fetched successfully",
-            data: cart,
-        });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Unauthorized user" });
+      return;
     }
+
+    const cart = await CartModel.findOne({ userId }).populate("products.productId");
+
+    if (!cart) {
+      res.status(404).json({ success: false, message: "Cart not found" });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Cart fetched successfully",
+      data: cart,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+  }
 };
 
 /**
