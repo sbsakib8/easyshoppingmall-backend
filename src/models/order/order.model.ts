@@ -1,4 +1,4 @@
-import mongoose, { Document, Schema, Model } from "mongoose";
+import mongoose, { Model, Schema } from "mongoose";
 import { IOrder } from "./interface";
 
 
