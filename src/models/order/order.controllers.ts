@@ -174,3 +174,31 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
     });
   }
 };
+
+// POST /order/manual-payment
+export const ManualPayment = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    // Update order status
+    order.paymentStatus = "success";
+    order.status = "completed";
+    order.paymentMethod = "manual";
+
+    await order.save();
+
+    res.json({
+      success: true,
+      message: "Manual payment successful",
+      order,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};

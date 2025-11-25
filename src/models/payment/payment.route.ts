@@ -1,13 +1,12 @@
-// routes/payment.routes.ts
 import express from "express";
+import { isAuth } from "../../middlewares/isAuth";
 import {
   initPayment,
-  paymentSuccess,
-  paymentFail,
   paymentCancel,
+  paymentFail,
   paymentIpn,
+  paymentSuccess,
 } from "./sslCommerz.controller";
-import { isAuth } from "../../middlewares/isAuth";
 
 const router = express.Router();
 

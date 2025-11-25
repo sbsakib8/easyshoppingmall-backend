@@ -15,7 +15,7 @@ import contactRoutes from "./models/content/contact/contact.routs";
 import websiteInfo from "./models/content/websiteInfo/websiteinfo.routs";
 import notifications from "./models/notification/notification.routs";
 import orderRoute from './models/order/order.routs';
-import paymentRouter from './models/payment/payment.route.ts';
+import paymentRouter from './models/payment/payment.route';
 import productRouter from "./models/product/product.routs";
 import subcategoriesRoutes from "./models/subcategory/subcategory.routs";
 import userRoutes from "./models/user/user.routs";
