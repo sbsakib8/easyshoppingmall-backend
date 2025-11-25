@@ -1,11 +1,12 @@
 import express from "express";
+import { isAdmin } from "../../middlewares/isAdmin";
+import { isAuth } from "../../middlewares/isAuth";
 import {
   createOrder,
   getMyOrders,
-  updateOrderStatus,
+  ManualPayment,
+  updateOrderStatus
 } from "../order/order.controllers";
-import { isAuth } from "../../middlewares/isAuth";
-import { isAdmin } from "../../middlewares/isAdmin";
 
 const router = express.Router();
 
@@ -29,5 +30,6 @@ router.get("/my-orders", isAuth, getMyOrders);
  * @access  Private (Admin)
  */
 router.put("/:id/status", isAuth, isAdmin, updateOrderStatus);
+router.post("/manual-payment", isAuth, ManualPayment)
 
 export default router;
