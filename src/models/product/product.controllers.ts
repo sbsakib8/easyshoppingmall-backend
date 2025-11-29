@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
-import ProductModel from "./product.model";
-import { IProduct } from "./type";
 import uploadClouinary from "../../utils/cloudinary";
+import ProductModel from "./product.model";
 
 interface PaginationRequest extends Request {
   body: {
@@ -46,7 +45,7 @@ export const createProductController = async (
 
     // Validation
     if (
-      !productName 
+      !productName
     ) {
       res.status(400).json({
         message: "Enter required fields",
@@ -60,14 +59,14 @@ export const createProductController = async (
     const files = req.files as Express.Multer.File[];
     let imageUrls: string[] = [];
 
-   if (files && files.length > 0) {
-  for (const file of files) {
-    if (file.path) { // safe check
-      const uploadedUrl = await uploadClouinary(file.path!);
-      imageUrls.push(uploadedUrl);
+    if (files && files.length > 0) {
+      for (const file of files) {
+        if (file.path) { // safe check
+          const uploadedUrl = await uploadClouinary(file.path!);
+          imageUrls.push(uploadedUrl);
+        }
+      }
     }
-  }
-}
 
     // Auto-generate unique SKU
     const sku = `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -251,14 +250,11 @@ export const getProductByCategoryAndSubCategory = async (
 };
 
 // Get Product Details
-export const getProductDetails = async (
-  req: PaginationRequest,
-  res: Response
-): Promise<void> => {
+export const getProductDetails = async (req: PaginationRequest, res: Response) => {
   try {
-    const { productId } = req.body;
+    const { productId } = req.params;
 
-    const product = await ProductModel.findOne({ _id: productId });
+    const product = await ProductModel.findById(productId);
 
     res.json({
       message: "Product details",
@@ -274,6 +270,7 @@ export const getProductDetails = async (
     });
   }
 };
+
 
 // Update Product
 export const updateProductDetails = async (
