@@ -78,9 +78,6 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
 export const getCart = async (req: RequestWithUser, res: Response): Promise<void> => {
   try {
     const userId = req.params?.userId;
-    console.log('userId', userId);
-    console.log('res', res)
-
 
     if (!userId) {
       res.status(401).json({ success: false, message: "Unauthorized user" });
