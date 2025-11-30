@@ -1,6 +1,4 @@
 import { Request, Response } from "express";
-import ProductModel from "./product.model";
-import { IProduct } from "./type";
 import uploadClouinary from "../../utils/cloudinary";
 import productModel from "./product.model";
 
@@ -47,7 +45,7 @@ export const createProductController = async (
 
     // Validation
     if (
-      !productName 
+      !productName
     ) {
       res.status(400).json({
         message: "Enter required fields",
@@ -61,20 +59,20 @@ export const createProductController = async (
     const files = req.files as Express.Multer.File[];
     let imageUrls: string[] = [];
 
-   if (files && files.length > 0) {
-  for (const file of files) {
-    if (file.path) { // safe check
-      const uploadedUrl = await uploadClouinary(file.path!);
-      imageUrls.push(uploadedUrl);
+    if (files && files.length > 0) {
+      for (const file of files) {
+        if (file.path) { // safe check
+          const uploadedUrl = await uploadClouinary(file.path!);
+          imageUrls.push(uploadedUrl);
+        }
+      }
     }
-  }
-}
 
     // Auto-generate unique SKU
     const sku = `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     // Product create and save
-    const product = await ProductModel.create({
+    const product = await productModel.create({
       productName,
       description,
       category,
@@ -139,12 +137,12 @@ export const getProductController = async (
     const skip = (page - 1) * limit;
 
     const [data, totalCount] = await Promise.all([
-      ProductModel.find(query)
+      productModel.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate("category subCategory"),
-      ProductModel.countDocuments(query),
+      productModel.countDocuments(query),
     ]);
 
     res.json({
@@ -181,7 +179,7 @@ export const getProductByCategory = async (
       return;
     }
 
-    const product = await ProductModel.find({
+    const product = await productModel.find({
       category: { $in: id },
     }).limit(15);
 
@@ -226,11 +224,11 @@ export const getProductByCategoryAndSubCategory = async (
     const skip = (page - 1) * limit;
 
     const [data, dataCount] = await Promise.all([
-      ProductModel.find(query)
+      productModel.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      ProductModel.countDocuments(query),
+      productModel.countDocuments(query),
     ]);
 
     res.json({
@@ -252,12 +250,9 @@ export const getProductByCategoryAndSubCategory = async (
 };
 
 // Get Product Details
-export const getProductDetails = async (
-  req: PaginationRequest,
-  res: Response
-): Promise<void> => {
+export const getProductDetails = async (req: PaginationRequest, res: Response) => {
   try {
-    const { productId } = req.body;
+    const { productId } = req.params;
 
     const product = await productModel.findOne({ _id: productId });
 
@@ -276,6 +271,7 @@ export const getProductDetails = async (
   }
 };
 
+
 // Update Product
 export const updateProductDetails = async (
   req: PaginationRequest,
@@ -293,7 +289,7 @@ export const updateProductDetails = async (
       return;
     }
 
-    const updateProduct = await ProductModel.updateOne(
+    const updateProduct = await productModel.updateOne(
       { _id },
       { ...req.body }
     );
@@ -330,7 +326,7 @@ export const deleteProductDetails = async (
       return;
     }
 
-    const deleteProduct = await ProductModel.deleteOne({ _id });
+    const deleteProduct = await productModel.deleteOne({ _id });
 
     res.json({
       message: "Delete successfully",
@@ -361,12 +357,12 @@ export const searchProduct = async (
     const skip = (page - 1) * limit;
 
     const [data, dataCount] = await Promise.all([
-      ProductModel.find(query)
+      productModel.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate("category subCategory"),
-      ProductModel.countDocuments(query),
+      productModel.countDocuments(query),
     ]);
 
     res.json({
