@@ -91,4 +91,12 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
   }
 );
 
-export default  model<IProduct>("Product", productSchema);
+// ✅ ADD THIS
+productSchema.index({
+  productName: "text",
+  description: "text",
+  brand: "text",
+  tags: "text",
+});
+
+export default model<IProduct>("Product", productSchema);
