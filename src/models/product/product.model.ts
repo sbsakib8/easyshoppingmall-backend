@@ -91,4 +91,4 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
   }
 );
 
-export default model<IProduct>("Product", productSchema);
+export default  model<IProduct>("Product", productSchema);

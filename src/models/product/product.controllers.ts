@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import ProductModel from "./product.model";
 import { IProduct } from "./type";
 import uploadClouinary from "../../utils/cloudinary";
+import productModel from "./product.model";
 
 interface PaginationRequest extends Request {
   body: {
@@ -258,7 +259,7 @@ export const getProductDetails = async (
   try {
     const { productId } = req.body;
 
-    const product = await ProductModel.findOne({ _id: productId });
+    const product = await productModel.findOne({ _id: productId });
 
     res.json({
       message: "Product details",
