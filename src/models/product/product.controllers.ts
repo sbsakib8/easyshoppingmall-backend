@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import uploadClouinary from "../../utils/cloudinary";
-import ProductModel from "./product.model";
+import productModel from "./product.model";
 
 interface PaginationRequest extends Request {
   body: {
@@ -72,7 +72,7 @@ export const createProductController = async (
     const sku = `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     // Product create and save
-    const product = await ProductModel.create({
+    const product = await productModel.create({
       productName,
       description,
       category,
@@ -137,12 +137,12 @@ export const getProductController = async (
     const skip = (page - 1) * limit;
 
     const [data, totalCount] = await Promise.all([
-      ProductModel.find(query)
+      productModel.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate("category subCategory"),
-      ProductModel.countDocuments(query),
+      productModel.countDocuments(query),
     ]);
 
     res.json({
@@ -179,7 +179,7 @@ export const getProductByCategory = async (
       return;
     }
 
-    const product = await ProductModel.find({
+    const product = await productModel.find({
       category: { $in: id },
     }).limit(15);
 
@@ -224,11 +224,11 @@ export const getProductByCategoryAndSubCategory = async (
     const skip = (page - 1) * limit;
 
     const [data, dataCount] = await Promise.all([
-      ProductModel.find(query)
+      productModel.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      ProductModel.countDocuments(query),
+      productModel.countDocuments(query),
     ]);
 
     res.json({
@@ -254,7 +254,7 @@ export const getProductDetails = async (req: PaginationRequest, res: Response) =
   try {
     const { productId } = req.params;
 
-    const product = await ProductModel.findById(productId);
+    const product = await productModel.findOne({ _id: productId });
 
     res.json({
       message: "Product details",
@@ -289,7 +289,7 @@ export const updateProductDetails = async (
       return;
     }
 
-    const updateProduct = await ProductModel.updateOne(
+    const updateProduct = await productModel.updateOne(
       { _id },
       { ...req.body }
     );
@@ -326,7 +326,7 @@ export const deleteProductDetails = async (
       return;
     }
 
-    const deleteProduct = await ProductModel.deleteOne({ _id });
+    const deleteProduct = await productModel.deleteOne({ _id });
 
     res.json({
       message: "Delete successfully",
@@ -357,12 +357,12 @@ export const searchProduct = async (
     const skip = (page - 1) * limit;
 
     const [data, dataCount] = await Promise.all([
-      ProductModel.find(query)
+      productModel.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate("category subCategory"),
-      ProductModel.countDocuments(query),
+      productModel.countDocuments(query),
     ]);
 
     res.json({
