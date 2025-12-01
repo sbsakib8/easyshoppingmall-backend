@@ -120,4 +120,11 @@ const productSchema = new mongoose_1.default.Schema({
 }, {
     timestamps: true,
 });
+// ✅ ADD THIS
+productSchema.index({
+    productName: "text",
+    description: "text",
+    brand: "text",
+    tags: "text",
+});
 exports.default = (0, mongoose_1.model)("Product", productSchema);

@@ -65,8 +65,6 @@ exports.addToCart = addToCart;
 const getCart = async (req, res) => {
     try {
         const userId = req.params?.userId;
-        console.log('userId', userId);
-        console.log('res', res);
         if (!userId) {
             res.status(401).json({ success: false, message: "Unauthorized user" });
             return;

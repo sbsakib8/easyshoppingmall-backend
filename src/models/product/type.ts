@@ -7,8 +7,8 @@ export interface IProduct extends Document {
   subCategory: Types.ObjectId[];
   featured: boolean;
   brand: string;
-  productWeight: number | null;
-  productSize: string;
+  productWeight: string[];
+  productSize: string[];
   color: string[];
   price: number | null;
   productStock: number | null;
