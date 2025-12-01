@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
+exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const cardproduct_model_1 = require("../cart/cardproduct.model"); // ✅ fix typo (card → cart)
 const order_model_1 = __importDefault(require("./order.model"));
@@ -150,3 +150,28 @@ const updateOrderStatus = async (req, res) => {
     }
 };
 exports.updateOrderStatus = updateOrderStatus;
+// POST /order/manual-payment
+const ManualPayment = async (req, res) => {
+    try {
+        const { orderId } = req.body;
+        const order = await Order.findById(orderId);
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+        // Update order status
+        order.paymentStatus = "success";
+        order.status = "completed";
+        order.paymentMethod = "manual";
+        await order.save();
+        res.json({
+            success: true,
+            message: "Manual payment successful",
+            order,
+        });
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
+    }
+};
+exports.ManualPayment = ManualPayment;

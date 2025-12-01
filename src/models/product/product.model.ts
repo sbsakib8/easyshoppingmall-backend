@@ -33,12 +33,12 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
       default: "",
     },
     productWeight: {
-      type: Number,
-      default: null,
+     type: [String],
+      default: [],
     },
     productSize: {
-      type: String,
-      default: "",
+      type: [String],
+      default: [],
     },
     color: {
       type: [String],
