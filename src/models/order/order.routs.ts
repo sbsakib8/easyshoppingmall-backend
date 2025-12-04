@@ -4,6 +4,7 @@ import { isAuth } from "../../middlewares/isAuth";
 import {
   createOrder,
   getMyOrders,
+  getOrderDetails,
   ManualPayment,
   updateOrderStatus
 } from "../order/order.controllers";
@@ -30,6 +31,7 @@ router.get("/my-orders", isAuth, getMyOrders);
  * @access  Private (Admin)
  */
 router.put("/:id/status", isAuth, isAdmin, updateOrderStatus);
+router.get("/:id", isAuth, getOrderDetails);
 router.post("/manual-payment", isAuth, ManualPayment)
 
 export default router;

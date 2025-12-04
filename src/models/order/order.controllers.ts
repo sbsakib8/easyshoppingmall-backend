@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { AuthRequest } from "../../middlewares/isAuth";
 import { AuthUser } from "./interface";
-import OrderModel from "./order.model";
+import { default as OrderModel } from "./order.model";
 const { v4: uuidv4 } = require('uuid');
 
 /**
@@ -146,6 +146,51 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       success: false,
       message: error.message || "Internal Server Error",
     });
+  }
+};
+
+// controllers/orderController.ts
+export const getOrderDetails = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: "Invalid order ID" });
+      return;
+    }
+
+    const orderDoc = await OrderModel.findById(id)
+      .populate("userId", "name email")
+      .populate("products.productId", "name price image")
+      .exec();
+
+    if (!orderDoc) {
+      res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    // Convert to plain object and ensure selected options are present
+    const order = orderDoc.toObject();
+
+    if (Array.isArray(order.products)) {
+      order.products = order.products.map((p: any) => ({
+        productId: p.productId,
+        name: p.name,
+        image: p.image,
+        quantity: p.quantity,
+        price: p.price,
+        totalPrice: p.totalPrice,
+        // Ensure these fields are always present in the response
+        selectedColor: p.selectedColor ?? null,
+        selectedSize: p.selectedSize ?? null,
+        selectedWeight: p.selectedWeight ?? null,
+      }));
+    }
+
+    res.json({ success: true, order });
+  } catch (error: any) {
+    console.error("Error fetching order:", error);
+    res.status(500).json({ success: false, message: "Internal server error", error: error.message });
   }
 };
 
