@@ -9,14 +9,13 @@ const cardproduct_model_1 = require("./cardproduct.model");
  */
 const addToCart = async (req, res) => {
     try {
-        const { userId, productId, quantity, price } = req.body;
+        const { userId, productId, quantity, price, selectedColor, selectedSize, selectedWeight } = req.body;
         if (!userId || !productId || !quantity || !price) {
             res.status(400).json({ success: false, message: "Missing required fields" });
             return;
         }
         let cart = await cardproduct_model_1.CartModel.findOne({ userId });
         if (!cart) {
-            // Create new cart
             cart = new cardproduct_model_1.CartModel({
                 userId,
                 products: [
@@ -25,13 +24,18 @@ const addToCart = async (req, res) => {
                         quantity,
                         price,
                         totalPrice: quantity * price,
+                        selectedColor,
+                        selectedSize,
+                        selectedWeight
                     },
                 ],
             });
         }
         else {
-            // Check if product already in cart
-            const existingProduct = cart.products.find((item) => item.productId.toString() === productId);
+            const existingProduct = cart.products.find((item) => item.productId.toString() === productId &&
+                item.selectedColor === selectedColor &&
+                item.selectedSize === selectedSize &&
+                item.selectedWeight === selectedWeight);
             if (existingProduct) {
                 existingProduct.quantity += quantity;
                 existingProduct.totalPrice = existingProduct.quantity * existingProduct.price;
@@ -42,6 +46,9 @@ const addToCart = async (req, res) => {
                     quantity,
                     price,
                     totalPrice: quantity * price,
+                    selectedColor,
+                    selectedSize,
+                    selectedWeight
                 });
             }
         }
@@ -53,7 +60,10 @@ const addToCart = async (req, res) => {
         });
     }
     catch (error) {
-        res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+        res.status(500).json({
+            success: false,
+            message: error.message || "Internal Server Error",
+        });
     }
 };
 exports.addToCart = addToCart;

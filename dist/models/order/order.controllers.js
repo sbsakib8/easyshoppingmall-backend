@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
-const cardproduct_model_1 = require("../cart/cardproduct.model"); // ✅ fix typo (card → cart)
 const order_model_1 = __importDefault(require("./order.model"));
 const { v4: uuidv4 } = require('uuid');
 /**
@@ -15,72 +14,46 @@ const { v4: uuidv4 } = require('uuid');
  */
 const createOrder = async (req, res) => {
     try {
-        const { userId, delivery_address } = req.body;
-        if (!userId || !delivery_address) {
+        const { userId, products, payment_method, delivery_address, } = req.body;
+        if (!userId || !products?.length || !payment_method || !delivery_address) {
             res.status(400).json({
                 success: false,
-                message: "Missing required fields (userId, delivery_address)",
+                message: "Missing required fields",
             });
             return;
         }
-        // ✅ Fetch cart with populated product details
-        const cart = await cardproduct_model_1.CartModel.findOne({ userId }).populate("products.productId");
-        if (!cart || cart.products.length === 0) {
-            res.status(404).json({
-                success: false,
-                message: "Cart is empty",
-            });
-            return;
-        }
-        // ✅ Filter valid product entries
-        const validProducts = cart.products.filter((item) => item.productId &&
-            typeof item.productId === "object" &&
-            "_id" in item.productId);
-        if (validProducts.length === 0) {
-            res.status(400).json({
-                success: false,
-                message: "No valid products found in the cart",
-            });
-            return;
-        }
-        // ✅ Map cart products to order format
-        const orderProducts = validProducts.map((item) => {
-            const product = item.productId;
-            return {
-                productId: product._id,
-                name: product.productName ?? "Unknown Product", // ✅ FIXED field name
-                image: product.images ?? [], // ✅ FIXED field name
-                quantity: item.quantity,
-                price: item.price,
-                totalPrice: item.totalPrice,
-            };
-        });
-        // ✅ Create the order
-        const order = new order_model_1.default({
+        const orderId = `ORD-${Date.now()}`;
+        const orderData = {
             userId,
-            orderId: uuidv4(),
-            products: orderProducts,
-            subTotalAmt: cart.subTotalAmt,
-            totalAmt: cart.totalAmt,
+            orderId,
+            products: products.map((p) => ({
+                productId: p.productId,
+                name: p.name,
+                image: p.image,
+                quantity: p.quantity,
+                price: p.price,
+                selectedColor: p.selectedColor,
+                selectedSize: p.selectedSize,
+                selectedWeight: p.selectedWeight,
+                totalPrice: p.price * p.quantity,
+            })),
+            payment_method,
             delivery_address,
-        });
-        await order.save();
-        // ✅ Clear the cart after order is placed
-        cart.products = [];
-        cart.subTotalAmt = 0;
-        cart.totalAmt = 0;
-        await cart.save();
+            subTotalAmt: 0,
+            totalAmt: 0,
+        };
+        const newOrder = new order_model_1.default(orderData);
+        await newOrder.save();
         res.status(201).json({
             success: true,
-            message: "Order placed successfully",
-            data: order,
+            message: "Order created successfully",
+            data: newOrder,
         });
     }
     catch (error) {
-        console.error("Order Creation Error:", error);
         res.status(500).json({
             success: false,
-            message: error.message || "Internal Server Error",
+            message: error.message || "Internal server error",
         });
     }
 };
@@ -154,14 +127,15 @@ exports.updateOrderStatus = updateOrderStatus;
 const ManualPayment = async (req, res) => {
     try {
         const { orderId } = req.body;
-        const order = await Order.findById(orderId);
+        const order = await order_model_1.default.findById(orderId);
         if (!order) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
-        // Update order status
-        order.paymentStatus = "success";
-        order.status = "completed";
-        order.paymentMethod = "manual";
+        // Correct field names based on schema
+        order.payment_status = "paid";
+        order.payment_method = "manual";
+        // Use a valid enum value
+        order.order_status = "delivered";
         await order.save();
         res.json({
             success: true,
@@ -170,7 +144,7 @@ const ManualPayment = async (req, res) => {
         });
     }
     catch (err) {
-        console.error(err);
+        console.error("Manual Payment Error:", err);
         res.status(500).json({ success: false, message: "Server error" });
     }
 };

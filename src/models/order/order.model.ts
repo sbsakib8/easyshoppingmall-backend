@@ -23,6 +23,9 @@ const orderSchema = new Schema<IOrder>(
         quantity: { type: Number, default: 1 },
         price: { type: Number, required: true },
         totalPrice: { type: Number, default: 0 },
+        selectedColor: { type: String },
+        selectedSize: { type: String },
+        selectedWeight: { type: String },
       },
     ],
 
@@ -59,7 +62,7 @@ const orderSchema = new Schema<IOrder>(
 
     order_status: {
       type: String,
-      enum: ["pending", "processing", "shipped", "delivered", "cancelled"],
+      enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed"],
       default: "pending",
     },
   },

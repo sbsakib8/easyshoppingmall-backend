@@ -5,6 +5,9 @@ export interface ICartProduct {
   quantity: number;
   price: number;
   totalPrice: number;
+  selectedColor?: string;
+  selectedSize?: string;
+  selectedWeight?: string;
 }
 
 export interface ICart extends Document {

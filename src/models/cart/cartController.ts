@@ -16,7 +16,16 @@ interface RequestWithUser extends Request {
  */
 export const addToCart = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { userId, productId, quantity, price } = req.body;
+    const {
+      userId,
+      productId,
+      quantity,
+      price,
+
+      selectedColor,
+      selectedSize,
+      selectedWeight
+    } = req.body;
 
     if (!userId || !productId || !quantity || !price) {
       res.status(400).json({ success: false, message: "Missing required fields" });
@@ -26,7 +35,6 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
     let cart = await CartModel.findOne({ userId });
 
     if (!cart) {
-      // Create new cart
       cart = new CartModel({
         userId,
         products: [
@@ -35,13 +43,20 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
             quantity,
             price,
             totalPrice: quantity * price,
+
+            selectedColor,
+            selectedSize,
+            selectedWeight
           },
         ],
       });
     } else {
-      // Check if product already in cart
       const existingProduct = cart.products.find(
-        (item) => item.productId.toString() === productId
+        (item) =>
+          item.productId.toString() === productId &&
+          item.selectedColor === selectedColor &&
+          item.selectedSize === selectedSize &&
+          item.selectedWeight === selectedWeight
       );
 
       if (existingProduct) {
@@ -53,6 +68,10 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
           quantity,
           price,
           totalPrice: quantity * price,
+
+          selectedColor,
+          selectedSize,
+          selectedWeight
         });
       }
     }
@@ -64,10 +83,15 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
       message: "Product added to cart successfully",
       data: cart,
     });
+
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
   }
 };
+
 
 
 /**

@@ -1,4 +1,4 @@
-import mongoose, { Schema, Model } from "mongoose";
+import mongoose, { Model, Schema } from "mongoose";
 import { ICart } from "./interface";
 
 const cartSchema = new Schema<ICart>(
@@ -28,7 +28,11 @@ const cartSchema = new Schema<ICart>(
           type: Number,
           default: 0,
         },
+        selectedColor: { type: String },
+        selectedSize: { type: String },
+        selectedWeight: { type: String },
       },
+
     ],
     subTotalAmt: { type: Number, default: 0 },
     totalAmt: { type: Number, default: 0 },

@@ -65,12 +65,12 @@ const productSchema = new mongoose_1.default.Schema({
         default: "",
     },
     productWeight: {
-        type: Number,
-        default: null,
+        type: [String],
+        default: [],
     },
     productSize: {
-        type: String,
-        default: "",
+        type: [String],
+        default: [],
     },
     color: {
         type: [String],

@@ -53,6 +53,9 @@ const orderSchema = new mongoose_1.Schema({
             quantity: { type: Number, default: 1 },
             price: { type: Number, required: true },
             totalPrice: { type: Number, default: 0 },
+            selectedColor: { type: String },
+            selectedSize: { type: String },
+            selectedWeight: { type: String },
         },
     ],
     paymentId: { type: String, default: "" },
@@ -81,7 +84,7 @@ const orderSchema = new mongoose_1.Schema({
     invoice_receipt: { type: String, default: "" },
     order_status: {
         type: String,
-        enum: ["pending", "processing", "shipped", "delivered", "cancelled"],
+        enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed"],
         default: "pending",
     },
 }, { timestamps: true });
