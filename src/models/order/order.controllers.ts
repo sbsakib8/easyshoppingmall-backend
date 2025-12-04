@@ -1,9 +1,8 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { AuthRequest } from "../../middlewares/isAuth";
-import { CartModel } from "../cart/cardproduct.model"; // ✅ fix typo (card → cart)
 import { AuthUser } from "./interface";
-import OrderModel from "./order.model";
+import { default as OrderModel } from "./order.model";
 const { v4: uuidv4 } = require('uuid');
 
 /**
@@ -20,87 +19,62 @@ interface RequestWithUser extends Request {
  */
 export const createOrder = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { userId, delivery_address } = req.body;
-
-    if (!userId || !delivery_address) {
-      res.status(400).json({
-        success: false,
-        message: "Missing required fields (userId, delivery_address)",
-      });
-      return;
-    }
-
-    // ✅ Fetch cart with populated product details
-    const cart = await CartModel.findOne({ userId }).populate("products.productId");
-
-    if (!cart || cart.products.length === 0) {
-      res.status(404).json({
-        success: false,
-        message: "Cart is empty",
-      });
-      return;
-    }
-
-    // ✅ Filter valid product entries
-    const validProducts = cart.products.filter(
-      (item: any) =>
-        item.productId &&
-        typeof item.productId === "object" &&
-        "_id" in item.productId
-    );
-
-    if (validProducts.length === 0) {
-      res.status(400).json({
-        success: false,
-        message: "No valid products found in the cart",
-      });
-      return;
-    }
-
-    // ✅ Map cart products to order format
-    const orderProducts = validProducts.map((item: any) => {
-      const product = item.productId;
-      return {
-        productId: product._id,
-        name: product.productName ?? "Unknown Product", // ✅ FIXED field name
-        image: product.images ?? [], // ✅ FIXED field name
-        quantity: item.quantity,
-        price: item.price,
-        totalPrice: item.totalPrice,
-      };
-    });
-
-    // ✅ Create the order
-    const order = new OrderModel({
+    const {
       userId,
-      orderId: uuidv4(),
-      products: orderProducts,
-      subTotalAmt: cart.subTotalAmt,
-      totalAmt: cart.totalAmt,
+      products,
+      payment_method,
       delivery_address,
-    });
+    } = req.body;
 
-    await order.save();
+    if (!userId || !products?.length || !payment_method || !delivery_address) {
+      res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+      });
+      return;
+    }
 
-    // ✅ Clear the cart after order is placed
-    cart.products = [];
-    cart.subTotalAmt = 0;
-    cart.totalAmt = 0;
-    await cart.save();
+    const orderId = `ORD-${Date.now()}`;
+
+    const orderData = {
+      userId,
+      orderId,
+      products: products.map((p: any) => ({
+        productId: p.productId,
+        name: p.name,
+        image: p.image,
+        quantity: p.quantity,
+        price: p.price,
+
+        selectedColor: p.selectedColor,
+        selectedSize: p.selectedSize,
+        selectedWeight: p.selectedWeight,
+
+        totalPrice: p.price * p.quantity,
+      })),
+
+      payment_method,
+      delivery_address,
+      subTotalAmt: 0,
+      totalAmt: 0,
+    };
+
+    const newOrder = new OrderModel(orderData);
+    await newOrder.save();
 
     res.status(201).json({
       success: true,
-      message: "Order placed successfully",
-      data: order,
+      message: "Order created successfully",
+      data: newOrder,
     });
   } catch (error: any) {
-    console.error("Order Creation Error:", error);
     res.status(500).json({
       success: false,
-      message: error.message || "Internal Server Error",
+      message: error.message || "Internal server error",
     });
   }
 };
+
 /**
  * @desc Get all orders for logged-in user
  * @route GET /api/orders/my-orders
@@ -175,20 +149,67 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
   }
 };
 
+// controllers/orderController.ts
+export const getOrderDetails = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: "Invalid order ID" });
+      return;
+    }
+
+    const orderDoc = await OrderModel.findById(id)
+      .populate("userId", "name email")
+      .populate("products.productId", "name price image")
+      .exec();
+
+    if (!orderDoc) {
+      res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    // Convert to plain object and ensure selected options are present
+    const order = orderDoc.toObject();
+
+    if (Array.isArray(order.products)) {
+      order.products = order.products.map((p: any) => ({
+        productId: p.productId,
+        name: p.name,
+        image: p.image,
+        quantity: p.quantity,
+        price: p.price,
+        totalPrice: p.totalPrice,
+        // Ensure these fields are always present in the response
+        selectedColor: p.selectedColor ?? null,
+        selectedSize: p.selectedSize ?? null,
+        selectedWeight: p.selectedWeight ?? null,
+      }));
+    }
+
+    res.json({ success: true, order });
+  } catch (error: any) {
+    console.error("Error fetching order:", error);
+    res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+  }
+};
+
 // POST /order/manual-payment
-export const ManualPayment = async (req, res) => {
+export const ManualPayment = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.body;
 
-    const order = await Order.findById(orderId);
+    const order = await OrderModel.findById(orderId);
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    // Update order status
-    order.paymentStatus = "success";
-    order.status = "completed";
-    order.paymentMethod = "manual";
+    // Correct field names based on schema
+    order.payment_status = "paid";
+    order.payment_method = "manual";
+
+    // Use a valid enum value
+    order.order_status = "delivered";
 
     await order.save();
 
@@ -198,7 +219,7 @@ export const ManualPayment = async (req, res) => {
       order,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Manual Payment Error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };

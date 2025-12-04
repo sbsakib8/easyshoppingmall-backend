@@ -10,6 +10,9 @@ export interface IOrder extends Document {
     quantity: number;
     price: number;
     totalPrice: number;
+    selectedColor?: string;
+    selectedSize?: string;
+    selectedWeight?: string;
   }[];
   paymentId?: string;
   payment_status?: "pending" | "paid" | "failed" | "refunded";
@@ -19,7 +22,7 @@ export interface IOrder extends Document {
   subTotalAmt: number;
   totalAmt: number;
   invoice_receipt?: string;
-  order_status?: "pending" | "processing" | "shipped" | "delivered" | "cancelled";
+  order_status?: "pending" | "processing" | "shipped" | "delivered" | "cancelled" | "completed";
   createdAt?: Date;
   updatedAt?: Date;
 }
