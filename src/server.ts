@@ -8,10 +8,11 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: ["https://easyshoppingmallbd.com/", "https://api.easyshoppingmallbd.com/"],
+    origin: ["https://easyshoppingmallbd.com", "https://easyshoppingmallbd.vercel.app"],
     methods: ["GET", "POST"],
     credentials: true,
   },
+  transports: ["websocket", "polling"],
 });
 
 //  Socket.io 
