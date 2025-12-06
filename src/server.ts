@@ -8,7 +8,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "https://easyshopingmall-b14r.vercel.app/"],
+    origin: ["https://easyshoppingmallbd.com/", "https://api.easyshoppingmallbd.com/"],
     methods: ["GET", "POST"],
     credentials: true,
   },

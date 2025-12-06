@@ -26,5 +26,6 @@ router.get("/my-orders", isAuth_1.isAuth, order_controllers_1.getMyOrders);
  * @access  Private (Admin)
  */
 router.put("/:id/status", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.updateOrderStatus);
+router.get("/:id", isAuth_1.isAuth, order_controllers_1.getOrderDetails);
 router.post("/manual-payment", isAuth_1.isAuth, order_controllers_1.ManualPayment);
 exports.default = router;

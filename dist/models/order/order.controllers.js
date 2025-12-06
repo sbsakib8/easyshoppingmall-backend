@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
+exports.ManualPayment = exports.getOrderDetails = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const order_model_1 = __importDefault(require("./order.model"));
 const { v4: uuidv4 } = require('uuid');
@@ -123,6 +123,46 @@ const updateOrderStatus = async (req, res) => {
     }
 };
 exports.updateOrderStatus = updateOrderStatus;
+// controllers/orderController.ts
+const getOrderDetails = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
+            res.status(400).json({ success: false, message: "Invalid order ID" });
+            return;
+        }
+        const orderDoc = await order_model_1.default.findById(id)
+            .populate("userId", "name email")
+            .populate("products.productId", "name price image")
+            .exec();
+        if (!orderDoc) {
+            res.status(404).json({ success: false, message: "Order not found" });
+            return;
+        }
+        // Convert to plain object and ensure selected options are present
+        const order = orderDoc.toObject();
+        if (Array.isArray(order.products)) {
+            order.products = order.products.map((p) => ({
+                productId: p.productId,
+                name: p.name,
+                image: p.image,
+                quantity: p.quantity,
+                price: p.price,
+                totalPrice: p.totalPrice,
+                // Ensure these fields are always present in the response
+                selectedColor: p.selectedColor ?? null,
+                selectedSize: p.selectedSize ?? null,
+                selectedWeight: p.selectedWeight ?? null,
+            }));
+        }
+        res.json({ success: true, order });
+    }
+    catch (error) {
+        console.error("Error fetching order:", error);
+        res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+    }
+};
+exports.getOrderDetails = getOrderDetails;
 // POST /order/manual-payment
 const ManualPayment = async (req, res) => {
     try {
