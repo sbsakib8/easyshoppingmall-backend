@@ -35,69 +35,74 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const productSchema = new mongoose_1.default.Schema({
-    name: {
+    productName: {
         type: String,
         required: true,
+        trim: true,
     },
-    image: {
-        type: [String],
-        default: [],
+    description: {
+        type: String,
+        default: "",
     },
     category: [
         {
-            type: mongoose_1.default.Schema.ObjectId,
-            ref: "category",
+            type: mongoose_1.default.Schema.Types.ObjectId,
+            ref: "Category",
         },
     ],
     subCategory: [
         {
-            type: mongoose_1.default.Schema.ObjectId,
-            ref: "subCategory",
+            type: mongoose_1.default.Schema.Types.ObjectId,
+            ref: "SubCategory",
         },
     ],
-    brand: {
-        type: String,
-        default: "",
-    },
-    tags: {
-        type: [String],
-        default: [],
-    },
     featured: {
         type: Boolean,
         default: false,
     },
-    unit: {
+    brand: {
         type: String,
         default: "",
     },
-    weight: {
-        type: Number,
-        default: null,
+    productWeight: {
+        type: [String],
+        default: [],
     },
-    size: {
-        type: String,
-        default: "",
+    productSize: {
+        type: [String],
+        default: [],
     },
-    rank: {
-        type: Number,
-        default: 0,
-    },
-    stock: {
-        type: Number,
-        default: null,
+    color: {
+        type: [String],
+        default: [],
     },
     price: {
         type: Number,
         default: null,
     },
+    productStock: {
+        type: Number,
+        default: null,
+    },
+    productRank: {
+        type: Number,
+        default: 0,
+    },
     discount: {
         type: Number,
         default: null,
     },
-    description: {
-        type: String,
-        default: "",
+    ratings: {
+        type: Number,
+        default: 5,
+    },
+    tags: {
+        type: [String],
+        default: [],
+    },
+    images: {
+        type: [String],
+        default: [],
     },
     more_details: {
         type: Object,
@@ -107,7 +112,19 @@ const productSchema = new mongoose_1.default.Schema({
         type: Boolean,
         default: true,
     },
+    sku: {
+        type: String,
+        unique: true,
+        sparse: true,
+    },
 }, {
     timestamps: true,
+});
+// ✅ ADD THIS
+productSchema.index({
+    productName: "text",
+    description: "text",
+    brand: "text",
+    tags: "text",
 });
 exports.default = (0, mongoose_1.model)("Product", productSchema);

@@ -1,16 +1,24 @@
 import { Request, Response } from "express";
 import SubCategoryModel from "./subcategory.model";
 import CategoryModel from "../category/category.model";
+import uploadClouinary from "../../utils/cloudinary";
 
 // ✅ Create SubCategory
 export const createSubCategory = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, image, icon, isActive, metaDescription, metaTitle, category } = req.body;
+    const { name, icon, isActive, metaDescription, metaTitle, category } = req.body;
 
     // Validate category
     const categoryExists = await CategoryModel.findById(category);
     if (!categoryExists) {
       res.status(400).json({ success: false, message: "Invalid Category ID" });
+      return;
+    }
+    let imageUrl: string | undefined;
+    if (req.file) {
+      imageUrl = await uploadClouinary(req.file.path);
+    } else {
+      res.status(400).json({ success: false, message: "not image file provided" });
       return;
     }
 
@@ -21,9 +29,11 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
       return;
     }
 
+    
+
     const subCategory = new SubCategoryModel({
       name,
-      image,
+      image:imageUrl,
       icon,
       isActive,
       metaDescription,
@@ -82,7 +92,14 @@ export const updateSubCategory = async (req: Request, res: Response): Promise<vo
       return;
     }
 
+    
+
     const { _id, slug, ...updateData } = req.body;
+
+    if (req.file) {
+      const imageUrl = await uploadClouinary(req.file.path);
+      updateData.image = imageUrl;
+    }
 
     const updatedSubCategory = await SubCategoryModel.findByIdAndUpdate(id, updateData, {
       new: true,

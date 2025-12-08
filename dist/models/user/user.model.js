@@ -3,8 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const mongoose_1 = __importDefault(require("mongoose"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
+const mongoose_1 = __importDefault(require("mongoose"));
 const userSchema = new mongoose_1.default.Schema({
     name: {
         type: String,
@@ -22,6 +22,10 @@ const userSchema = new mongoose_1.default.Schema({
         type: String,
         default: null
     },
+    image: {
+        type: String,
+        default: null
+    },
     refresh_token: {
         type: String,
         default: ""
@@ -36,8 +40,13 @@ const userSchema = new mongoose_1.default.Schema({
     },
     status: {
         type: String,
-        enum: ["Active", "Inactive", "Suspended"],
+        enum: ['Active', 'Inactive', 'Blocked'],
         default: "Active"
+    },
+    customerstatus: {
+        type: String,
+        enum: ['NewCustomer', 'TopCustomer', 'ReturningCustomer', 'VIPCustomer', 'WholesaleCustomer', 'Reseller', '3starCustomer', '4starCustomer', '5starCustomer'],
+        default: "NewCustomer"
     },
     address_details: [
         {

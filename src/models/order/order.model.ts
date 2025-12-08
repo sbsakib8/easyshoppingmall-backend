@@ -1,9 +1,6 @@
-import mongoose, { Document, Schema, Model } from "mongoose";
+import mongoose, { Model, Schema } from "mongoose";
 import { IOrder } from "./interface";
 
-
-
-// 2. Schema
 const orderSchema = new Schema<IOrder>(
   {
     userId: {
@@ -11,11 +8,13 @@ const orderSchema = new Schema<IOrder>(
       ref: "User",
       required: true,
     },
+
     orderId: {
       type: String,
-      required: [true, "Provide orderId"],
+      required: true,
       unique: true,
     },
+
     products: [
       {
         productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
@@ -26,55 +25,64 @@ const orderSchema = new Schema<IOrder>(
         totalPrice: { type: Number, default: 0 },
       },
     ],
-    paymentId: {
-      type: String,
-      default: "",
-    },
+
+    paymentId: { type: String, default: "" },
+
     payment_status: {
       type: String,
       enum: ["pending", "paid", "failed", "refunded"],
       default: "pending",
     },
-    delivery_address: {
-      type: Schema.Types.ObjectId,
-      ref: "Address",
-      required: true,
+
+    // ⭐ NEW FIELD
+    payment_method: {
+      type: String,
+      enum: ["manual", "sslcommerz"],
+      default: "manual",
     },
-    subTotalAmt: {
-      type: Number,
-      default: 0,
-    },
-    totalAmt: {
-      type: Number,
-      default: 0,
-    },
-    invoice_receipt: {
+
+    // ⭐ NEW FIELD
+    payment_session_key: {
       type: String,
       default: "",
     },
+
+    delivery_address: {
+      type: String,
+      required: true,
+    },
+
+    subTotalAmt: { type: Number, default: 0 },
+    totalAmt: { type: Number, default: 0 },
+
+    invoice_receipt: { type: String, default: "" },
+
     order_status: {
       type: String,
       enum: ["pending", "processing", "shipped", "delivered", "cancelled"],
       default: "pending",
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
+// FIX PRE-HOOK TYPES
 orderSchema.pre("save", function (next) {
-  if (this.products && this.products.length > 0) {
-    this.products.forEach((p) => {
+  const self = this as unknown as IOrder;
+
+  if (self.products && self.products.length > 0) {
+    self.products.forEach((p) => {
       p.totalPrice = p.quantity * p.price;
     });
-    this.subTotalAmt = this.products.reduce((sum, p) => sum + p.totalPrice, 0);
-    this.totalAmt = this.subTotalAmt; 
+
+    self.subTotalAmt = self.products.reduce((sum, p) => sum + p.totalPrice, 0);
+    self.totalAmt = self.subTotalAmt;
   }
+
   next();
 });
 
-// 4. Model type
+
 const OrderModel: Model<IOrder> = mongoose.model<IOrder>("Order", orderSchema);
 
 export default OrderModel;

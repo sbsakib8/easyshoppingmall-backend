@@ -1,4 +1,4 @@
-import type { Request, Response } from "express";
+import type { CookieOptions, Request, Response } from "express";
 import User from "../user/user.model";
 import type { IUser } from "../user/user.model";
 import generateToken from "../../utils/genaretetoken";
@@ -7,17 +7,17 @@ import { AuthRequest } from "../../middlewares/isAuth";
 import uploadClouinary from "../../utils/cloudinary";
 
 // Cookie 
-const cookieOptions = {
+const cookieOptions:CookieOptions = {
   httpOnly: true, 
-  secure: false, 
-  sameSite: "strict" as const,
+  secure: true, 
+  sameSite: "none",
   maxAge: 30 * 24 * 60 * 60 * 1000, 
 };
 
 // Register User
 export const signUp = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password , role } = req.body;
 
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -25,7 +25,7 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const user: IUser = await User.create({ name, email, password });
+    const user: IUser = await User.create({ name, email, password , role });
     const token = generateToken(user._id.toString());
     //  cookie
      res.cookie("token", token,{
@@ -261,6 +261,22 @@ export const getUserProfile = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
+//  get all users
+export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const users = await User.find().select( 
+      "-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified"
+    );
+
+    res.status(200).json({ success: true, users });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
 // user imge push 
 export const userImage = async (req: Request, res: Response) => {
   try {
@@ -300,3 +316,69 @@ export const userImage = async (req: Request, res: Response) => {
     });
   }
 };
+
+// user update profile
+export const updateUserProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.params.id; 
+
+    const {
+      name,
+      email,
+      mobile,
+      customerstatus,
+      image,
+      status,
+      verify_email,
+      role,
+    } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      res.status(404).json({ success: false, message: "User not found" });
+      return;
+    }
+
+    if (name !== undefined) user.name = name;
+    if (email !== undefined) user.email = email;
+    if (mobile !== undefined) user.mobile = mobile;
+    if (customerstatus !== undefined) user.customerstatus = customerstatus;
+    if (image !== undefined) user.image = image;
+    if (status !== undefined) user.status = status;
+    if (verify_email !== undefined) user.verify_email = verify_email;
+    if (role !== undefined) user.role = role;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
+// delete user
+export const deleteUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.params.id;
+    const user = await User.findByIdAndDelete(userId);
+    if (!user) {
+      res.status(404).json({ success: false, message: "User not found" });
+      return;
+    }
+    res.status(200).json({ success: true, message: "User deleted successfully" });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
+

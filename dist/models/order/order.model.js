@@ -34,7 +34,6 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-// 2. Schema
 const orderSchema = new mongoose_1.Schema({
     userId: {
         type: mongoose_1.Schema.Types.ObjectId,
@@ -43,7 +42,7 @@ const orderSchema = new mongoose_1.Schema({
     },
     orderId: {
         type: String,
-        required: [true, "Provide orderId"],
+        required: true,
         unique: true,
     },
     products: [
@@ -56,50 +55,47 @@ const orderSchema = new mongoose_1.Schema({
             totalPrice: { type: Number, default: 0 },
         },
     ],
-    paymentId: {
-        type: String,
-        default: "",
-    },
+    paymentId: { type: String, default: "" },
     payment_status: {
         type: String,
         enum: ["pending", "paid", "failed", "refunded"],
         default: "pending",
     },
-    delivery_address: {
-        type: mongoose_1.Schema.Types.ObjectId,
-        ref: "Address",
-        required: true,
+    // ⭐ NEW FIELD
+    payment_method: {
+        type: String,
+        enum: ["manual", "sslcommerz"],
+        default: "manual",
     },
-    subTotalAmt: {
-        type: Number,
-        default: 0,
-    },
-    totalAmt: {
-        type: Number,
-        default: 0,
-    },
-    invoice_receipt: {
+    // ⭐ NEW FIELD
+    payment_session_key: {
         type: String,
         default: "",
     },
+    delivery_address: {
+        type: String,
+        required: true,
+    },
+    subTotalAmt: { type: Number, default: 0 },
+    totalAmt: { type: Number, default: 0 },
+    invoice_receipt: { type: String, default: "" },
     order_status: {
         type: String,
         enum: ["pending", "processing", "shipped", "delivered", "cancelled"],
         default: "pending",
     },
-}, {
-    timestamps: true,
-});
+}, { timestamps: true });
+// FIX PRE-HOOK TYPES
 orderSchema.pre("save", function (next) {
-    if (this.products && this.products.length > 0) {
-        this.products.forEach((p) => {
+    const self = this;
+    if (self.products && self.products.length > 0) {
+        self.products.forEach((p) => {
             p.totalPrice = p.quantity * p.price;
         });
-        this.subTotalAmt = this.products.reduce((sum, p) => sum + p.totalPrice, 0);
-        this.totalAmt = this.subTotalAmt;
+        self.subTotalAmt = self.products.reduce((sum, p) => sum + p.totalPrice, 0);
+        self.totalAmt = self.subTotalAmt;
     }
     next();
 });
-// 4. Model type
 const OrderModel = mongoose_1.default.model("Order", orderSchema);
 exports.default = OrderModel;

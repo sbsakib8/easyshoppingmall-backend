@@ -33,41 +33,43 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.CartModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-// 2. Schema
-const cartProductSchema = new mongoose_1.Schema({
-    productId: {
-        type: mongoose_1.Schema.Types.ObjectId,
-        ref: "Product",
-        required: true,
-    },
-    quantity: {
-        type: Number,
-        default: 1,
-        min: [1, "Quantity can not be less than 1"],
-    },
+const cartSchema = new mongoose_1.Schema({
     userId: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: "User",
         required: true,
     },
-    price: {
-        type: Number,
-        default: 0,
-    },
-    totalPrice: {
-        type: Number,
-        default: 0,
-    },
-}, {
-    timestamps: true,
-});
-cartProductSchema.pre("save", function (next) {
-    if (this.price && this.quantity) {
-        this.totalPrice = this.price * this.quantity;
-    }
+    products: [
+        {
+            productId: {
+                type: mongoose_1.Schema.Types.ObjectId,
+                ref: "Product",
+                required: true,
+            },
+            quantity: {
+                type: Number,
+                default: 1,
+                min: [1, "Quantity can not be less than 1"],
+            },
+            price: {
+                type: Number,
+                default: 0,
+            },
+            totalPrice: {
+                type: Number,
+                default: 0,
+            },
+        },
+    ],
+    subTotalAmt: { type: Number, default: 0 },
+    totalAmt: { type: Number, default: 0 },
+}, { timestamps: true });
+// Pre-save hook to update totals
+cartSchema.pre("save", function (next) {
+    this.subTotalAmt = this.products.reduce((acc, item) => acc + item.price * item.quantity, 0);
+    this.totalAmt = this.subTotalAmt; // Add taxes/shipping if needed
     next();
 });
-// 4. Model type
-const CartProductModel = mongoose_1.default.model("CartProduct", cartProductSchema);
-exports.default = CartProductModel;
+exports.CartModel = mongoose_1.default.model("Cart", cartSchema);
