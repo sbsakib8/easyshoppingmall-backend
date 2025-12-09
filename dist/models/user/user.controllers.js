@@ -11,8 +11,8 @@ const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 // Cookie 
 const cookieOptions = {
     httpOnly: true,
-    secure: false,
-    sameSite: "strict",
+    secure: true,
+    sameSite: "none",
     maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 // Register User

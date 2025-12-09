@@ -2,13 +2,16 @@ import app from "./index";
 const PORT = process.env.PORT || 5001;
 import http from "http";
 import { Server } from "socket.io";
+import connectDB from "./config/db.connect";
 
 
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "https://easyshopingmall-b14r.vercel.app/"],
+    origin: ["http://localhost:3000",
+    "https://easyshoppingmallbd.com",
+    "https://easyshoppingmallbd.vercel.app"],
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -30,8 +33,11 @@ io.on("connection", (socket) => {
 });
 
 //  Server start
-server.listen(PORT, () => {
+server.listen(PORT,async () => {
+    // mongodb 
+    await connectDB()
   console.log(`✅ Server running at http://localhost:${PORT}`);
+
 });
 
 export { io };

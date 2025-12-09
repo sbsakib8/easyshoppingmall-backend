@@ -28,12 +28,13 @@ app.use(cookieParser());
 // cors
 app.use(cors(
   {
-    origin: ["http://localhost:3000", "https://easyshopingmall-b14r.vercel.app/"],
+    origin: ["http://localhost:3000",
+    "https://easyshoppingmallbd.com",
+    "https://easyshoppingmallbd.vercel.app"],
     credentials: true,
   }
 ));
-// mongodb 
-connectDB()
+
 
 //  route
 app.use("/api/users", userRoutes);
