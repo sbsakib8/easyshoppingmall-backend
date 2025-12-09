@@ -15,6 +15,10 @@ import contactRoutes from "./models/content/contact/contact.routs";
 import websiteInfo from "./models/content/websiteInfo/websiteinfo.routs";
 import notifications from "./models/notification/notification.routs";
 import orderRoute from './models/order/order.routs';
+<<<<<<< HEAD
+=======
+import paymentRouter from './models/payment/payment.route';
+>>>>>>> 0ab9f4aadc19406e29a2900b7c57e0c9258eeecb
 import productRouter from "./models/product/product.routs";
 import subcategoriesRoutes from "./models/subcategory/subcategory.routs";
 import userRoutes from "./models/user/user.routs";
@@ -27,12 +31,17 @@ app.use(cookieParser());
 // cors
 app.use(cors(
   {
+<<<<<<< HEAD
     origin: ["http://localhost:3000", "https://easyshopingmall-b14r.vercel.app/"],
+=======
+    origin: ["http://localhost:3000",
+    "https://easyshoppingmallbd.com",
+    "https://easyshoppingmallbd.vercel.app"],
+>>>>>>> 0ab9f4aadc19406e29a2900b7c57e0c9258eeecb
     credentials: true,
   }
 ));
-// mongodb 
-connectDB()
+
 
 //  route
 app.use("/api/users", userRoutes);
@@ -51,6 +60,8 @@ app.use("/api/notification", notifications);
 app.use("/api/cart", cartRouter)
 app.use("/api/orders", orderRoute)
 app.use("/api/wishlist", wishlistRouter)
+app.use("/api/payment", paymentRouter)
+
 
 app.get("/", (req: Request, res: Response) => {
   res.send("APi  is running...");

@@ -1,4 +1,4 @@
-import type { Request, Response } from "express";
+import type { CookieOptions, Request, Response } from "express";
 import User from "../user/user.model";
 import type { IUser } from "../user/user.model";
 import generateToken from "../../utils/genaretetoken";
@@ -7,10 +7,10 @@ import { AuthRequest } from "../../middlewares/isAuth";
 import uploadClouinary from "../../utils/cloudinary";
 
 // Cookie 
-const cookieOptions = {
+const cookieOptions:CookieOptions = {
   httpOnly: true, 
-  secure: false, 
-  sameSite: "strict" as const,
+  secure: true, 
+  sameSite: "none",
   maxAge: 30 * 24 * 60 * 60 * 1000, 
 };
 

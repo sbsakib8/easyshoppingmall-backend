@@ -33,12 +33,12 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
       default: "",
     },
     productWeight: {
-      type: Number,
-      default: null,
+     type: [String],
+      default: [],
     },
     productSize: {
-      type: String,
-      default: "",
+      type: [String],
+      default: [],
     },
     color: {
       type: [String],
@@ -90,5 +90,13 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// ✅ ADD THIS
+productSchema.index({
+  productName: "text",
+  description: "text",
+  brand: "text",
+  tags: "text",
+});
 
 export default model<IProduct>("Product", productSchema);

@@ -4,8 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.searchProduct = exports.deleteProductDetails = exports.updateProductDetails = exports.getProductDetails = exports.getProductByCategoryAndSubCategory = exports.getProductByCategory = exports.getProductController = exports.createProductController = void 0;
-const product_model_1 = __importDefault(require("./product.model"));
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
+const product_model_1 = __importDefault(require("./product.model"));
 // Create Product
 const createProductController = async (req, res) => {
     try {
@@ -194,7 +194,7 @@ exports.getProductByCategoryAndSubCategory = getProductByCategoryAndSubCategory;
 // Get Product Details
 const getProductDetails = async (req, res) => {
     try {
-        const { productId } = req.body;
+        const { productId } = req.params;
         const product = await product_model_1.default.findOne({ _id: productId });
         res.json({
             message: "Product details",

@@ -65,12 +65,12 @@ const productSchema = new mongoose_1.default.Schema({
         default: "",
     },
     productWeight: {
-        type: Number,
-        default: null,
+        type: [String],
+        default: [],
     },
     productSize: {
-        type: String,
-        default: "",
+        type: [String],
+        default: [],
     },
     color: {
         type: [String],
@@ -119,5 +119,12 @@ const productSchema = new mongoose_1.default.Schema({
     },
 }, {
     timestamps: true,
+});
+// ✅ ADD THIS
+productSchema.index({
+    productName: "text",
+    description: "text",
+    brand: "text",
+    tags: "text",
 });
 exports.default = (0, mongoose_1.model)("Product", productSchema);

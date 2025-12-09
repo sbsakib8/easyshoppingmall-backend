@@ -4,7 +4,8 @@ import { isAuth } from "../../middlewares/isAuth";
 import {
   createOrder,
   getMyOrders,
-  updateOrderStatus,
+  ManualPayment,
+  updateOrderStatus
 } from "../order/order.controllers";
 
 const router = express.Router();
@@ -29,5 +30,6 @@ router.get("/my-orders", isAuth, getMyOrders);
  * @access  Private (Admin)
  */
 router.put("/:id/status", isAuth, isAdmin, updateOrderStatus);
+router.post("/manual-payment", isAuth, ManualPayment)
 
 export default router;
