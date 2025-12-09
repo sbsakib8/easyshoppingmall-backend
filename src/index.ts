@@ -2,7 +2,6 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import type { Application, Request, Response } from "express";
 import express from "express";
-import connectDB from "./config/db.connect";
 import addressRouter from "./models/address/address.routs";
 import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routs";
 import homeBannerRoutes from "./models/banners/homeBanner/homeBanner.routs";
@@ -15,10 +14,6 @@ import contactRoutes from "./models/content/contact/contact.routs";
 import websiteInfo from "./models/content/websiteInfo/websiteinfo.routs";
 import notifications from "./models/notification/notification.routs";
 import orderRoute from './models/order/order.routs';
-<<<<<<< HEAD
-=======
-import paymentRouter from './models/payment/payment.route';
->>>>>>> 0ab9f4aadc19406e29a2900b7c57e0c9258eeecb
 import productRouter from "./models/product/product.routs";
 import subcategoriesRoutes from "./models/subcategory/subcategory.routs";
 import userRoutes from "./models/user/user.routs";
@@ -31,13 +26,9 @@ app.use(cookieParser());
 // cors
 app.use(cors(
   {
-<<<<<<< HEAD
-    origin: ["http://localhost:3000", "https://easyshopingmall-b14r.vercel.app/"],
-=======
     origin: ["http://localhost:3000",
-    "https://easyshoppingmallbd.com",
-    "https://easyshoppingmallbd.vercel.app"],
->>>>>>> 0ab9f4aadc19406e29a2900b7c57e0c9258eeecb
+      "https://easyshoppingmallbd.com",
+      "https://easyshoppingmallbd.vercel.app"],
     credentials: true,
   }
 ));
