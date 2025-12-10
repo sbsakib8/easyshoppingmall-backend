@@ -23,6 +23,7 @@ import connectDB from "./config/db.connect";
 // middleware
 const app: Application = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // cors
