@@ -187,7 +187,7 @@ export const ManualPayment = async (req: Request, res: Response) => {
 
     // Update order status
     order.payment_status = "paid"; 
-    order.order_status = "delivered"; 
+    order.order_status = "completed"; 
     order.payment_method = "manual";
 
     await order.save();
