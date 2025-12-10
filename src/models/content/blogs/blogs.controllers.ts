@@ -10,7 +10,7 @@ export const createBlog = async (req: Request, res: Response) => {
 
     const now = moment().locale("bn");
 
-    const file = req.file?.path;
+    const file = req.file?.buffer;
     let image = "";
     if (file) {
       image = await uploadClouinary(file);
@@ -71,7 +71,7 @@ export const updateBlog = async (req: Request, res: Response) => {
   try {
     const now = moment().locale("bn");
 
-    const file = req.file?.path;
+    const file = req.file?.buffer;
     let image = req.body.image || "";
 
     if (file) {

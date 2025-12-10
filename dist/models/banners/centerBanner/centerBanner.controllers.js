@@ -6,7 +6,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteCenterBanner = exports.updateCenterBanner = exports.getSingleCenterBanner = exports.getAllCenterBanner = exports.createCenterBanner = void 0;
 const centerBanner_model_1 = __importDefault(require("./centerBanner.model"));
 const cloudinary_1 = __importDefault(require("../../../utils/cloudinary"));
-const fs_1 = __importDefault(require("fs"));
 // Create Home Banner
 const createCenterBanner = async (req, res) => {
     try {
@@ -15,9 +14,7 @@ const createCenterBanner = async (req, res) => {
         let imageUrls = [];
         if (files && files.length > 0) {
             const uploadPromises = files.map(async (file) => {
-                const imageUrl = await (0, cloudinary_1.default)(file.path);
-                if (fs_1.default.existsSync(file.path))
-                    fs_1.default.unlinkSync(file.path);
+                const imageUrl = await (0, cloudinary_1.default)(file.buffer);
                 return imageUrl;
             });
             imageUrls = await Promise.all(uploadPromises);
@@ -74,9 +71,7 @@ const updateCenterBanner = async (req, res) => {
         let imageUrls = [];
         if (files && files.length > 0) {
             const uploadPromises = files.map(async (file) => {
-                const imageUrl = await (0, cloudinary_1.default)(file.path);
-                if (fs_1.default.existsSync(file.path))
-                    fs_1.default.unlinkSync(file.path);
+                const imageUrl = await (0, cloudinary_1.default)(file.buffer);
                 return imageUrl;
             });
             imageUrls = await Promise.all(uploadPromises);

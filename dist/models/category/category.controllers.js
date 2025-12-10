@@ -18,7 +18,7 @@ const createCategory = async (req, res) => {
         }
         let imageUrl;
         if (req.file) {
-            imageUrl = await (0, cloudinary_1.default)(req.file.path);
+            imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
         }
         else {
             res.status(400).json({ success: false, message: "not image file provided" });
@@ -77,7 +77,7 @@ const updateCategory = async (req, res) => {
         }
         const { _id, slug, ...updateData } = req.body;
         if (req.file) {
-            const imageUrl = await (0, cloudinary_1.default)(req.file.path);
+            const imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
             updateData.image = imageUrl;
         }
         const updatedCategory = await category_model_1.default.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });

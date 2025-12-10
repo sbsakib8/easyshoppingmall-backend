@@ -6,10 +6,10 @@ import { isAdmin } from "../../../middlewares/isAdmin";
 
 const router = express.Router();
 
-router.post("/create",isAuth, isAdmin, upload.array("images"), createCenterBanner);
+router.post("/create",isAuth, isAdmin, upload.array("images", 4), createCenterBanner);
 router.get("/get", getAllCenterBanner);
 router.get("/:id", getSingleCenterBanner);
-router.put("/:id",isAuth, isAdmin, upload.array("images"), updateCenterBanner);
+router.put("/:id",isAuth, isAdmin, upload.array("images", 4), updateCenterBanner);
 router.delete("/:id",isAuth, isAdmin, deleteCenterBanner);
 
 export default router;

@@ -13,8 +13,7 @@ export const createHomeBanner = async (req: Request, res: Response) => {
 
     if (files && files.length > 0) {
       const uploadPromises = files.map(async (file) => {
-        const imageUrl = await uploadClouinary(file.path);
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        const imageUrl = await uploadClouinary(file.buffer);
         return imageUrl;
       });
 
@@ -73,7 +72,7 @@ export const updateHomeBanner = async (req: Request, res: Response) => {
 
     if (files && files.length > 0) {
       const uploadPromises = files.map(async (file) => {
-        const imageUrl = await uploadClouinary(file.path);
+        const imageUrl = await uploadClouinary(file.buffer);
         if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
         return imageUrl;
       });

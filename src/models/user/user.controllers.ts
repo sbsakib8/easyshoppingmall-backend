@@ -287,7 +287,7 @@ export const userImage = async (req: Request, res: Response) => {
 
     let imageUrl: string | undefined;
     if (req.file) {
-      imageUrl = await uploadClouinary(req.file.path);
+      imageUrl = await uploadClouinary(req.file.buffer);
     } else {
       return res.status(400).json({ message: "No image file provided" });
     }

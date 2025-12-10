@@ -24,8 +24,8 @@ const createProductController = async (req, res) => {
         let imageUrls = [];
         if (files && files.length > 0) {
             for (const file of files) {
-                if (file.path) { // safe check
-                    const uploadedUrl = await (0, cloudinary_1.default)(file.path);
+                if (file.buffer) { // safe check
+                    const uploadedUrl = await (0, cloudinary_1.default)(file.buffer);
                     imageUrls.push(uploadedUrl);
                 }
             }

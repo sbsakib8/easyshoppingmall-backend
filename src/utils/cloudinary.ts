@@ -1,35 +1,32 @@
+// cloudinaryUpload.ts
 import { v2 as cloudinary } from "cloudinary";
-import fs from "fs";
-import path from "path";
 import processdata from "../config";
 
-const uploadClouinary = async (file: string): Promise<string> => {
-  if (!file) throw new Error("Invalid file path");
+const uploadCloudinary = async (fileBuffer: Buffer): Promise<string> => {
+  if (!fileBuffer) throw new Error("Invalid file buffer");
 
-  // Cloudinary config
   cloudinary.config({
     cloud_name: processdata.cloudname,
     api_key: processdata.cloudapikey,
     api_secret: processdata.cloudapisecret,
   });
 
-  const resolvedPath = path.resolve(file); 
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { resource_type: "image" },
+      (error, result) => {
+        if (error) {
+          console.error("❌ Cloudinary upload failed:", error);
+          return reject(error);
+        }
+        if (!result || !result.secure_url) {
+          return reject(new Error("Cloudinary upload returned no URL"));
+        }
+        resolve(result.secure_url); 
+      }
+    );
 
-  try {
-    const result = await cloudinary.uploader.upload(resolvedPath, {
-      resource_type: "image",
-      timeout: 120000, 
-    });
-
-   
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-
-    return result.secure_url;
-  } catch (error) {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-    console.error("❌ Cloudinary upload failed:", error);
-    throw new Error("Cloudinary upload failed");
-  }
+    uploadStream.end(fileBuffer);
+  });
 };
-
-export default uploadClouinary;
+export default uploadCloudinary;

@@ -12,10 +12,10 @@ import { isAdmin } from "../../../middlewares/isAdmin";
 
 const router = express.Router();
 
-router.post("/create",isAuth, isAdmin, upload.array("images"), createHomeBanner);
+router.post("/create",isAuth, isAdmin, upload.array("images",4), createHomeBanner);
 router.get("/get", getAllHomeBanners);
 router.get("/:id", getSingleHomeBanner);
-router.put("/:id",isAuth, isAdmin, upload.array("images"), updateHomeBanner);
+router.put("/:id",isAuth, isAdmin, upload.array("images" , 4), updateHomeBanner);
 router.delete("/:id",isAuth, isAdmin, deleteHomeBanner);
 
 export default router;

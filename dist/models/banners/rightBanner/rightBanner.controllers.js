@@ -6,7 +6,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteRightBanner = exports.updateRightBanner = exports.getSingleRightBanner = exports.getAllRightBanners = exports.createRightBanner = void 0;
 const rightBanner_model_1 = __importDefault(require("./rightBanner.model"));
 const cloudinary_1 = __importDefault(require("../../../utils/cloudinary"));
-const fs_1 = __importDefault(require("fs"));
 // Create Home Banner
 const createRightBanner = async (req, res) => {
     try {
@@ -15,9 +14,7 @@ const createRightBanner = async (req, res) => {
         let imageUrls = [];
         if (files && files.length > 0) {
             const uploadPromises = files.map(async (file) => {
-                const imageUrl = await (0, cloudinary_1.default)(file.path);
-                if (fs_1.default.existsSync(file.path))
-                    fs_1.default.unlinkSync(file.path);
+                const imageUrl = await (0, cloudinary_1.default)(file.buffer);
                 return imageUrl;
             });
             imageUrls = await Promise.all(uploadPromises);
@@ -74,9 +71,7 @@ const updateRightBanner = async (req, res) => {
         let imageUrls = [];
         if (files && files.length > 0) {
             const uploadPromises = files.map(async (file) => {
-                const imageUrl = await (0, cloudinary_1.default)(file.path);
-                if (fs_1.default.existsSync(file.path))
-                    fs_1.default.unlinkSync(file.path);
+                const imageUrl = await (0, cloudinary_1.default)(file.buffer);
                 return imageUrl;
             });
             imageUrls = await Promise.all(uploadPromises);

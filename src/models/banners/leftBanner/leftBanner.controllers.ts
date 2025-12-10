@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import LeftBanner from "./leftBanner.model";
 import uploadClouinary from "../../../utils/cloudinary"; 
-import fs from "fs";
 
 // Create Home Banner
 export const createLeftBanner = async (req: Request, res: Response) => {
@@ -13,8 +12,7 @@ export const createLeftBanner = async (req: Request, res: Response) => {
 
     if (files && files.length > 0) {
       const uploadPromises = files.map(async (file) => {
-        const imageUrl = await uploadClouinary(file.path);
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        const imageUrl = await uploadClouinary(file.buffer);
         return imageUrl;
       });
 
@@ -73,8 +71,7 @@ export const updateLeftBanner = async (req: Request, res: Response) => {
 
     if (files && files.length > 0) {
       const uploadPromises = files.map(async (file) => {
-        const imageUrl = await uploadClouinary(file.path);
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        const imageUrl = await uploadClouinary(file.buffer);
         return imageUrl;
       });
 

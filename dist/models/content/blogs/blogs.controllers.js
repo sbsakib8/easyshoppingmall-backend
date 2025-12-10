@@ -12,7 +12,7 @@ const createBlog = async (req, res) => {
     try {
         const { title, author, category, status, excerpt, content } = req.body;
         const now = (0, moment_1.default)().locale("bn");
-        const file = req.file?.path;
+        const file = req.file?.buffer;
         let image = "";
         if (file) {
             image = await (0, cloudinary_1.default)(file);
@@ -72,7 +72,7 @@ exports.getBlogById = getBlogById;
 const updateBlog = async (req, res) => {
     try {
         const now = (0, moment_1.default)().locale("bn");
-        const file = req.file?.path;
+        const file = req.file?.buffer;
         let image = req.body.image || "";
         if (file) {
             image = await (0, cloudinary_1.default)(file);
