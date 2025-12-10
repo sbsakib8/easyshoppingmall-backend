@@ -19,7 +19,7 @@ export interface IOrder extends Document {
   subTotalAmt: number;
   totalAmt: number;
   invoice_receipt?: string;
-  order_status?: "pending" | "processing" | "shipped" | "delivered" | "cancelled";
+  order_status?: "pending" | "processing" | "shipped" | "delivered" | "cancelled" | "completed";
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -154,14 +154,14 @@ exports.updateOrderStatus = updateOrderStatus;
 const ManualPayment = async (req, res) => {
     try {
         const { orderId } = req.body;
-        const order = await Order.findById(orderId);
+        const order = await order_model_1.default.findById(orderId);
         if (!order) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
         // Update order status
-        order.paymentStatus = "success";
-        order.status = "completed";
-        order.paymentMethod = "manual";
+        order.payment_status = "paid";
+        order.order_status = "delivered";
+        order.payment_method = "manual";
         await order.save();
         res.json({
             success: true,
