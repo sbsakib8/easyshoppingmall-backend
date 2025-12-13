@@ -266,7 +266,7 @@ const userImage = async (req, res) => {
         }
         let imageUrl;
         if (req.file) {
-            imageUrl = await (0, cloudinary_1.default)(req.file.path);
+            imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
         }
         else {
             return res.status(400).json({ message: "No image file provided" });

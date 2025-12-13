@@ -2,7 +2,6 @@ import app from "./index";
 const PORT = process.env.PORT || 5001;
 import http from "http";
 import { Server } from "socket.io";
-import connectDB from "./config/db.connect";
 
 
 const server = http.createServer(app);
@@ -32,10 +31,12 @@ io.on("connection", (socket) => {
   });
 });
 
+ 
+ 
 //  Server start
-server.listen(PORT,async () => {
+server.listen(PORT, () => {
     // mongodb 
-    await connectDB()
+    
   console.log(`✅ Server running at http://localhost:${PORT}`);
 
 });

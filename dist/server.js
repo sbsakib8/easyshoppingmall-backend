@@ -8,7 +8,6 @@ const index_1 = __importDefault(require("./index"));
 const PORT = process.env.PORT || 5001;
 const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
-const db_connect_1 = __importDefault(require("./config/db.connect"));
 const server = http_1.default.createServer(index_1.default);
 const io = new socket_io_1.Server(server, {
     cors: {
@@ -32,8 +31,7 @@ io.on("connection", (socket) => {
     });
 });
 //  Server start
-server.listen(PORT, async () => {
+server.listen(PORT, () => {
     // mongodb 
-    await (0, db_connect_1.default)();
     console.log(`✅ Server running at http://localhost:${PORT}`);
 });

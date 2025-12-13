@@ -15,7 +15,7 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
     }
     let imageUrl: string | undefined;
         if (req.file) {
-          imageUrl = await uploadClouinary(req.file.path);
+          imageUrl = await uploadClouinary(req.file.buffer);
         } else {
           res.status(400).json({ success: false, message: "not image file provided" });
           return;
@@ -77,7 +77,7 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
 
     const { _id, slug, ...updateData } = req.body;
      if (req.file) {
-          const imageUrl = await uploadClouinary(req.file.path);
+          const imageUrl = await uploadClouinary(req.file.buffer);
           updateData.image = imageUrl;
         }
 

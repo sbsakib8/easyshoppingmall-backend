@@ -61,8 +61,8 @@ export const createProductController = async (
 
     if (files && files.length > 0) {
       for (const file of files) {
-        if (file.path) { // safe check
-          const uploadedUrl = await uploadClouinary(file.path!);
+        if (file.buffer) { // safe check
+          const uploadedUrl = await uploadClouinary(file.buffer);
           imageUrls.push(uploadedUrl);
         }
       }

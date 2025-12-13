@@ -23,9 +23,11 @@ const product_routs_1 = __importDefault(require("./models/product/product.routs"
 const subcategory_routs_1 = __importDefault(require("./models/subcategory/subcategory.routs"));
 const user_routs_1 = __importDefault(require("./models/user/user.routs"));
 const wishlist_routs_1 = __importDefault(require("./models/wishlist/wishlist.routs"));
+const db_connect_1 = __importDefault(require("./config/db.connect"));
 // middleware
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
+app.use(express_1.default.urlencoded({ extended: true }));
 app.use((0, cookie_parser_1.default)());
 // cors
 app.use((0, cors_1.default)({
@@ -34,6 +36,7 @@ app.use((0, cors_1.default)({
         "https://easyshoppingmallbd.vercel.app"],
     credentials: true,
 }));
+(0, db_connect_1.default)();
 //  route
 app.use("/api/users", user_routs_1.default);
 app.use("/api/products", product_routs_1.default);

@@ -15,9 +15,7 @@ const createHomeBanner = async (req, res) => {
         let imageUrls = [];
         if (files && files.length > 0) {
             const uploadPromises = files.map(async (file) => {
-                const imageUrl = await (0, cloudinary_1.default)(file.path);
-                if (fs_1.default.existsSync(file.path))
-                    fs_1.default.unlinkSync(file.path);
+                const imageUrl = await (0, cloudinary_1.default)(file.buffer);
                 return imageUrl;
             });
             imageUrls = await Promise.all(uploadPromises);
@@ -74,7 +72,7 @@ const updateHomeBanner = async (req, res) => {
         let imageUrls = [];
         if (files && files.length > 0) {
             const uploadPromises = files.map(async (file) => {
-                const imageUrl = await (0, cloudinary_1.default)(file.path);
+                const imageUrl = await (0, cloudinary_1.default)(file.buffer);
                 if (fs_1.default.existsSync(file.path))
                     fs_1.default.unlinkSync(file.path);
                 return imageUrl;
