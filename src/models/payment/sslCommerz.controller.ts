@@ -48,9 +48,9 @@ export const initPayment = async (req: Request, res: Response) => {
       currency: "BDT",
       tran_id: order.orderId,
 
-      success_url: `${BACKEND_URL}/api/payment/success`,
-      fail_url: `${BACKEND_URL}/api/payment/fail`,
-      cancel_url: `${BACKEND_URL}/api/payment/cancel`,
+      success_url: `${BACKEND_URL}/payment/success`,
+      fail_url: `${BACKEND_URL}/payment/fail`,
+      cancel_url: `${BACKEND_URL}/payment/cancel`,
 
       ipn_url: `${BACKEND_URL}/api/payment/ipn`,
 
