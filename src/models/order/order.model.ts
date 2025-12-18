@@ -23,6 +23,8 @@ const orderSchema = new Schema<IOrder>(
         quantity: { type: Number, default: 1 },
         price: { type: Number, required: true },
         totalPrice: { type: Number, default: 0 },
+        size: String,
+
       },
     ],
 
@@ -37,7 +39,7 @@ const orderSchema = new Schema<IOrder>(
     // ⭐ NEW FIELD
     payment_method: {
       type: String,
-      enum: ["manual", "sslcommerz"],
+      enum: ["manual", "sslcommerz", "online"],
       default: "manual",
     },
 
@@ -46,7 +48,11 @@ const orderSchema = new Schema<IOrder>(
       type: String,
       default: "",
     },
-
+    payment_details: {
+      providerNumber: { type: String },
+      transactionId: { type: String },
+      manualFor: { type: String },
+    },
     delivery_address: {
       type: String,
       required: true,
@@ -59,7 +65,7 @@ const orderSchema = new Schema<IOrder>(
 
     order_status: {
       type: String,
-      enum: ["pending", "processing", "shipped", "delivered", "cancelled" , "completed"],
+      enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed"],
       default: "pending",
     },
   },
