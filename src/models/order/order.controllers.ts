@@ -18,59 +18,50 @@ interface RequestWithUser extends Request {
  * @route POST /api/orders/create
  * @access Private (User)
  */
-export const createOrder = async (req: Request, res: Response): Promise<void> => {
+/**
+ * @desc Create a new order from user's cart
+ * @route POST /api/orders/create
+ * @access Private (User)
+ */
+export const createOrder = async (req: Request, res: Response) => {
   try {
-    const { userId, delivery_address } = req.body;
+    const { userId, delivery_address, paymentMethod, paymentDetails } = req.body;
 
     if (!userId || !delivery_address) {
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         message: "Missing required fields (userId, delivery_address)",
       });
-      return;
     }
 
-    // ✅ Fetch cart with populated product details
     const cart = await CartModel.findOne({ userId }).populate("products.productId");
 
     if (!cart || cart.products.length === 0) {
-      res.status(404).json({
-        success: false,
-        message: "Cart is empty",
-      });
-      return;
+      return res.status(404).json({ success: false, message: "Cart is empty" });
     }
 
-    // ✅ Filter valid product entries
     const validProducts = cart.products.filter(
-      (item: any) =>
-        item.productId &&
-        typeof item.productId === "object" &&
-        "_id" in item.productId
+      (item: any) => item.productId && "_id" in item.productId
     );
 
     if (validProducts.length === 0) {
-      res.status(400).json({
-        success: false,
-        message: "No valid products found in the cart",
-      });
-      return;
+      return res.status(400).json({ success: false, message: "No valid products in cart" });
     }
 
-    // ✅ Map cart products to order format
     const orderProducts = validProducts.map((item: any) => {
       const product = item.productId;
       return {
         productId: product._id,
-        name: product.productName ?? "Unknown Product", // ✅ FIXED field name
-        image: product.images ?? [], // ✅ FIXED field name
+        name: product.productName || "Unnamed Product",
+        image: product.images || [],
         quantity: item.quantity,
         price: item.price,
         totalPrice: item.totalPrice,
+        size: item.size,
       };
     });
 
-    // ✅ Create the order
+    // Create order
     const order = new OrderModel({
       userId,
       orderId: uuidv4(),
@@ -78,11 +69,15 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       subTotalAmt: cart.subTotalAmt,
       totalAmt: cart.totalAmt,
       delivery_address,
+      payment_method: paymentMethod || "manual", // manual or sslcommerz
+      payment_status: "pending", // manual always pending
+      payment_details: paymentDetails || undefined,
+      order_status: "pending",
     });
 
     await order.save();
 
-    // ✅ Clear the cart after order is placed
+    // Clear cart
     cart.products = [];
     cart.subTotalAmt = 0;
     cart.totalAmt = 0;
@@ -101,6 +96,7 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
     });
   }
 };
+
 /**
  * @desc Get all orders for logged-in user
  * @route GET /api/orders/my-orders
@@ -178,27 +174,36 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
 // POST /order/manual-payment
 export const ManualPayment = async (req: Request, res: Response) => {
   try {
-    const { orderId } = req.body;
+    const { orderId, providerNumber, transactionId, manualFor } = req.body;
 
-    const order = await OrderModel.findById(orderId);
+    if (!orderId || !providerNumber || !transactionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Order ID, phone number, and transaction ID are required",
+      });
+    }
+
+    const order = await OrderModel.findOne({ orderId });
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    // Update order status
-    order.payment_status = "paid"; 
-    order.order_status = "completed"; 
+    // Save manual payment info but keep status pending
     order.payment_method = "manual";
+    order.payment_details = { providerNumber, transactionId, manualFor };
+    order.payment_status = "pending"; // ❌ DO NOT mark as paid yet
+    order.order_status = "pending";   // still pending admin confirmation
 
     await order.save();
 
     res.json({
       success: true,
-      message: "Manual payment successful",
+      message: "Manual payment submitted, pending admin confirmation",
       order,
     });
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    console.error("Manual Payment Error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
