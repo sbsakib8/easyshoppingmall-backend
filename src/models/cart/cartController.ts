@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { AuthUser } from "../order/interface";
+import ProductModel from "../product/product.model";
 import { CartModel } from "./cardproduct.model";
 
 /**
@@ -26,40 +27,87 @@ const isSameVariant = (item: any, productId: string, color: string | null, size:
  * @route POST /api/cart/add
  * @access Private (User)
  */
-export const addToCart = async (req: Request, res: Response): Promise<void> => {
+export const addToCart = async (req: Request, res: Response) => {
   try {
-    const { userId, productId, quantity, price, color = null, size = null, weight = null } = req.body;
+    let { userId, productId, quantity, price, color, size, weight } = req.body;
 
-    if (!userId || !productId || !quantity || !price) {
-      res.status(400).json({ success: false, message: "Missing required fields" });
-      return;
+    if (!userId || !productId || !quantity) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
     }
+
+    // 🔥 Fetch product
+    const product = await ProductModel.findById(productId);
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
+    // 🔥 AUTO PICK FIRST VARIANT IF NOT SELECTED
+    size =
+      size ??
+      (product.productSize?.length ? product.productSize[0] : null);
+
+    color =
+      color ??
+      (product.color?.length ? product.color[0] : null);
+
+    weight =
+      weight ??
+      (product.productWeight?.length ? product.productWeight[0] : null);
+
+    // 🔥 Price fallback
+    price = price ?? product.price;
 
     let cart = await CartModel.findOne({ userId });
 
     if (!cart) {
       cart = new CartModel({
         userId,
-        products: [{ productId, quantity, price, color, size, weight, totalPrice: quantity * price }],
+        products: [{
+          productId,
+          quantity,
+          price,
+          color,
+          size,
+          weight,
+          totalPrice: quantity * price,
+        }],
       });
     } else {
-      const existingProduct = cart.products.find(item => isSameVariant(item, productId, color, size, weight));
+      const existingProduct = cart.products.find(item =>
+        isSameVariant(item, productId, color, size, weight)
+      );
 
       if (existingProduct) {
         existingProduct.quantity += quantity;
         existingProduct.totalPrice = existingProduct.quantity * existingProduct.price;
       } else {
-        cart.products.push({ productId, quantity, price, color, size, weight, totalPrice: quantity * price });
+        cart.products.push({
+          productId,
+          quantity,
+          price,
+          color,
+          size,
+          weight,
+          totalPrice: quantity * price,
+        });
       }
     }
 
+    cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);
+    cart.totalAmt = cart.subTotalAmt;
+
     await cart.save();
 
-    res.status(200).json({ success: true, message: "Product added to cart successfully", data: cart });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+    res.json({
+      success: true,
+      message: "Product added to cart",
+      data: cart,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 /**
  * @desc Get user's cart
@@ -75,7 +123,16 @@ export const getCart = async (req: RequestWithUser, res: Response): Promise<void
       return;
     }
 
-    const cart = await CartModel.findOne({ userId }).populate("products.productId");
+    // const cart = await CartModel.findOne({ userId }).populate("products.productId");
+    const cart = await CartModel.findOne({ userId })
+      .populate({
+        path: "products.productId",
+        populate: {
+          path: "category",
+          select: "name",
+        },
+      });
+
 
     if (!cart) {
       res.status(404).json({ success: false, message: "Cart not found" });
@@ -133,34 +190,31 @@ export const updateCartItem = async (req: Request, res: Response): Promise<void>
  * @route DELETE /api/cart/remove
  * @access Private (User)
  */
-export const removeFromCart = async (req: Request, res: Response): Promise<void> => {
+export const removeFromCart = async (req: Request, res: Response) => {
   try {
-    const { userId, productId, color = null, size = null, weight = null } = req.body;
+    const { userId, productId } = req.params;
+    const { color = null, size = null, weight = null } = req.query;
 
     const cart = await CartModel.findOne({ userId });
     if (!cart) {
-      res.status(404).json({ success: false, message: "Cart not found" });
-      return;
+      return res.status(404).json({ success: false, message: "Cart not found" });
     }
 
-    const initialLength = cart.products.length;
-    cart.products = cart.products.filter(item => !isSameVariant(item, productId, color, size, weight));
+    cart.products = cart.products.filter(
+      item => !isSameVariant(item, productId, color as any, size as any, weight as any)
+    );
 
-    if (cart.products.length === initialLength) {
-      res.status(404).json({ success: false, message: "Cart item not found" });
-      return;
-    }
-
-    cart.subTotalAmt = cart.products.reduce((sum, p) => sum + p.totalPrice, 0);
+    cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);
     cart.totalAmt = cart.subTotalAmt;
 
     await cart.save();
 
-    res.status(200).json({ success: true, message: "Product removed from cart successfully", data: cart });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+    res.json({ success: true, message: "Removed from cart", data: cart });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 /**
  * @desc Clear user cart

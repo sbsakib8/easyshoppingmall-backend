@@ -24,6 +24,8 @@ const orderSchema = new Schema<IOrder>(
         price: { type: Number, required: true },
         totalPrice: { type: Number, default: 0 },
         size: String,
+        color: { type: String, default: null },
+        weight: { type: String, default: null },
 
       },
     ],

@@ -45,7 +45,7 @@ cartSchema.pre("save", function (next) {
     (acc, item) => acc + item.totalPrice,
     0
   );
-  this.totalAmt = this.subTotalAmt; // Add taxes/shipping if needed
+  this.totalAmt = this.subTotalAmt;
   next();
 });
 
