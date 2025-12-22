@@ -1,4 +1,4 @@
-import mongoose, { Schema, Model } from "mongoose";
+import mongoose, { Model, Schema } from "mongoose";
 import { ICart } from "./interface";
 
 const cartSchema = new Schema<ICart>(
@@ -18,7 +18,7 @@ const cartSchema = new Schema<ICart>(
         quantity: {
           type: Number,
           default: 1,
-          min: [1, "Quantity can not be less than 1"],
+          min: [1, "Quantity cannot be less than 1"],
         },
         price: {
           type: Number,
@@ -28,6 +28,9 @@ const cartSchema = new Schema<ICart>(
           type: Number,
           default: 0,
         },
+        size: { type: String },
+        color: { type: String },
+        weight: { type: String },
       },
     ],
     subTotalAmt: { type: Number, default: 0 },
@@ -39,10 +42,10 @@ const cartSchema = new Schema<ICart>(
 // Pre-save hook to update totals
 cartSchema.pre("save", function (next) {
   this.subTotalAmt = this.products.reduce(
-    (acc, item) => acc + item.price * item.quantity,
+    (acc, item) => acc + item.totalPrice,
     0
   );
-  this.totalAmt = this.subTotalAmt; // Add taxes/shipping if needed
+  this.totalAmt = this.subTotalAmt;
   next();
 });
 
