@@ -4,10 +4,6 @@
       "main": true,
       "*": false
     }
-  },
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs18.x"
-    }
   }
+  
 }
