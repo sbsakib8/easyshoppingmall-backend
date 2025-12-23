@@ -53,6 +53,9 @@ const orderSchema = new mongoose_1.Schema({
             quantity: { type: Number, default: 1 },
             price: { type: Number, required: true },
             totalPrice: { type: Number, default: 0 },
+            size: String,
+            color: { type: String, default: null },
+            weight: { type: String, default: null },
         },
     ],
     paymentId: { type: String, default: "" },
@@ -64,13 +67,18 @@ const orderSchema = new mongoose_1.Schema({
     // ⭐ NEW FIELD
     payment_method: {
         type: String,
-        enum: ["manual", "sslcommerz"],
+        enum: ["manual", "sslcommerz", "online"],
         default: "manual",
     },
     // ⭐ NEW FIELD
     payment_session_key: {
         type: String,
         default: "",
+    },
+    payment_details: {
+        providerNumber: { type: String },
+        transactionId: { type: String },
+        manualFor: { type: String },
     },
     delivery_address: {
         type: String,

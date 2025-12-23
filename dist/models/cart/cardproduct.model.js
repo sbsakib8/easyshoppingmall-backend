@@ -51,7 +51,7 @@ const cartSchema = new mongoose_1.Schema({
             quantity: {
                 type: Number,
                 default: 1,
-                min: [1, "Quantity can not be less than 1"],
+                min: [1, "Quantity cannot be less than 1"],
             },
             price: {
                 type: Number,
@@ -61,6 +61,9 @@ const cartSchema = new mongoose_1.Schema({
                 type: Number,
                 default: 0,
             },
+            size: { type: String },
+            color: { type: String },
+            weight: { type: String },
         },
     ],
     subTotalAmt: { type: Number, default: 0 },
@@ -68,8 +71,8 @@ const cartSchema = new mongoose_1.Schema({
 }, { timestamps: true });
 // Pre-save hook to update totals
 cartSchema.pre("save", function (next) {
-    this.subTotalAmt = this.products.reduce((acc, item) => acc + item.price * item.quantity, 0);
-    this.totalAmt = this.subTotalAmt; // Add taxes/shipping if needed
+    this.subTotalAmt = this.products.reduce((acc, item) => acc + item.totalPrice, 0);
+    this.totalAmt = this.subTotalAmt;
     next();
 });
 exports.CartModel = mongoose_1.default.model("Cart", cartSchema);
