@@ -52,8 +52,6 @@ const createOrder = async (req, res) => {
             userId,
             orderId: uuidv4(),
             products: orderProducts,
-            subTotalAmt: cart.subTotalAmt,
-            totalAmt: cart.totalAmt,
             delivery_address,
             payment_method: paymentMethod || "manual", // manual or sslcommerz
             payment_status: "pending", // manual always pending

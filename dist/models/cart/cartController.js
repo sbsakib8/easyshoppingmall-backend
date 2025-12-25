@@ -10,10 +10,16 @@ const cardproduct_model_1 = require("./cardproduct.model");
  * Helper to check if two cart items are the same variant
  */
 const isSameVariant = (item, productId, color, size, weight) => {
-    return (item.productId.toString() === productId &&
-        (item.color ?? null) === color &&
-        (item.size ?? null) === size &&
-        (item.weight ?? null) === weight);
+    if (item.productId.toString() !== productId)
+        return false;
+    // Only match variant fields if they are provided
+    if (color != null && (item.color ?? null) !== color)
+        return false;
+    if (size != null && (item.size ?? null) !== size)
+        return false;
+    if (weight != null && (item.weight ?? null) !== weight)
+        return false;
+    return true;
 };
 /**
  * @desc Add product to cart
@@ -99,8 +105,7 @@ const getCart = async (req, res) => {
     try {
         const userId = req.params?.userId;
         if (!userId) {
-            res.status(401).json({ success: false, message: "Unauthorized user" });
-            return;
+            return res.status(401).json({ success: false, message: "Unauthorized user" });
         }
         // const cart = await CartModel.findOne({ userId }).populate("products.productId");
         const cart = await cardproduct_model_1.CartModel.findOne({ userId })
@@ -112,13 +117,12 @@ const getCart = async (req, res) => {
             },
         });
         if (!cart) {
-            res.status(404).json({ success: false, message: "Cart not found" });
-            return;
+            return res.status(404).json({ success: false, message: "Cart not found" });
         }
-        res.status(200).json({ success: true, message: "Cart fetched successfully", data: cart });
+        return res.status(200).json({ success: true, message: "Cart fetched successfully", data: cart });
     }
     catch (error) {
-        res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+        return res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
     }
 };
 exports.getCart = getCart;
@@ -129,30 +133,27 @@ exports.getCart = getCart;
  */
 const updateCartItem = async (req, res) => {
     try {
-        const { userId, productId, quantity, color = null, size = null, weight = null } = req.body;
-        if (!userId || !productId || !quantity) {
-            res.status(400).json({ success: false, message: "Missing required fields" });
-            return;
+        const { userId, productId, quantity, color, size, weight } = req.body;
+        if (!userId || !productId || quantity == null) {
+            return res.status(400).json({ success: false, message: "Missing required fields" });
         }
         const cart = await cardproduct_model_1.CartModel.findOne({ userId });
         if (!cart) {
-            res.status(404).json({ success: false, message: "Cart not found" });
-            return;
+            return res.status(404).json({ success: false, message: "Cart not found" });
         }
-        const product = cart.products.find(item => isSameVariant(item, productId, color, size, weight));
+        const product = cart.products.find(item => isSameVariant(item, productId, color ?? undefined, size ?? undefined, weight ?? undefined));
         if (!product) {
-            res.status(404).json({ success: false, message: "Cart item not found" });
-            return;
+            return res.status(404).json({ success: false, message: "Cart item not found" });
         }
-        product.quantity = quantity;
-        product.totalPrice = product.price * quantity;
+        product.quantity = Number(quantity);
+        product.totalPrice = product.price * product.quantity;
         cart.subTotalAmt = cart.products.reduce((sum, p) => sum + p.totalPrice, 0);
         cart.totalAmt = cart.subTotalAmt;
         await cart.save();
-        res.status(200).json({ success: true, message: "Cart item updated successfully", data: cart });
+        return res.status(200).json({ success: true, message: "Cart item updated successfully", data: cart });
     }
     catch (error) {
-        res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+        return res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
     }
 };
 exports.updateCartItem = updateCartItem;
@@ -164,12 +165,12 @@ exports.updateCartItem = updateCartItem;
 const removeFromCart = async (req, res) => {
     try {
         const { userId, productId } = req.params;
-        const { color = null, size = null, weight = null } = req.query;
+        const { color, size, weight } = req.query;
         const cart = await cardproduct_model_1.CartModel.findOne({ userId });
         if (!cart) {
             return res.status(404).json({ success: false, message: "Cart not found" });
         }
-        cart.products = cart.products.filter(item => !isSameVariant(item, productId, color, size, weight));
+        cart.products = cart.products.filter(item => !isSameVariant(item, productId, color ? String(color) : undefined, size ? String(size) : undefined, weight ? String(weight) : undefined));
         cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);
         cart.totalAmt = cart.subTotalAmt;
         await cart.save();
@@ -190,17 +191,16 @@ const clearCart = async (req, res) => {
         const { userId } = req.params;
         const cart = await cardproduct_model_1.CartModel.findOne({ userId });
         if (!cart) {
-            res.status(404).json({ success: false, message: "Cart not found" });
-            return;
+            return res.status(404).json({ success: false, message: "Cart not found" });
         }
         cart.products = [];
         cart.subTotalAmt = 0;
         cart.totalAmt = 0;
         await cart.save();
-        res.status(200).json({ success: true, message: "Cart cleared successfully" });
+        return res.status(200).json({ success: true, message: "Cart cleared successfully" });
     }
     catch (error) {
-        res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+        return res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
     }
 };
 exports.clearCart = clearCart;
