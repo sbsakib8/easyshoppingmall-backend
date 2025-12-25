@@ -20,11 +20,12 @@ router.post("/create", order_controllers_1.createOrder);
  * @access  Private (User)
  */
 router.get("/my-orders", isAuth_1.isAuth, order_controllers_1.getMyOrders);
+router.post("/manual-payment", isAuth_1.isAuth, order_controllers_1.ManualPayment);
 /**
  * @route   PUT /api/orders/:id/status
  * @desc    Update order status (admin only)
  * @access  Private (Admin)
  */
 router.put("/:id/status", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.updateOrderStatus);
-router.post("/manual-payment", isAuth_1.isAuth, order_controllers_1.ManualPayment);
+// router.post("/manual-payment", isAuth, ManualPayment)
 exports.default = router;

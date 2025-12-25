@@ -13,14 +13,23 @@ interface RequestWithUser extends Request {
 /**
  * Helper to check if two cart items are the same variant
  */
-const isSameVariant = (item: any, productId: string, color: string | null, size: string | null, weight: string | null) => {
-  return (
-    item.productId.toString() === productId &&
-    (item.color ?? null) === color &&
-    (item.size ?? null) === size &&
-    (item.weight ?? null) === weight
-  );
+const isSameVariant = (
+  item: any,
+  productId: string,
+  color?: string | null,
+  size?: string | null,
+  weight?: string | null
+) => {
+  if (item.productId.toString() !== productId) return false;
+
+  // Only match variant fields if they are provided
+  if (color != null && (item.color ?? null) !== color) return false;
+  if (size != null && (item.size ?? null) !== size) return false;
+  if (weight != null && (item.weight ?? null) !== weight) return false;
+
+  return true;
 };
+
 
 /**
  * @desc Add product to cart
@@ -152,27 +161,33 @@ export const getCart = async (req: RequestWithUser, res: Response): Promise<void
  */
 export const updateCartItem = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { userId, productId, quantity, color = null, size = null, weight = null } = req.body;
+    const { userId, productId, quantity, color, size, weight } = req.body;
 
-    if (!userId || !productId || !quantity) {
-      res.status(400).json({ success: false, message: "Missing required fields" });
-      return;
+    if (!userId || !productId || quantity == null) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
     const cart = await CartModel.findOne({ userId });
     if (!cart) {
-      res.status(404).json({ success: false, message: "Cart not found" });
-      return;
+      return res.status(404).json({ success: false, message: "Cart not found" });
     }
 
-    const product = cart.products.find(item => isSameVariant(item, productId, color, size, weight));
+    const product = cart.products.find(item =>
+      isSameVariant(
+        item,
+        productId,
+        color ?? undefined,
+        size ?? undefined,
+        weight ?? undefined
+      )
+    );
+
     if (!product) {
-      res.status(404).json({ success: false, message: "Cart item not found" });
-      return;
+      return res.status(404).json({ success: false, message: "Cart item not found" });
     }
 
-    product.quantity = quantity;
-    product.totalPrice = product.price * quantity;
+    product.quantity = Number(quantity);
+    product.totalPrice = product.price * product.quantity;
 
     cart.subTotalAmt = cart.products.reduce((sum, p) => sum + p.totalPrice, 0);
     cart.totalAmt = cart.subTotalAmt;
@@ -185,6 +200,8 @@ export const updateCartItem = async (req: Request, res: Response): Promise<void>
   }
 };
 
+
+
 /**
  * @desc Remove product from cart
  * @route DELETE /api/cart/remove
@@ -193,15 +210,21 @@ export const updateCartItem = async (req: Request, res: Response): Promise<void>
 export const removeFromCart = async (req: Request, res: Response) => {
   try {
     const { userId, productId } = req.params;
-    const { color = null, size = null, weight = null } = req.query;
+    const { color, size, weight } = req.query;
 
     const cart = await CartModel.findOne({ userId });
     if (!cart) {
       return res.status(404).json({ success: false, message: "Cart not found" });
     }
 
-    cart.products = cart.products.filter(
-      item => !isSameVariant(item, productId, color as any, size as any, weight as any)
+    cart.products = cart.products.filter(item =>
+      !isSameVariant(
+        item,
+        productId,
+        color ? String(color) : undefined,
+        size ? String(size) : undefined,
+        weight ? String(weight) : undefined
+      )
     );
 
     cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);

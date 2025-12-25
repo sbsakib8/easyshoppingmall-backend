@@ -1,4 +1,5 @@
 import mongoose, { Model, Schema } from "mongoose";
+import { calculateDeliveryCharge } from "../../utils/deliveryCharge";
 import { IOrder } from "./interface";
 
 const orderSchema = new Schema<IOrder>(
@@ -14,6 +15,12 @@ const orderSchema = new Schema<IOrder>(
       required: true,
       unique: true,
     },
+    deliveryCharge: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+
 
     products: [
       {
@@ -76,16 +83,25 @@ const orderSchema = new Schema<IOrder>(
 
 // FIX PRE-HOOK TYPES
 orderSchema.pre("save", function (next) {
-  const self = this as unknown as IOrder;
+  const order = this as any;
 
-  if (self.products && self.products.length > 0) {
-    self.products.forEach((p) => {
-      p.totalPrice = p.quantity * p.price;
-    });
+  // product totals
+  order.products.forEach((p) => {
+    p.totalPrice = p.quantity * p.price;
+  });
 
-    self.subTotalAmt = self.products.reduce((sum, p) => sum + p.totalPrice, 0);
-    self.totalAmt = self.subTotalAmt;
-  }
+  // subtotal
+  order.subTotalAmt = order.products.reduce(
+    (sum, p) => sum + p.totalPrice,
+    0
+  );
+
+  // delivery charge from address
+  const district = order.delivery_address;
+  order.deliveryCharge = calculateDeliveryCharge(district);
+
+  // final total
+  order.totalAmt = order.subTotalAmt + order.deliveryCharge;
 
   next();
 });

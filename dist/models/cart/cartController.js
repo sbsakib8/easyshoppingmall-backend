@@ -1,7 +1,20 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clearCart = exports.removeFromCart = exports.updateCartItem = exports.getCart = exports.addToCart = void 0;
+const product_model_1 = __importDefault(require("../product/product.model"));
 const cardproduct_model_1 = require("./cardproduct.model");
+/**
+ * Helper to check if two cart items are the same variant
+ */
+const isSameVariant = (item, productId, color, size, weight) => {
+    return (item.productId.toString() === productId &&
+        (item.color ?? null) === color &&
+        (item.size ?? null) === size &&
+        (item.weight ?? null) === weight);
+};
 /**
  * @desc Add product to cart
  * @route POST /api/cart/add
@@ -9,29 +22,44 @@ const cardproduct_model_1 = require("./cardproduct.model");
  */
 const addToCart = async (req, res) => {
     try {
-        const { userId, productId, quantity, price } = req.body;
-        if (!userId || !productId || !quantity || !price) {
-            res.status(400).json({ success: false, message: "Missing required fields" });
-            return;
+        let { userId, productId, quantity, price, color, size, weight } = req.body;
+        if (!userId || !productId || !quantity) {
+            return res.status(400).json({ success: false, message: "Missing required fields" });
         }
+        // 🔥 Fetch product
+        const product = await product_model_1.default.findById(productId);
+        if (!product) {
+            return res.status(404).json({ success: false, message: "Product not found" });
+        }
+        // 🔥 AUTO PICK FIRST VARIANT IF NOT SELECTED
+        size =
+            size ??
+                (product.productSize?.length ? product.productSize[0] : null);
+        color =
+            color ??
+                (product.color?.length ? product.color[0] : null);
+        weight =
+            weight ??
+                (product.productWeight?.length ? product.productWeight[0] : null);
+        // 🔥 Price fallback
+        price = price ?? product.price;
         let cart = await cardproduct_model_1.CartModel.findOne({ userId });
         if (!cart) {
-            // Create new cart
             cart = new cardproduct_model_1.CartModel({
                 userId,
-                products: [
-                    {
+                products: [{
                         productId,
                         quantity,
                         price,
+                        color,
+                        size,
+                        weight,
                         totalPrice: quantity * price,
-                    },
-                ],
+                    }],
             });
         }
         else {
-            // Check if product already in cart
-            const existingProduct = cart.products.find((item) => item.productId.toString() === productId);
+            const existingProduct = cart.products.find(item => isSameVariant(item, productId, color, size, weight));
             if (existingProduct) {
                 existingProduct.quantity += quantity;
                 existingProduct.totalPrice = existingProduct.quantity * existingProduct.price;
@@ -41,25 +69,30 @@ const addToCart = async (req, res) => {
                     productId,
                     quantity,
                     price,
+                    color,
+                    size,
+                    weight,
                     totalPrice: quantity * price,
                 });
             }
         }
+        cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);
+        cart.totalAmt = cart.subTotalAmt;
         await cart.save();
-        res.status(200).json({
+        res.json({
             success: true,
-            message: "Product added to cart successfully",
+            message: "Product added to cart",
             data: cart,
         });
     }
-    catch (error) {
-        res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+    catch (err) {
+        res.status(500).json({ success: false, message: err.message });
     }
 };
 exports.addToCart = addToCart;
 /**
  * @desc Get user's cart
- * @route GET /api/cart
+ * @route GET /api/cart/:userId
  * @access Private (User)
  */
 const getCart = async (req, res) => {
@@ -69,16 +102,20 @@ const getCart = async (req, res) => {
             res.status(401).json({ success: false, message: "Unauthorized user" });
             return;
         }
-        const cart = await cardproduct_model_1.CartModel.findOne({ userId }).populate("products.productId");
+        // const cart = await CartModel.findOne({ userId }).populate("products.productId");
+        const cart = await cardproduct_model_1.CartModel.findOne({ userId })
+            .populate({
+            path: "products.productId",
+            populate: {
+                path: "category",
+                select: "name",
+            },
+        });
         if (!cart) {
             res.status(404).json({ success: false, message: "Cart not found" });
             return;
         }
-        res.status(200).json({
-            success: true,
-            message: "Cart fetched successfully",
-            data: cart,
-        });
+        res.status(200).json({ success: true, message: "Cart fetched successfully", data: cart });
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
@@ -87,12 +124,12 @@ const getCart = async (req, res) => {
 exports.getCart = getCart;
 /**
  * @desc Update cart item quantity
- * @route PUT /api/cart/update/:productId
+ * @route PUT /api/cart/update
  * @access Private (User)
  */
 const updateCartItem = async (req, res) => {
     try {
-        const { userId, productId, quantity } = req.body;
+        const { userId, productId, quantity, color = null, size = null, weight = null } = req.body;
         if (!userId || !productId || !quantity) {
             res.status(400).json({ success: false, message: "Missing required fields" });
             return;
@@ -102,22 +139,17 @@ const updateCartItem = async (req, res) => {
             res.status(404).json({ success: false, message: "Cart not found" });
             return;
         }
-        const product = cart.products.find((item) => item.productId.toString() === productId);
+        const product = cart.products.find(item => isSameVariant(item, productId, color, size, weight));
         if (!product) {
-            res.status(404).json({ success: false, message: "Product not found in cart" });
+            res.status(404).json({ success: false, message: "Cart item not found" });
             return;
         }
         product.quantity = quantity;
-        product.totalPrice = product.quantity * product.price;
-        // Recalculate totals
-        cart.subTotalAmt = cart.products.reduce((acc, item) => acc + item.totalPrice, 0);
+        product.totalPrice = product.price * quantity;
+        cart.subTotalAmt = cart.products.reduce((sum, p) => sum + p.totalPrice, 0);
         cart.totalAmt = cart.subTotalAmt;
         await cart.save();
-        res.status(200).json({
-            success: true,
-            message: "Cart item updated successfully",
-            data: cart,
-        });
+        res.status(200).json({ success: true, message: "Cart item updated successfully", data: cart });
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
@@ -126,36 +158,31 @@ const updateCartItem = async (req, res) => {
 exports.updateCartItem = updateCartItem;
 /**
  * @desc Remove product from cart
- * @route DELETE /api/cart/remove/:productId
+ * @route DELETE /api/cart/remove
  * @access Private (User)
  */
 const removeFromCart = async (req, res) => {
     try {
         const { userId, productId } = req.params;
+        const { color = null, size = null, weight = null } = req.query;
         const cart = await cardproduct_model_1.CartModel.findOne({ userId });
         if (!cart) {
-            res.status(404).json({ success: false, message: "Cart not found" });
-            return;
+            return res.status(404).json({ success: false, message: "Cart not found" });
         }
-        cart.products = cart.products.filter((item) => item.productId.toString() !== productId);
-        // Update totals
-        cart.subTotalAmt = cart.products.reduce((acc, item) => acc + item.totalPrice, 0);
+        cart.products = cart.products.filter(item => !isSameVariant(item, productId, color, size, weight));
+        cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);
         cart.totalAmt = cart.subTotalAmt;
         await cart.save();
-        res.status(200).json({
-            success: true,
-            message: "Product removed from cart successfully",
-            data: cart,
-        });
+        res.json({ success: true, message: "Removed from cart", data: cart });
     }
-    catch (error) {
-        res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+    catch (err) {
+        res.status(500).json({ success: false, message: err.message });
     }
 };
 exports.removeFromCart = removeFromCart;
 /**
  * @desc Clear user cart
- * @route DELETE /api/cart/clear
+ * @route DELETE /api/cart/clear/:userId
  * @access Private (User)
  */
 const clearCart = async (req, res) => {
@@ -170,10 +197,7 @@ const clearCart = async (req, res) => {
         cart.subTotalAmt = 0;
         cart.totalAmt = 0;
         await cart.save();
-        res.status(200).json({
-            success: true,
-            message: "Cart cleared successfully",
-        });
+        res.status(200).json({ success: true, message: "Cart cleared successfully" });
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message || "Internal Server Error" });

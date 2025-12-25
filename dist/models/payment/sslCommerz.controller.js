@@ -36,26 +36,26 @@ const initPayment = async (req, res) => {
         const store_id = "easys690b843505473";
         const store_passwd = "easys690b843505473@ssl";
         const is_live = false;
-        const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
-        const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5001";
+        const FRONTEND_URL = process.env.FRONTEND_URL;
+        const BACKEND_URL = process.env.BACKEND_URL;
         const data = {
             total_amount: totalAmount,
             currency: "BDT",
             tran_id: order.orderId,
-            success_url: `${BACKEND_URL}/api/payment/success`,
-            fail_url: `${BACKEND_URL}/api/payment/fail`,
-            cancel_url: `${BACKEND_URL}/api/payment/cancel`,
+            success_url: `${BACKEND_URL}/payment/success`,
+            fail_url: `${BACKEND_URL}/payment/fail`,
+            cancel_url: `${BACKEND_URL}/payment/cancel`,
             ipn_url: `${BACKEND_URL}/api/payment/ipn`,
             product_name: "Order Checkout",
             product_category: "Ecommerce",
             product_profile: "general",
-            cus_name: user?.name || "Guest",
+            cus_name: user?.name || "Easy Shopping Mall Customer",
             cus_email: user?.email || "no-reply@local",
             cus_phone: user?.phone || "0000000000",
             cus_add1: user?.address || "",
             cus_city: "Dhaka",
             cus_country: "Bangladesh",
-            ship_name: user?.name || "Guest",
+            ship_name: user?.name || "Easy Shopping Mall Customer",
             ship_add1: user?.address || "",
             ship_city: "Dhaka",
             ship_country: "Bangladesh",
