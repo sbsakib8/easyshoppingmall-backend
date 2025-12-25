@@ -65,7 +65,7 @@ const initPayment = async (req, res) => {
         const sslcz = new sslcommerz_lts_1.default(store_id, store_passwd, is_live);
         const apiResponse = await sslcz.init(data);
         if (apiResponse?.GatewayPageURL) {
-            order.payment_session_key = apiResponse.sessionkey;
+            order.payment_details = { sessionKey: apiResponse.sessionkey || "" };
             await order.save();
             return res.status(200).json({
                 message: "Payment session created",

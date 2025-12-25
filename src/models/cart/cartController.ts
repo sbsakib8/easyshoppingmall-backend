@@ -123,13 +123,12 @@ export const addToCart = async (req: Request, res: Response) => {
  * @route GET /api/cart/:userId
  * @access Private (User)
  */
-export const getCart = async (req: RequestWithUser, res: Response): Promise<void> => {
+export const getCart = async (req: RequestWithUser, res: Response): Promise<Response> => {
   try {
     const userId = req.params?.userId;
 
     if (!userId) {
-      res.status(401).json({ success: false, message: "Unauthorized user" });
-      return;
+      return res.status(401).json({ success: false, message: "Unauthorized user" });
     }
 
     // const cart = await CartModel.findOne({ userId }).populate("products.productId");
@@ -144,13 +143,12 @@ export const getCart = async (req: RequestWithUser, res: Response): Promise<void
 
 
     if (!cart) {
-      res.status(404).json({ success: false, message: "Cart not found" });
-      return;
+      return res.status(404).json({ success: false, message: "Cart not found" });
     }
 
-    res.status(200).json({ success: true, message: "Cart fetched successfully", data: cart });
+    return res.status(200).json({ success: true, message: "Cart fetched successfully", data: cart });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+    return res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
   }
 };
 
@@ -159,7 +157,7 @@ export const getCart = async (req: RequestWithUser, res: Response): Promise<void
  * @route PUT /api/cart/update
  * @access Private (User)
  */
-export const updateCartItem = async (req: Request, res: Response): Promise<void> => {
+export const updateCartItem = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { userId, productId, quantity, color, size, weight } = req.body;
 
@@ -194,9 +192,9 @@ export const updateCartItem = async (req: Request, res: Response): Promise<void>
 
     await cart.save();
 
-    res.status(200).json({ success: true, message: "Cart item updated successfully", data: cart });
+    return res.status(200).json({ success: true, message: "Cart item updated successfully", data: cart });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+    return res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
   }
 };
 
@@ -244,14 +242,13 @@ export const removeFromCart = async (req: Request, res: Response) => {
  * @route DELETE /api/cart/clear/:userId
  * @access Private (User)
  */
-export const clearCart = async (req: Request, res: Response): Promise<void> => {
+export const clearCart = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { userId } = req.params;
 
     const cart = await CartModel.findOne({ userId });
     if (!cart) {
-      res.status(404).json({ success: false, message: "Cart not found" });
-      return;
+      return res.status(404).json({ success: false, message: "Cart not found" });
     }
 
     cart.products = [];
@@ -260,8 +257,8 @@ export const clearCart = async (req: Request, res: Response): Promise<void> => {
 
     await cart.save();
 
-    res.status(200).json({ success: true, message: "Cart cleared successfully" });
+    return res.status(200).json({ success: true, message: "Cart cleared successfully" });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+    return res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
   }
 };

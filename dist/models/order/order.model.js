@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
+const deliveryCharge_1 = require("../../utils/deliveryCharge");
 const orderSchema = new mongoose_1.Schema({
     userId: {
         type: mongoose_1.Schema.Types.ObjectId,
@@ -45,6 +46,7 @@ const orderSchema = new mongoose_1.Schema({
         required: true,
         unique: true,
     },
+    // Product Details
     products: [
         {
             productId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Product", required: true },
@@ -53,40 +55,48 @@ const orderSchema = new mongoose_1.Schema({
             quantity: { type: Number, default: 1 },
             price: { type: Number, required: true },
             totalPrice: { type: Number, default: 0 },
-            size: String,
+            size: { type: String, default: null },
             color: { type: String, default: null },
             weight: { type: String, default: null },
         },
     ],
-    paymentId: { type: String, default: "" },
+    // Delivery Details
+    delivery_address: {
+        type: String,
+        required: true,
+    },
+    deliveryCharge: {
+        type: Number,
+        default: 0,
+    },
+    // Amount Details
+    subTotalAmt: { type: Number, default: 0 },
+    totalAmt: { type: Number, default: 0 },
+    amount_paid: { type: Number, default: 0 },
+    amount_due: { type: Number, default: 0 },
+    // Payment Details
+    payment_method: {
+        type: String,
+        enum: ["manual", "sslcommerz"],
+        default: "manual",
+    },
+    payment_type: {
+        type: String,
+        enum: ["full", "delivery"],
+        default: "full",
+    },
     payment_status: {
         type: String,
         enum: ["pending", "paid", "failed", "refunded"],
         default: "pending",
     },
-    // ⭐ NEW FIELD
-    payment_method: {
-        type: String,
-        enum: ["manual", "sslcommerz", "online"],
-        default: "manual",
-    },
-    // ⭐ NEW FIELD
-    payment_session_key: {
-        type: String,
-        default: "",
-    },
     payment_details: {
-        providerNumber: { type: String },
-        transactionId: { type: String },
-        manualFor: { type: String },
+        type: mongoose_1.Schema.Types.Mixed,
+        default: null,
     },
-    delivery_address: {
-        type: String,
-        required: true,
-    },
-    subTotalAmt: { type: Number, default: 0 },
-    totalAmt: { type: Number, default: 0 },
+    paymentId: { type: String, default: "" },
     invoice_receipt: { type: String, default: "" },
+    // Order Status
     order_status: {
         type: String,
         enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed"],
@@ -95,13 +105,35 @@ const orderSchema = new mongoose_1.Schema({
 }, { timestamps: true });
 // FIX PRE-HOOK TYPES
 orderSchema.pre("save", function (next) {
-    const self = this;
-    if (self.products && self.products.length > 0) {
-        self.products.forEach((p) => {
-            p.totalPrice = p.quantity * p.price;
-        });
-        self.subTotalAmt = self.products.reduce((sum, p) => sum + p.totalPrice, 0);
-        self.totalAmt = self.subTotalAmt;
+    const order = this;
+    // product totals
+    order.products.forEach((p) => {
+        p.totalPrice = p.quantity * p.price;
+    });
+    // subtotal
+    order.subTotalAmt = order.products.reduce((sum, p) => sum + p.totalPrice, 0);
+    // delivery charge from address
+    const district = order.delivery_address;
+    order.deliveryCharge = (0, deliveryCharge_1.calculateDeliveryCharge)(district);
+    // final total
+    order.totalAmt = order.subTotalAmt + order.deliveryCharge;
+    // Calculate amount_paid and amount_due based on payment_status and payment_type
+    if (order.payment_status === "paid") {
+        if (order.payment_type === "delivery") {
+            // Only delivery charge is paid, products payment is due
+            order.amount_paid = order.deliveryCharge;
+            order.amount_due = order.subTotalAmt;
+        }
+        else {
+            // Full amount is paid
+            order.amount_paid = order.totalAmt;
+            order.amount_due = 0;
+        }
+    }
+    else {
+        // Nothing paid yet
+        order.amount_paid = 0;
+        order.amount_due = order.totalAmt;
     }
     next();
 });

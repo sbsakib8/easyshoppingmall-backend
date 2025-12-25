@@ -78,7 +78,7 @@ export const initPayment = async (req: Request, res: Response) => {
     const apiResponse = await sslcz.init(data);
 
     if (apiResponse?.GatewayPageURL) {
-      order.payment_session_key = apiResponse.sessionkey;
+      order.payment_details = { sessionKey: apiResponse.sessionkey || "" };
       await order.save();
 
       return res.status(200).json({
