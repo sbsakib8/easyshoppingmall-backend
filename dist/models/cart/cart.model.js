@@ -23,9 +23,9 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WishlistModel = void 0;
+exports.CartModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const wishlistSchema = new mongoose_1.Schema({
+const cartSchema = new mongoose_1.Schema({
     userId: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: "User",
@@ -38,8 +38,31 @@ const wishlistSchema = new mongoose_1.Schema({
                 ref: "Product",
                 required: true,
             },
-            addedAt: { type: Date, default: Date.now },
+            quantity: {
+                type: Number,
+                default: 1,
+                min: [1, "Quantity cannot be less than 1"],
+            },
+            price: {
+                type: Number,
+                default: 0,
+            },
+            totalPrice: {
+                type: Number,
+                default: 0,
+            },
+            size: { type: String },
+            color: { type: String },
+            weight: { type: String },
         },
     ],
+    subTotalAmt: { type: Number, default: 0 },
+    totalAmt: { type: Number, default: 0 },
 }, { timestamps: true });
-exports.WishlistModel = mongoose_1.default.model("Wishlist", wishlistSchema);
+// Pre-save hook to update totals
+cartSchema.pre("save", function (next) {
+    this.subTotalAmt = this.products.reduce((acc, item) => acc + item.totalPrice, 0);
+    this.totalAmt = this.subTotalAmt;
+    next();
+});
+exports.CartModel = mongoose_1.default.model("Cart", cartSchema);

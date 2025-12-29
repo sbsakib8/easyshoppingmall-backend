@@ -5,7 +5,8 @@ import {
   createOrder,
   getMyOrders,
   ManualPayment,
-  updateOrderStatus
+  updateOrderStatus,
+  confirmManualPayment
 } from "../order/order.controllers";
 
 const router = express.Router();
@@ -32,6 +33,12 @@ router.post("/manual-payment", isAuth, ManualPayment);
  * @access  Private (Admin)
  */
 router.put("/:id/status", isAuth, isAdmin, updateOrderStatus);
-// router.post("/manual-payment", isAuth, ManualPayment)
+
+/**
+ * @route   PUT /api/orders/:id/confirm-payment
+ * @desc    Confirm manual payment (admin only)
+ * @access  Private (Admin)
+ */
+router.put("/:id/confirm-payment", isAuth, isAdmin, confirmManualPayment);
 
 export default router;

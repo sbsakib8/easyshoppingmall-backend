@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import { AuthUser } from "../order/interface";
 import ProductModel from "../product/product.model";
-import { CartModel } from "./cardproduct.model";
+import { CartModel } from "./cart.model";
+import { ICartProduct } from "./interface";
 
 /**
  * Extending Express Request to include user
@@ -14,7 +15,7 @@ interface RequestWithUser extends Request {
  * Helper to check if two cart items are the same variant
  */
 const isSameVariant = (
-  item: any,
+  item: ICartProduct,
   productId: string,
   color?: string | null,
   size?: string | null,
@@ -82,7 +83,7 @@ export const addToCart = async (req: Request, res: Response) => {
         }],
       });
     } else {
-      const existingProduct = cart.products.find(item =>
+      const existingProduct = cart.products.find((item: ICartProduct) =>
         isSameVariant(item, productId, color, size, weight)
       );
 
@@ -102,7 +103,7 @@ export const addToCart = async (req: Request, res: Response) => {
       }
     }
 
-    cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);
+    cart.subTotalAmt = cart.products.reduce((s: number, p: ICartProduct) => s + p.totalPrice, 0);
     cart.totalAmt = cart.subTotalAmt;
 
     await cart.save();
@@ -170,7 +171,7 @@ export const updateCartItem = async (req: Request, res: Response): Promise<Respo
       return res.status(404).json({ success: false, message: "Cart not found" });
     }
 
-    const product = cart.products.find(item =>
+    const product = cart.products.find((item: ICartProduct) =>
       isSameVariant(
         item,
         productId,
@@ -187,7 +188,7 @@ export const updateCartItem = async (req: Request, res: Response): Promise<Respo
     product.quantity = Number(quantity);
     product.totalPrice = product.price * product.quantity;
 
-    cart.subTotalAmt = cart.products.reduce((sum, p) => sum + p.totalPrice, 0);
+    cart.subTotalAmt = cart.products.reduce((sum: number, p: ICartProduct) => sum + p.totalPrice, 0);
     cart.totalAmt = cart.subTotalAmt;
 
     await cart.save();
@@ -215,7 +216,7 @@ export const removeFromCart = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Cart not found" });
     }
 
-    cart.products = cart.products.filter(item =>
+    cart.products = cart.products.filter((item: ICartProduct) =>
       !isSameVariant(
         item,
         productId,
@@ -225,7 +226,7 @@ export const removeFromCart = async (req: Request, res: Response) => {
       )
     );
 
-    cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);
+    cart.subTotalAmt = cart.products.reduce((s: number, p: ICartProduct) => s + p.totalPrice, 0);
     cart.totalAmt = cart.subTotalAmt;
 
     await cart.save();
