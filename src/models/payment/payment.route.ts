@@ -1,7 +1,7 @@
 import express from "express";
 import { isAuth } from "../../middlewares/isAuth";
 import {
-  initPayment,
+  initSslPayment,
   paymentCancel,
   paymentFail,
   paymentIpn,
@@ -10,7 +10,7 @@ import {
 
 const router = express.Router();
 
-router.post("/init", isAuth, initPayment);
+router.post("/init", isAuth, initSslPayment);
 router.post("/success", paymentSuccess);
 router.post("/fail", paymentFail);
 router.post("/cancel", paymentCancel);

@@ -3,9 +3,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
+exports.confirmManualPayment = exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
-const cardproduct_model_1 = require("../cart/cardproduct.model"); // ✅ fix typo (card → cart)
+const cart_model_1 = require("../cart/cart.model"); // ✅ fix typo (card → cart)
 const order_model_1 = __importDefault(require("./order.model"));
 const { v4: uuidv4 } = require('uuid');
 /**
@@ -13,21 +13,16 @@ const { v4: uuidv4 } = require('uuid');
  * @route POST /api/orders/create
  * @access Private (User)
  */
-/**
- * @desc Create a new order from user's cart
- * @route POST /api/orders/create
- * @access Private (User)
- */
 const createOrder = async (req, res) => {
     try {
-        const { userId, delivery_address, paymentMethod, paymentDetails } = req.body;
+        const { userId, delivery_address, paymentMethod, paymentDetails, payment_type, deliveryCharge, subtotal } = req.body;
         if (!userId || !delivery_address) {
             return res.status(400).json({
                 success: false,
                 message: "Missing required fields (userId, delivery_address)",
             });
         }
-        const cart = await cardproduct_model_1.CartModel.findOne({ userId }).populate("products.productId");
+        const cart = await cart_model_1.CartModel.findOne({ userId }).populate("products.productId");
         if (!cart || cart.products.length === 0) {
             return res.status(404).json({ success: false, message: "Cart is empty" });
         }
@@ -47,6 +42,7 @@ const createOrder = async (req, res) => {
                 size: item.size,
             };
         });
+        const totalOrderAmount = subtotal + deliveryCharge;
         // Create order
         const order = new order_model_1.default({
             userId,
@@ -56,14 +52,13 @@ const createOrder = async (req, res) => {
             payment_method: paymentMethod || "manual", // manual or sslcommerz
             payment_status: "pending", // manual always pending
             payment_details: paymentDetails || undefined,
+            payment_type: payment_type || "full",
             order_status: "pending",
+            subTotalAmt: subtotal,
+            deliveryCharge: deliveryCharge,
+            totalAmt: totalOrderAmount,
         });
         await order.save();
-        // Clear cart
-        cart.products = [];
-        cart.subTotalAmt = 0;
-        cart.totalAmt = 0;
-        await cart.save();
         res.status(201).json({
             success: true,
             message: "Order placed successfully",
@@ -176,3 +171,59 @@ const ManualPayment = async (req, res) => {
     }
 };
 exports.ManualPayment = ManualPayment;
+/**
+ * @desc Confirm manual payment for an order (Admin only)
+ * @route PUT /api/orders/:id/confirm-payment
+ * @access Private (Admin)
+ */
+const confirmManualPayment = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid order ID" });
+        }
+        const order = await order_model_1.default.findById(id);
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+        if (order.payment_method !== 'manual') {
+            return res.status(400).json({ success: false, message: "This is not a manual payment order." });
+        }
+        if (order.payment_status === 'paid') {
+            return res.status(400).json({ success: false, message: "This order has already been paid." });
+        }
+        // Update payment status
+        order.payment_status = "paid";
+        order.order_status = "processing";
+        // Calculate amount_paid and amount_due based on payment type
+        if (order.payment_type === "delivery") {
+            order.amount_paid = order.deliveryCharge;
+            order.amount_due = order.subTotalAmt;
+        }
+        else { // "full" payment
+            order.amount_paid = order.totalAmt;
+            order.amount_due = 0;
+        }
+        await order.save();
+        // Clear the user's cart
+        const cart = await cart_model_1.CartModel.findOne({ userId: order.userId });
+        if (cart) {
+            cart.products = [];
+            cart.subTotalAmt = 0;
+            cart.totalAmt = 0;
+            await cart.save();
+        }
+        res.json({
+            success: true,
+            message: "Manual payment confirmed successfully",
+            data: order,
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message || "Internal Server Error",
+        });
+    }
+};
+exports.confirmManualPayment = confirmManualPayment;

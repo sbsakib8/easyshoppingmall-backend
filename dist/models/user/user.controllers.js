@@ -4,10 +4,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.getAllUsers = exports.getUserProfile = exports.googleAuth = exports.resetpassword = exports.verifyotp = exports.sendotp = exports.signOut = exports.signIn = exports.signUp = void 0;
-const user_model_1 = __importDefault(require("../user/user.model"));
+const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 const genaretetoken_1 = __importDefault(require("../../utils/genaretetoken"));
 const nodemailer_1 = require("../../utils/nodemailer");
-const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
+const user_model_1 = __importDefault(require("../user/user.model"));
 // Cookie 
 const cookieOptions = {
     httpOnly: true,
@@ -261,33 +261,20 @@ exports.getAllUsers = getAllUsers;
 const userImage = async (req, res) => {
     try {
         const userId = req.params.id;
-        if (!userId) {
-            return res.status(400).json({ message: "User ID is required" });
-        }
-        let imageUrl;
-        if (req.file) {
-            imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
-        }
-        else {
+        if (!req.file) {
             return res.status(400).json({ message: "No image file provided" });
         }
-        const updatedUser = await user_model_1.default.findByIdAndUpdate(userId, { image: imageUrl }, { new: true });
-        if (!updatedUser) {
-            return res.status(404).json({ message: "User not found" });
-        }
+        const imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
+        const user = await user_model_1.default.findByIdAndUpdate(userId, { image: imageUrl }, { new: true });
         res.status(200).json({
-            message: "Profile image updated successfully ✅",
             success: true,
+            message: "Profile image updated successfully",
             image: imageUrl,
-            user: updatedUser,
+            user,
         });
     }
     catch (error) {
-        console.error(error);
-        res.status(500).json({
-            message: error.message || "Server error",
-            success: false,
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 exports.userImage = userImage;

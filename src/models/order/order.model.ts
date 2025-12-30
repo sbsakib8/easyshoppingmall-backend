@@ -1,5 +1,4 @@
 import mongoose, { Model, Schema } from "mongoose";
-import { calculateDeliveryCharge } from "../../utils/deliveryCharge";
 import { IOrder } from "./interface";
 
 const orderSchema = new Schema<IOrder>(
@@ -48,6 +47,7 @@ const orderSchema = new Schema<IOrder>(
     amount_due: { type: Number, default: 0 },
 
     // Payment Details
+    // Payment Details
     payment_method: {
       type: String,
       enum: ["manual", "sslcommerz"],
@@ -57,6 +57,7 @@ const orderSchema = new Schema<IOrder>(
       type: String,
       enum: ["full", "delivery"],
       default: "full",
+      required: true,
     },
     payment_status: {
       type: String,
@@ -70,6 +71,7 @@ const orderSchema = new Schema<IOrder>(
     paymentId: { type: String, default: "" },
     invoice_receipt: { type: String, default: "" },
 
+
     // Order Status
     order_status: {
       type: String,
@@ -81,43 +83,11 @@ const orderSchema = new Schema<IOrder>(
 );
 
 // FIX PRE-HOOK TYPES
-orderSchema.pre("save", function (next) {
-  const order = this as any;
-
+orderSchema.pre<IOrder>("save", function (next) {
   // product totals
-  order.products.forEach((p: any) => {
+  this.products.forEach((p) => {
     p.totalPrice = p.quantity * p.price;
   });
-
-  // subtotal
-  order.subTotalAmt = order.products.reduce(
-    (sum: number, p: any) => sum + p.totalPrice,
-    0
-  );
-
-  // delivery charge from address
-  const district = order.delivery_address;
-  order.deliveryCharge = calculateDeliveryCharge(district);
-
-  // final total
-  order.totalAmt = order.subTotalAmt + order.deliveryCharge;
-
-  // Calculate amount_paid and amount_due based on payment_status and payment_type
-  if (order.payment_status === "paid") {
-    if (order.payment_type === "delivery") {
-      // Only delivery charge is paid, products payment is due
-      order.amount_paid = order.deliveryCharge;
-      order.amount_due = order.subTotalAmt;
-    } else {
-      // Full amount is paid
-      order.amount_paid = order.totalAmt;
-      order.amount_due = 0;
-    }
-  } else {
-    // Nothing paid yet
-    order.amount_paid = 0;
-    order.amount_due = order.totalAmt;
-  }
 
   next();
 });

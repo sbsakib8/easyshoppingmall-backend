@@ -27,5 +27,10 @@ router.post("/manual-payment", isAuth_1.isAuth, order_controllers_1.ManualPaymen
  * @access  Private (Admin)
  */
 router.put("/:id/status", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.updateOrderStatus);
-// router.post("/manual-payment", isAuth, ManualPayment)
+/**
+ * @route   PUT /api/orders/:id/confirm-payment
+ * @desc    Confirm manual payment (admin only)
+ * @access  Private (Admin)
+ */
+router.put("/:id/confirm-payment", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.confirmManualPayment);
 exports.default = router;

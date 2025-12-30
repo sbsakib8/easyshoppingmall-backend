@@ -1,23 +1,23 @@
 import type { CookieOptions, Request, Response } from "express";
-import User from "../user/user.model";
-import type { IUser } from "../user/user.model";
-import generateToken from "../../utils/genaretetoken";
-import { sendEmail } from "../../utils/nodemailer";
 import { AuthRequest } from "../../middlewares/isAuth";
 import uploadClouinary from "../../utils/cloudinary";
+import generateToken from "../../utils/genaretetoken";
+import { sendEmail } from "../../utils/nodemailer";
+import type { IUser } from "../user/user.model";
+import User from "../user/user.model";
 
 // Cookie 
-const cookieOptions:CookieOptions = {
-  httpOnly: true, 
-  secure: true, 
+const cookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: true,
   sameSite: "none",
-  maxAge: 30 * 24 * 60 * 60 * 1000, 
+  maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 
 // Register User
 export const signUp = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, password , role } = req.body;
+    const { name, email, password, role } = req.body;
 
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -25,20 +25,20 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const user: IUser = await User.create({ name, email, password , role });
+    const user: IUser = await User.create({ name, email, password, role });
     const token = generateToken(user._id.toString());
     //  cookie
-     res.cookie("token", token,{
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production", 
-    sameSite: "lax", 
-    maxAge: 30 * 24 * 60 * 60 * 1000, 
-  });;
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });;
 
 
     res.status(201).json({
-       success: true,       
-        message: "User registered successfully",
+      success: true,
+      message: "User registered successfully",
       id: user._id,
       name: user.name,
       email: user.email,
@@ -55,33 +55,33 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-    if(!user){
+    if (!user) {
       res.status(401).json({ message: "user does not exist" });
       return;
     }
     const ismatch = await user.comparePassword(password);
-    if(!ismatch){
+    if (!ismatch) {
       res.status(401).json({ message: "incorrect password" });
       return;
-    }   
-      const token = generateToken(user._id.toString());
+    }
+    const token = generateToken(user._id.toString());
 
-      res.cookie("token", token,{
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production", 
-    sameSite: "lax", 
-    maxAge: 30 * 24 * 60 * 60 * 1000, 
-  });;
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });;
 
-      res.json({
-        success: true,       
-        message: "User Signin successfully",
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      });
-    
+    res.json({
+      success: true,
+      message: "User Signin successfully",
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    });
+
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }
@@ -94,7 +94,7 @@ export const signOut = async (req: Request, res: Response): Promise<void> => {
       httpOnly: true,
       secure: true,
       sameSite: "strict",
-      path: "/", 
+      path: "/",
     });
 
     res.status(200).json({
@@ -119,14 +119,14 @@ export const sendotp = async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ success: false, message: "User not found" });
       return;
     }
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.forgot_password_otp = otp;
     user.forgot_password_expiry = new Date(Date.now() + 5 * 60 * 1000);
     await user.save();
     // Send OTP via email
     await sendEmail(user.email, parseInt(otp), user.name);
-    res.status(200).json({ success: true, message: "OTP sent to email", otp }); 
-    
+    res.status(200).json({ success: true, message: "OTP sent to email", otp });
+
   } catch (error: any) {
     res.status(500).json({
       success: false,
@@ -144,7 +144,7 @@ export const verifyotp = async (req: Request, res: Response): Promise<void> => {
     if (!user) {
       res.status(404).json({ success: false, message: "User not found" });
       return;
-    } 
+    }
     if (user.forgot_password_otp !== otp) {
       res.status(400).json({ success: false, message: "Invalid OTP" });
       return;
@@ -164,7 +164,7 @@ export const verifyotp = async (req: Request, res: Response): Promise<void> => {
       success: false,
       message: (error as Error).message,
     });
-      
+
   }
 }
 
@@ -173,7 +173,7 @@ export const resetpassword = async (req: Request, res: Response): Promise<void> 
   try {
     const { email, newpassword } = req.body;
 
-    
+
     const user = await User.findOne({ email });
     if (!user) {
       res.status(404).json({ success: false, message: "User not found" });
@@ -184,11 +184,11 @@ export const resetpassword = async (req: Request, res: Response): Promise<void> 
       res.status(400).json({ success: false, message: "OTP not verified" });
       return;
     }
-  
+
     user.password = newpassword;
     user.forgot_password_otp = undefined;
     user.forgot_password_expiry = undefined;
-    user.isotpverified = false; 
+    user.isotpverified = false;
     await user.save();
 
     res.status(200).json({ success: true, message: "Password reset successfully" });
@@ -204,10 +204,10 @@ export const resetpassword = async (req: Request, res: Response): Promise<void> 
 // google login
 export const googleAuth = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, mobile , image } = req.body;
+    const { name, email, mobile, image } = req.body;
     let user = await User.findOne({ email });
     if (!user) {
-      user = new User({ name, email, mobile ,image });
+      user = new User({ name, email, mobile, image });
       await user.save();
     }
     const token = generateToken(user._id.toString());
@@ -221,14 +221,14 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
       mobile: user.mobile,
       image: user.image,
       role: user.role,
-    }); 
+    });
 
-    
+
   } catch (error) {
     res.status(500).json({
       success: false,
       message: (error as Error).message,
-    }); 
+    });
   }
 }
 
@@ -264,7 +264,7 @@ export const getUserProfile = async (req: AuthRequest, res: Response): Promise<v
 //  get all users
 export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const users = await User.find().select( 
+    const users = await User.find().select(
       "-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified"
     );
 
@@ -278,49 +278,37 @@ export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void
 };
 
 // user imge push 
-export const userImage = async (req: Request, res: Response) => {
+export const userImage = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.params.id;
-    if (!userId) {
-      return res.status(400).json({ message: "User ID is required" });
-    }
-
-    let imageUrl: string | undefined;
-    if (req.file) {
-      imageUrl = await uploadClouinary(req.file.buffer);
-    } else {
+    if (!req.file) {
       return res.status(400).json({ message: "No image file provided" });
     }
 
-    const updatedUser = await User.findByIdAndUpdate(
+    const imageUrl = await uploadClouinary(req.file.buffer);
+
+    const user = await User.findByIdAndUpdate(
       userId,
       { image: imageUrl },
       { new: true }
     );
 
-    if (!updatedUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
     res.status(200).json({
-      message: "Profile image updated successfully ✅",
       success: true,
+      message: "Profile image updated successfully",
       image: imageUrl,
-      user: updatedUser,
+      user,
     });
   } catch (error: any) {
-    console.error(error);
-    res.status(500).json({
-      message: error.message || "Server error",
-      success: false,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 // user update profile
 export const updateUserProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.params.id; 
+    const userId = req.params.id;
 
     const {
       name,
