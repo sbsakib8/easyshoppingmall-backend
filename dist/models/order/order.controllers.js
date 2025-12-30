@@ -13,14 +13,9 @@ const { v4: uuidv4 } = require('uuid');
  * @route POST /api/orders/create
  * @access Private (User)
  */
-/**
- * @desc Create a new order from user's cart
- * @route POST /api/orders/create
- * @access Private (User)
- */
 const createOrder = async (req, res) => {
     try {
-        const { userId, delivery_address, paymentMethod, paymentDetails, payment_type } = req.body;
+        const { userId, delivery_address, paymentMethod, paymentDetails, payment_type, deliveryCharge, subtotal } = req.body;
         if (!userId || !delivery_address) {
             return res.status(400).json({
                 success: false,
@@ -47,6 +42,7 @@ const createOrder = async (req, res) => {
                 size: item.size,
             };
         });
+        const totalOrderAmount = subtotal + deliveryCharge;
         // Create order
         const order = new order_model_1.default({
             userId,
@@ -58,6 +54,9 @@ const createOrder = async (req, res) => {
             payment_details: paymentDetails || undefined,
             payment_type: payment_type || "full",
             order_status: "pending",
+            subTotalAmt: subtotal,
+            deliveryCharge: deliveryCharge,
+            totalAmt: totalOrderAmount,
         });
         await order.save();
         res.status(201).json({

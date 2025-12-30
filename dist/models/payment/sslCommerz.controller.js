@@ -5,8 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.paymentIpn = exports.paymentCancel = exports.paymentFail = exports.paymentSuccess = exports.initSslPayment = void 0;
 const sslcommerz_lts_1 = __importDefault(require("sslcommerz-lts"));
-const order_model_1 = __importDefault(require("../order/order.model"));
 const cart_model_1 = require("../cart/cart.model");
+const order_model_1 = __importDefault(require("../order/order.model"));
 /**
  * POST /api/payment/init
  * body: { dbOrderId: string, user: { name, email, phone, address }, method: "manual" | "sslcommerz" }
@@ -18,21 +18,19 @@ const initSslPayment = async (req, res) => {
         if (!order) {
             return res.status(404).json({ message: "Order not found" });
         }
-        let amount = 0;
-        let description = "";
-        if (order.payment_type === "delivery") {
-            amount = order.deliveryCharge;
-            description = "Delivery Charge";
-        }
-        else {
-            amount = order.totalAmt;
-            description = "Products + Delivery";
-        }
+        // ✅ ALWAYS calculate fresh
+        const subTotal = order.subTotalAmt || 0;
+        const deliveryCharge = order.deliveryCharge || 0;
+        const amount = order.payment_type === "delivery"
+            ? deliveryCharge
+            : subTotal + deliveryCharge;
         const sslData = {
-            total_amount: amount,
+            total_amount: Number(amount.toFixed(2)),
             currency: "BDT",
             tran_id: order.orderId,
-            product_name: description,
+            product_name: order.payment_type === "delivery"
+                ? "Delivery Charge"
+                : "Products + Delivery",
             product_category: "Ecommerce",
             product_profile: "general",
             cus_name: user.name,
@@ -43,24 +41,14 @@ const initSslPayment = async (req, res) => {
             fail_url: `${process.env.BACKEND_URL}/api/payment/ssl/fail`,
             cancel_url: `${process.env.BACKEND_URL}/api/payment/ssl/cancel`,
         };
-        const storeId = process.env.SSLCOMMERZ_STORE_ID;
-        const storePassword = process.env.SSLCOMMERZ_STORE_PASSWORD;
-        if (!storeId || !storePassword) {
-            throw new Error("SSLCommerz store ID and password must be set in environment variables.");
-        }
-        const sslcz = new sslcommerz_lts_1.default(storeId, storePassword, false);
+        const sslcz = new sslcommerz_lts_1.default(process.env.SSLCOMMERZ_STORE_ID, process.env.SSLCOMMERZ_STORE_PASSWORD, false);
         const apiResponse = await sslcz.init(sslData);
-        if (!apiResponse.sessionkey) {
-            throw new Error("Failed to get session key from SSLCommerz.");
-        }
-        // Save session key (optional but recommended)
-        order.payment_details = {
-            sessionKey: apiResponse.sessionkey,
-        };
+        order.payment_details = { sessionKey: apiResponse.sessionkey || "" };
         await order.save();
-        return res.json({
-        // url: apiResponse.GatewayPageURL,
-        });
+        // console.log("PAYMENT TYPE:", order.payment_type);
+        // console.log("DELIVERY CHARGE:", order.deliveryCharge);
+        // console.log("TOTAL AMOUNT:", order.totalAmt);
+        return res.json({ url: apiResponse.GatewayPageURL });
     }
     catch (err) {
         console.error("SSL init error:", err);

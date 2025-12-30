@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const cors_1 = __importDefault(require("cors"));
 const express_1 = __importDefault(require("express"));
+const db_connect_1 = __importDefault(require("./config/db.connect"));
 const address_routs_1 = __importDefault(require("./models/address/address.routs"));
 const centerBanner_routs_1 = __importDefault(require("./models/banners/centerBanner/centerBanner.routs"));
 const homeBanner_routs_1 = __importDefault(require("./models/banners/homeBanner/homeBanner.routs"));
@@ -20,10 +21,10 @@ const notification_routs_1 = __importDefault(require("./models/notification/noti
 const order_routs_1 = __importDefault(require("./models/order/order.routs"));
 const payment_route_1 = __importDefault(require("./models/payment/payment.route"));
 const product_routs_1 = __importDefault(require("./models/product/product.routs"));
+const review_routs_1 = __importDefault(require("./models/review/review.routs"));
 const subcategory_routs_1 = __importDefault(require("./models/subcategory/subcategory.routs"));
 const user_routs_1 = __importDefault(require("./models/user/user.routs"));
 const wishlist_routs_1 = __importDefault(require("./models/wishlist/wishlist.routs"));
-const db_connect_1 = __importDefault(require("./config/db.connect"));
 // middleware
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
@@ -55,6 +56,7 @@ app.use("/api/cart", cart_routs_1.default);
 app.use("/api/orders", order_routs_1.default);
 app.use("/api/wishlist", wishlist_routs_1.default);
 app.use("/api/payment", payment_route_1.default);
+app.use('/api/review', review_routs_1.default);
 app.get("/", (req, res) => {
     res.send("APi  is running...");
 });

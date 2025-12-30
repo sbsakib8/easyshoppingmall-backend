@@ -33,28 +33,34 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.Review = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const centerBannerSchema = new mongoose_1.Schema({
-    title: {
+const reviewSchema = new mongoose_1.Schema({
+    productId: {
+        type: mongoose_1.default.Schema.Types.ObjectId,
+        ref: "Product",
+        required: true,
+    },
+    userId: {
+        type: mongoose_1.default.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    rating: {
+        type: Number,
+        required: true,
+        min: 1,
+        max: 5,
+    },
+    comment: {
         type: String,
-        default: ""
-    },
-    Description: {
-        type: String,
-        default: ""
-    },
-    images: {
-        type: [String],
-        default: []
-    },
-    Link_URL: {
-        type: String
+        required: true,
+        trim: true,
     },
     status: {
         type: String,
-        enum: ['active', 'inactive'],
-        default: 'active'
-    }
+        enum: ["pending", "approved", "rejected"],
+        default: "pending",
+    },
 }, { timestamps: true });
-exports.default = mongoose_1.default.models.CenterBanner ||
-    mongoose_1.default.model("CenterBanner", centerBannerSchema);
+exports.Review = mongoose_1.default.model("Review", reviewSchema);

@@ -55,7 +55,7 @@ export const initSslPayment = async (req: Request, res: Response) => {
 
     const apiResponse = await sslcz.init(sslData);
 
-    order.payment_details = { sessionKey: apiResponse.sessionkey };
+    order.payment_details = { sessionKey: apiResponse.sessionkey || "" };
     await order.save();
 
     // console.log("PAYMENT TYPE:", order.payment_type);
