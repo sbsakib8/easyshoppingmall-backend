@@ -20,7 +20,9 @@ interface RequestWithUser extends Request {
  */
 export const createOrder = async (req: Request, res: Response) => {
   try {
-    const { userId, delivery_address, paymentMethod, paymentDetails, payment_type, deliveryCharge, subtotal } = req.body;
+    const { userId, delivery_address, paymentMethod, paymentDetails, payment_type } = req.body;
+    const subtotalFromReq = Number(req.body.subtotal) || 0;
+    const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0;
 
     if (!userId || !delivery_address) {
       return res.status(400).json({
@@ -45,18 +47,20 @@ export const createOrder = async (req: Request, res: Response) => {
 
     const orderProducts = validProducts.map((item: any) => {
       const product = item.productId;
+      const productPrice = Number(product.productPrice) || 0; // Ensure productPrice is a number, default to 0
+      const quantity = Number(item.quantity) || 0; // Ensure quantity is a number, default to 0
       return {
         productId: product._id,
         name: product.productName || "Unnamed Product",
         image: product.images || [],
-        quantity: item.quantity,
-        price: item.price,
-        totalPrice: item.totalPrice,
+        quantity: quantity,
+        price: productPrice,
+        totalPrice: quantity * productPrice, // Calculate totalPrice using the numeric values
         size: item.size,
       };
     });
 
-    const totalOrderAmount = subtotal + deliveryCharge;
+    const totalOrderAmount = subtotalFromReq + deliveryChargeFromReq;
 
     // Create order
     const order = new OrderModel({
@@ -69,8 +73,8 @@ export const createOrder = async (req: Request, res: Response) => {
       payment_details: paymentDetails || undefined,
       payment_type: payment_type || "full",
       order_status: "pending",
-      subTotalAmt: subtotal,
-      deliveryCharge: deliveryCharge,
+      subTotalAmt: subtotalFromReq,
+      deliveryCharge: deliveryChargeFromReq,
       totalAmt: totalOrderAmount,
     });
 
