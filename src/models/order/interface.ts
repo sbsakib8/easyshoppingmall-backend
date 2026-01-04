@@ -40,7 +40,7 @@ export interface IOrder extends Document {
   // Payment Fields
   payment_method: "manual" | "sslcommerz";
   payment_type: "full" | "delivery";
-  payment_status: "pending" | "paid" | "failed" | "refunded";
+  payment_status: "pending" | "paid" | "failed" | "refunded" | "partial";
   payment_details?: IManualPaymentDetails | ISSLPaymentDetails;
   paymentId?: string;
   invoice_receipt?: string;
@@ -55,4 +55,5 @@ export interface AuthUser {
   name?: string;
   email?: string;
   role?: "user" | "admin";
+  mobile?: string;
 }
