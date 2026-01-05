@@ -16,6 +16,8 @@ import websiteInfo from "./models/content/websiteInfo/websiteinfo.routs";
 import notifications from "./models/notification/notification.routs";
 import orderRoute from './models/order/order.routs';
 import paymentRouter from './models/payment/payment.route';
+
+import adminRoutes from './models/admin/admin.route';
 import productRouter from "./models/product/product.routs";
 import reviewRouter from './models/review/review.routs';
 import subcategoriesRoutes from "./models/subcategory/subcategory.routs";
@@ -58,6 +60,8 @@ app.use("/api/orders", orderRoute)
 app.use("/api/wishlist", wishlistRouter)
 app.use("/api/payment", paymentRouter)
 app.use('/api/review', reviewRouter)
+
+app.use("/api/admin", adminRoutes)
 
 
 app.get("/", (req: Request, res: Response) => {

@@ -1,4 +1,4 @@
-import express from "express";
+import { Router } from "express";
 import { isAuth } from "../../middlewares/isAuth";
 import {
   initSslPayment,
@@ -6,11 +6,10 @@ import {
   paymentFail,
   paymentIpn,
   paymentSuccess,
-} from "./sslCommerz.controller";
+} from "./payment.controller";
+const router = Router();
 
-const router = express.Router();
-
-router.post("/init", isAuth, initSslPayment);
+router.post("/initiate", isAuth, initSslPayment);
 router.post("/success", paymentSuccess);
 router.post("/fail", paymentFail);
 router.post("/cancel", paymentCancel);

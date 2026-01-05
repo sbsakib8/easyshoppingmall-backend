@@ -37,7 +37,7 @@ export const isAuth = async (req: AuthRequest, res: Response, next: NextFunction
       name: user.name,
       email: user.email,
       role: user.role === "ADMIN" ? "admin" : "user", // Map role
-      mobile: user.mobile, // Populate mobile
+      mobile: user.mobile || undefined, // Populate mobile
     };
     next();
   } catch (error) {

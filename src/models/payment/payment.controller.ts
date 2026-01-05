@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import SSLCommerzPayment from "sslcommerz-lts";
+import processdata from "../../config";
 import { AuthRequest } from "../../middlewares/isAuth"; // Import AuthRequest
 import { CartModel } from "../cart/cart.model";
 import OrderModel from "../order/order.model";
@@ -8,84 +9,96 @@ import OrderModel from "../order/order.model";
  * POST /api/payment/init
  * body: { dbOrderId: string, user: { name, email, phone, address }, method: "manual" | "sslcommerz" }
  */
-export const initSslPayment = async (req: AuthRequest, res: Response) => { // Use AuthRequest
+export const initSslPayment = async (req: AuthRequest, res: Response) => {
   try {
-    const { dbOrderId } = req.body; // user is now from req.user
-    console.log("Received dbOrderId for payment initiation:", dbOrderId);
+    const { orderId } = req.body;
 
-    // Ensure user is authenticated and has user data
     if (!req.userId || !req.user) {
       return res.status(401).json({ message: "Unauthorized: User not authenticated" });
     }
 
-    // Check for essential environment variables
-    if (!process.env.SSLC_STORE_ID || !process.env.SSLC_STORE_PASSWORD || !process.env.BACKEND_URL) {
-      console.error("Missing SSLCommerz or BACKEND_URL environment variables.");
-      return res.status(500).json({
-        success: false,
-        message: "Server configuration error: Missing SSLCommerz credentials or BACKEND_URL.",
-      });
-    }
+    const order = await OrderModel.findById(orderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
 
-    const order = await OrderModel.findById(dbOrderId);
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
+    // Calculate payable amount
+    const subTotal = Number(order.subTotalAmt || 0);
+    const deliveryCharge = Number(order.deliveryCharge || 0);
+    const amount = order.payment_type === "delivery" ? deliveryCharge : subTotal + deliveryCharge;
 
-    // ✅ ALWAYS calculate fresh
-    const subTotal = order.subTotalAmt || 0;
-    const deliveryCharge = order.deliveryCharge || 0;
+    console.log("Payment Type:", order.payment_type);
+    console.log("Sub Total:", subTotal);
+    console.log("Delivery Charge:", deliveryCharge);
+    console.log("Final Amount:", amount);
 
-    const amount =
-      order.payment_type === "delivery"
-        ? deliveryCharge
-        : subTotal + deliveryCharge;
+    if (amount <= 0) return res.status(400).json({ message: "Invalid payable amount" });
 
+    // Unique transaction ID
+    const tranId = `${order.orderId}-${Date.now()}`;
+
+    // SSLCommerz required data
     const sslData = {
       total_amount: Number(amount.toFixed(2)),
       currency: "BDT",
-      tran_id: order.orderId,
+      tran_id: tranId,
 
-      product_name:
-        order.payment_type === "delivery"
-          ? "Delivery Charge"
-          : "Products + Delivery",
+      product_name: "Ecommerce Order",
       product_category: "Ecommerce",
       product_profile: "general",
 
-      cus_name: req.user.name || "Customer", // Use req.user
-      cus_email: req.user.email || "customer@example.com", // Use req.user
-      cus_phone: req.user.mobile || "N/A", // Use req.user.mobile
-      cus_add1: order.delivery_address || "N/A", // Use order delivery address, as AuthUser does not have an address
+      cus_name: req.user.name || "Customer",
+      cus_email: req.user.email || "customer@test.com",
+      cus_phone: req.user.mobile || "01700000000",
+      cus_add1: order.delivery_address || "Dhaka",
+      cus_city: "Dhaka",
+      cus_postcode: "1207",
+      cus_country: "Bangladesh",
 
-      success_url: `${process.env.BACKEND_URL}/api/payment/ssl/success`,
-      fail_url: `${process.env.BACKEND_URL}/api/payment/ssl/fail`,
-      cancel_url: `${process.env.BACKEND_URL}/api/payment/ssl/cancel`,
+      // REQUIRED SHIPPING FIELDS
+      shipping_method: "YES",
+      ship_name: req.user.name || "Customer",
+      ship_add1: order.delivery_address || "Dhaka",
+      ship_city: "Dhaka",
+      ship_postcode: "1207",
+      ship_country: "Bangladesh",
+
+      success_url: `${process.env.BACKEND_URL}/payment/success`,
+      fail_url: `${process.env.BACKEND_URL}/api/payment/fail`,
+      cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel`,
+      ipn_url: `${process.env.BACKEND_URL}/api/payment/ipn`,
     };
 
+    // Use correct credentials & mode
     const sslcz = new SSLCommerzPayment(
-      process.env.SSLCOMMERZ_STORE_ID,
-      process.env.SSLCOMMERZ_STORE_PASSWORD,
-      false
+      processdata.sslcommerzstoreid,
+      processdata.sslcommerzstorepassword,
+      false // false for live, true for sandbox
     );
 
     const apiResponse = await sslcz.init(sslData);
+    console.log("SSLCommerz Init Response:", apiResponse);
 
-    console.log("SSLCommerz Init Response:", apiResponse); // Log the full response
-
-    if (apiResponse && apiResponse.GatewayPageURL) {
-      order.payment_details = { sessionKey: apiResponse.sessionkey || "" };
-      await order.save();
-      return res.json({ url: apiResponse.GatewayPageURL });
-    } else {
-      console.error("SSLCommerz GatewayPageURL not found in apiResponse:", apiResponse);
-      return res.status(500).json({ success: false, message: "Failed to initiate SSLCommerz payment: Gateway URL not found." });
+    if (!apiResponse?.GatewayPageURL) {
+      return res.status(500).json({
+        success: false,
+        message: apiResponse?.failedreason || "SSL payment initialization failed",
+        url: "",
+      });
     }
-  } catch (err) {
-    console.error("SSL init error:", err);
-    res.status(500).json({ message: "SSL payment initialization failed" });
+
+    // Save tran_id and mark payment as pending
+    order.tran_id = tranId;
+    order.payment_status = "pending";
+    order.payment_details = { sessionKey: apiResponse.sessionkey || "" };
+    await order.save();
+
+    return res.json({ success: true, url: apiResponse.GatewayPageURL });
+  } catch (error) {
+    console.error("SSL init error:", error);
+    return res.status(500).json({ success: false, message: "SSL payment initialization failed" });
   }
 };
+
+
 
 
 // SUCCESS
@@ -97,7 +110,7 @@ export const paymentSuccess = async (req: Request, res: Response) => {
       return res.status(400).redirect(`${process.env.FRONTEND_URL}/payment/fail?error=InvalidTransactionID`);
     }
 
-    const order = await OrderModel.findOne({ orderId: tran_id });
+    const order = await OrderModel.findOne({ tran_id: tran_id });
     if (!order) {
       return res.status(404).redirect(`${process.env.FRONTEND_URL}/payment/fail?error=OrderNotFound`);
     }
@@ -105,23 +118,17 @@ export const paymentSuccess = async (req: Request, res: Response) => {
     // =================================================================
     // 🔒 CRITICAL: VALIDATE THE PAYMENT WITH SSLCOMMERZ
     // =================================================================
-    const storeId = process.env.SSLCOMMERZ_STORE_ID;
-    const storePassword = process.env.SSLCOMMERZ_STORE_PASSWORD;
-    if (!storeId || !storePassword) {
-      throw new Error("SSLCommerz store ID and password must be set in environment variables.");
-    }
     const sslcz = new SSLCommerzPayment(
-      storeId,
-      storePassword,
+      processdata.sslcommerzstoreid,
+      processdata.sslcommerzstorepassword,
       false // false for live, true for sandbox
     );
 
     const validation = await sslcz.validate(req.body);
 
     if (validation?.status !== 'VALID' && validation?.status !== 'VALIDATED') {
-      // Payment is not valid
       await OrderModel.findOneAndUpdate(
-        { orderId: tran_id },
+        { tran_id: tran_id },
         {
           payment_status: "failed",
           order_status: "cancelled",
@@ -175,7 +182,7 @@ export const paymentFail = async (req: Request, res: Response) => {
 
     if (tran_id) {
       await OrderModel.findOneAndUpdate(
-        { orderId: tran_id },
+        { tran_id: tran_id },
         {
           payment_status: "failed",
           order_status: "cancelled",
@@ -199,7 +206,7 @@ export const paymentCancel = async (req: Request, res: Response) => {
 
     if (tran_id) {
       await OrderModel.findOneAndUpdate(
-        { orderId: tran_id },
+        { tran_id: tran_id },
         {
           payment_status: "failed",
           order_status: "cancelled",
@@ -229,14 +236,9 @@ export const paymentIpn = async (req: Request, res: Response) => {
     // =================================================================
     // 🔒 CRITICAL: VALIDATE THE IPN DATA WITH SSLCOMMERZ
     // =================================================================
-    const storeId = process.env.SSLCOMMERZ_STORE_ID;
-    const storePassword = process.env.SSLCOMMERZ_STORE_PASSWORD;
-    if (!storeId || !storePassword) {
-      throw new Error("SSLCommerz store ID and password must be set in environment variables.");
-    }
     const sslcz = new SSLCommerzPayment(
-      storeId,
-      storePassword,
+      processdata.sslcommerzstoreid,
+      processdata.sslcommerzstorepassword,
       false // false for live, true for sandbox
     );
 
@@ -252,7 +254,7 @@ export const paymentIpn = async (req: Request, res: Response) => {
     // =================================================================
     // ✅ IPN IS VALID - UPDATE ORDER IF IT'S STILL PENDING
     // =================================================================
-    const order = await OrderModel.findOne({ orderId: tran_id });
+    const order = await OrderModel.findOne({ tran_id: tran_id });
     if (!order) {
       return res.status(404).send("IPN: Order not found");
     }

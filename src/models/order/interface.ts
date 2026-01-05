@@ -44,6 +44,7 @@ export interface IOrder extends Document {
   payment_details?: IManualPaymentDetails | ISSLPaymentDetails;
   paymentId?: string;
   invoice_receipt?: string;
+  tran_id?: string;
   // Order Status
   order_status: "pending" | "processing" | "shipped" | "delivered" | "cancelled" | "completed";
   createdAt?: Date;

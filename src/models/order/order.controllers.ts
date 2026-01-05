@@ -47,7 +47,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
     const orderProducts = validProducts.map((item: any) => {
       const product = item.productId;
-      const productPrice = Number(product.productPrice) || 0; // Ensure productPrice is a number, default to 0
+      const productPrice = Number(product.price) || 0; // Ensure productPrice is a number, default to 0
       const quantity = Number(item.quantity) || 0; // Ensure quantity is a number, default to 0
       return {
         productId: product._id,
@@ -60,22 +60,18 @@ export const createOrder = async (req: Request, res: Response) => {
       };
     });
 
-    const totalOrderAmount = subtotalFromReq + deliveryChargeFromReq;
-
     // Create order
     const order = new OrderModel({
       userId,
       orderId: uuidv4(),
       products: orderProducts,
       delivery_address,
-      payment_method: paymentMethod || "manual", // manual or sslcommerz
+      payment_method: req.body.payment_method || "manual", // manual or sslcommerz
       payment_status: "pending", // manual always pending
       payment_details: paymentDetails || undefined,
-      payment_type: payment_type || "full",
+      payment_type: payment_type || undefined,
       order_status: "pending",
-      subTotalAmt: subtotalFromReq,
       deliveryCharge: deliveryChargeFromReq,
-      totalAmt: totalOrderAmount,
     });
 
     await order.save();
@@ -171,23 +167,23 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
 // POST /order/manual-payment
 export const ManualPayment = async (req: Request, res: Response) => {
   try {
-    const { orderId, providerNumber, transactionId, manualFor } = req.body;
+    const { orderId, phoneNumber, transactionId, manualFor } = req.body;
 
-    if (!orderId || !providerNumber || !transactionId) {
+    if (!orderId || !phoneNumber || !transactionId) {
       return res.status(400).json({
         success: false,
         message: "Order ID, phone number, and transaction ID are required",
       });
     }
 
-    const order = await OrderModel.findOne({ orderId });
+    const order = await OrderModel.findById(orderId);
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
     // Save manual payment info but keep status pending
     order.payment_method = "manual";
-    order.payment_details = { providerNumber, transactionId, manualFor };
+    order.payment_details = { providerNumber: phoneNumber, transactionId, manualFor };
     order.payment_status = "pending"; // ❌ DO NOT mark as paid yet
     order.order_status = "pending";   // still pending admin confirmation
 
