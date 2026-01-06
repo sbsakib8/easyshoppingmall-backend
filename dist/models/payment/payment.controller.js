@@ -35,7 +35,7 @@ const initSslPayment = async (req, res) => {
         const tranId = `${order.orderId}-${Date.now()}`;
         // SSLCommerz required data
         const sslData = {
-            total_amount: Number(amount.toFixed(2)),
+            total_amount: String(Number(amount.toFixed(2))), // Explicitly convert to string
             currency: "BDT",
             tran_id: tranId,
             product_name: "Ecommerce Order",
@@ -43,18 +43,18 @@ const initSslPayment = async (req, res) => {
             product_profile: "general",
             cus_name: req.user.name || "Customer",
             cus_email: req.user.email || "customer@test.com",
-            cus_phone: req.user.mobile || "01700000000",
-            cus_add1: order.delivery_address || "Dhaka",
-            cus_city: "Dhaka",
-            cus_postcode: "1207",
-            cus_country: "Bangladesh",
+            cus_phone: String(req.user.mobile || order.delivery_address.mobile || "01700000000"), // Ensure phone is string
+            cus_add1: String(order.delivery_address.address_line || "N/A"), // Ensure string
+            cus_city: String(order.delivery_address.district || "N/A"), // Ensure string
+            cus_postcode: String(order.delivery_address.pincode || "1200"), // Ensure string
+            cus_country: String(order.delivery_address.country || "Bangladesh"), // Ensure string
             // REQUIRED SHIPPING FIELDS
             shipping_method: "YES",
             ship_name: req.user.name || "Customer",
-            ship_add1: order.delivery_address || "Dhaka",
-            ship_city: "Dhaka",
-            ship_postcode: "1207",
-            ship_country: "Bangladesh",
+            ship_add1: String(order.delivery_address.address_line || "N/A"), // Ensure string
+            ship_city: String(order.delivery_address.district || "N/A"), // Ensure string
+            ship_postcode: String(order.delivery_address.pincode || "1200"), // Ensure string
+            ship_country: String(order.delivery_address.country || "Bangladesh"), // Ensure string
             success_url: `${process.env.BACKEND_URL}/payment/success`,
             fail_url: `${process.env.BACKEND_URL}/api/payment/fail`,
             cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel`,

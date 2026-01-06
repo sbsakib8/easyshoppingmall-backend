@@ -128,3 +128,31 @@ export const getAllReviews = async (req: Request, res: Response) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// Delete own review (user)
+export const deleteReview = async (req: Request, res: Response) => {
+    try {
+        const reviewId = req.params.id;
+        const userId = req.user?.id;
+
+        if (!mongoose.Types.ObjectId.isValid(reviewId)) {
+            return res.status(400).json({ message: "Invalid review id" });
+        }
+
+        const review = await Review.findOneAndDelete({
+            _id: reviewId,
+            userId: userId,
+        });
+
+        if (!review) {
+            return res.status(404).json({
+                message: "Review not found or you are not authorized to delete it.",
+            });
+        }
+
+        res.json({ success: true, message: "Review deleted successfully" });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+

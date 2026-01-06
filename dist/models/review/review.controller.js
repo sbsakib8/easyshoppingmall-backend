@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAllReviews = exports.getPendingReviews = exports.rejectReview = exports.approveReview = exports.getProductReviews = exports.createReview = void 0;
+exports.deleteReview = exports.getAllReviews = exports.getPendingReviews = exports.rejectReview = exports.approveReview = exports.getProductReviews = exports.createReview = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const review_model_1 = require("./review.model");
 // Create review
@@ -122,3 +122,27 @@ const getAllReviews = async (req, res) => {
     }
 };
 exports.getAllReviews = getAllReviews;
+// Delete own review (user)
+const deleteReview = async (req, res) => {
+    try {
+        const reviewId = req.params.id;
+        const userId = req.user?.id;
+        if (!mongoose_1.default.Types.ObjectId.isValid(reviewId)) {
+            return res.status(400).json({ message: "Invalid review id" });
+        }
+        const review = await review_model_1.Review.findOneAndDelete({
+            _id: reviewId,
+            userId: userId,
+        });
+        if (!review) {
+            return res.status(404).json({
+                message: "Review not found or you are not authorized to delete it.",
+            });
+        }
+        res.json({ success: true, message: "Review deleted successfully" });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.deleteReview = deleteReview;

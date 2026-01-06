@@ -4,10 +4,11 @@ import { isAuth } from "../../middlewares/isAuth";
 import {
     approveReview,
     createReview,
+    deleteReview,
+    getAllReviews, // Import the new controller
     getPendingReviews,
     getProductReviews,
     rejectReview,
-    getAllReviews, // Import the new controller
 } from "./review.controller";
 
 const router = express.Router();
@@ -21,5 +22,6 @@ router.patch("/admin/:id/reject", isAuth, isAdmin, rejectReview);
 // User routes
 router.post("/:productId", isAuth, createReview);
 router.get("/:productId", getProductReviews);
+router.delete("/:id", isAuth, deleteReview);
 
 export default router;
