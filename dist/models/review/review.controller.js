@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getPendingReviews = exports.rejectReview = exports.approveReview = exports.getProductReviews = exports.createReview = void 0;
+exports.getAllReviews = exports.getPendingReviews = exports.rejectReview = exports.approveReview = exports.getProductReviews = exports.createReview = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const review_model_1 = require("./review.model");
 // Create review
@@ -47,7 +47,7 @@ const getProductReviews = async (req, res) => {
             productId,
             status: "approved",
         })
-            .populate("userId", "name image") // populate user name and image
+            .populate("userId", "name email image") // populate user name and image
             .sort({ createdAt: -1 });
         res.json({ success: true, reviews });
     }
@@ -109,3 +109,16 @@ const getPendingReviews = async (req, res) => {
     }
 };
 exports.getPendingReviews = getPendingReviews;
+// Get all reviews (admin)
+const getAllReviews = async (req, res) => {
+    try {
+        const reviews = await review_model_1.Review.find()
+            .populate("userId", "name image")
+            .sort({ createdAt: -1 });
+        res.json({ success: true, reviews });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.getAllReviews = getAllReviews;

@@ -22,6 +22,18 @@ router.post("/create", order_controllers_1.createOrder);
 router.get("/my-orders", isAuth_1.isAuth, order_controllers_1.getMyOrders);
 router.post("/manual-payment", isAuth_1.isAuth, order_controllers_1.ManualPayment);
 /**
+ * @route   GET /api/orders/admin/all
+ * @desc    Get all orders (admin only)
+ * @access  Private (Admin)
+ */
+router.get("/admin/all", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.getAllOrders);
+/**
+ * @route   GET /api/orders/admin/status/:status
+ * @desc    Get orders by status (admin only)
+ * @access  Private (Admin)
+ */
+router.get("/admin/status/:status", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.getOrdersByStatus);
+/**
  * @route   PUT /api/orders/:id/status
  * @desc    Update order status (admin only)
  * @access  Private (Admin)

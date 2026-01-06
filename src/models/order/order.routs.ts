@@ -2,11 +2,13 @@ import express from "express";
 import { isAdmin } from "../../middlewares/isAdmin";
 import { isAuth } from "../../middlewares/isAuth";
 import {
+  confirmManualPayment,
   createOrder,
+  getAllOrders,
   getMyOrders,
+  getOrdersByStatus,
   ManualPayment,
-  updateOrderStatus,
-  confirmManualPayment
+  updateOrderStatus
 } from "../order/order.controllers";
 
 const router = express.Router();
@@ -25,6 +27,20 @@ router.post("/create", createOrder);
  */
 router.get("/my-orders", isAuth, getMyOrders);
 router.post("/manual-payment", isAuth, ManualPayment);
+
+/**
+ * @route   GET /api/orders/admin/all
+ * @desc    Get all orders (admin only)
+ * @access  Private (Admin)
+ */
+router.get("/admin/all", isAuth, isAdmin, getAllOrders);
+
+/**
+ * @route   GET /api/orders/admin/status/:status
+ * @desc    Get orders by status (admin only)
+ * @access  Private (Admin)
+ */
+router.get("/admin/status/:status", isAuth, isAdmin, getOrdersByStatus);
 
 
 /**

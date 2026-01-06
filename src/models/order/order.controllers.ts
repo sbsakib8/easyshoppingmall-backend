@@ -140,6 +140,15 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       return;
     }
 
+    const allowedStatuses = ["pending", "processing", "shipped", "delivered", "cancelled", "completed"];
+    if (!allowedStatuses.includes(status)) {
+      res.status(400).json({
+        success: false,
+        message: `Invalid status provided. Allowed statuses are: ${allowedStatuses.join(", ")}`,
+      });
+      return;
+    }
+
     const order = await OrderModel.findByIdAndUpdate(
       id,
       { order_status: status },
@@ -200,6 +209,63 @@ export const ManualPayment = async (req: Request, res: Response) => {
   }
 };
 
+
+/**
+ * @desc Get all orders for admin
+ * @route GET /api/admin/orders/all
+ * @access Private (Admin)
+ */
+export const getAllOrders = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const orders = await OrderModel.find()
+      .populate("products.productId")
+      .populate("userId", "name email") // Populate user details
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      message: "All orders fetched successfully",
+      data: orders,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+
+/**
+ * @desc Get orders by status for admin
+ * @route GET /api/admin/orders/status/:status
+ * @access Private (Admin)
+ */
+export const getOrdersByStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { status } = req.params;
+
+    if (!status) {
+      res.status(400).json({ success: false, message: "Order status is required" });
+      return;
+    }
+
+    const orders = await OrderModel.find({ order_status: status })
+      .populate("products.productId")
+      .populate("userId", "name email") // Populate user details
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      message: `Orders with status "${status}" fetched successfully`,
+      data: orders,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
 
 /**
  * @desc Confirm manual payment for an order (Admin only)

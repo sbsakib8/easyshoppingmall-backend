@@ -20,7 +20,6 @@ const websiteinfo_routs_1 = __importDefault(require("./models/content/websiteInf
 const notification_routs_1 = __importDefault(require("./models/notification/notification.routs"));
 const order_routs_1 = __importDefault(require("./models/order/order.routs"));
 const payment_route_1 = __importDefault(require("./models/payment/payment.route"));
-const ssl_route_1 = __importDefault(require("./models/payment/ssl/ssl.route"));
 const admin_route_1 = __importDefault(require("./models/admin/admin.route"));
 const product_routs_1 = __importDefault(require("./models/product/product.routs"));
 const review_routs_1 = __importDefault(require("./models/review/review.routs"));
@@ -59,7 +58,6 @@ app.use("/api/orders", order_routs_1.default);
 app.use("/api/wishlist", wishlist_routs_1.default);
 app.use("/api/payment", payment_route_1.default);
 app.use('/api/review', review_routs_1.default);
-app.use("/api/ssl", ssl_route_1.default);
 app.use("/api/admin", admin_route_1.default);
 app.get("/", (req, res) => {
     res.send("APi  is running...");

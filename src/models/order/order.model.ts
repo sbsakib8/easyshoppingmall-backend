@@ -32,8 +32,13 @@ const orderSchema = new Schema<IOrder>(
 
     // Delivery Details
     delivery_address: {
-      type: String,
-      required: true,
+      address_line: { type: String, required: true },
+      district: { type: String, default: "" },
+      division: { type: String, default: "" },
+      upazila_thana: { type: String, default: "" },
+      pincode: { type: String, default: "" },
+      country: { type: String, default: "" },
+      mobile: { type: Number, default: null },
     },
     deliveryCharge: {
       type: Number,

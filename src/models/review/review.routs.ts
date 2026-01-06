@@ -7,12 +7,14 @@ import {
     getPendingReviews,
     getProductReviews,
     rejectReview,
+    getAllReviews, // Import the new controller
 } from "./review.controller";
 
 const router = express.Router();
 
 // Admin routes
 router.get("/admin", isAuth, isAdmin, getPendingReviews);
+router.get("/admin/all", isAuth, isAdmin, getAllReviews); // New route for all reviews
 router.patch("/admin/:id/approve", isAuth, isAdmin, approveReview);
 router.patch("/admin/:id/reject", isAuth, isAdmin, rejectReview);
 

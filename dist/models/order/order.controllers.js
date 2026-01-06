@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.confirmManualPayment = exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
+exports.confirmManualPayment = exports.getOrdersByStatus = exports.getAllOrders = exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const cart_model_1 = require("../cart/cart.model"); // ✅ fix typo (card → cart)
 const order_model_1 = __importDefault(require("./order.model"));
@@ -15,7 +15,9 @@ const { v4: uuidv4 } = require('uuid');
  */
 const createOrder = async (req, res) => {
     try {
-        const { userId, delivery_address, paymentMethod, paymentDetails, payment_type, deliveryCharge, subtotal } = req.body;
+        const { userId, delivery_address, paymentMethod, paymentDetails, payment_type } = req.body;
+        const subtotalFromReq = Number(req.body.subtotal) || 0;
+        const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0;
         if (!userId || !delivery_address) {
             return res.status(400).json({
                 success: false,
@@ -32,31 +34,30 @@ const createOrder = async (req, res) => {
         }
         const orderProducts = validProducts.map((item) => {
             const product = item.productId;
+            const productPrice = Number(product.price) || 0; // Ensure productPrice is a number, default to 0
+            const quantity = Number(item.quantity) || 0; // Ensure quantity is a number, default to 0
             return {
                 productId: product._id,
                 name: product.productName || "Unnamed Product",
                 image: product.images || [],
-                quantity: item.quantity,
-                price: item.price,
-                totalPrice: item.totalPrice,
+                quantity: quantity,
+                price: productPrice,
+                totalPrice: quantity * productPrice, // Calculate totalPrice using the numeric values
                 size: item.size,
             };
         });
-        const totalOrderAmount = subtotal + deliveryCharge;
         // Create order
         const order = new order_model_1.default({
             userId,
             orderId: uuidv4(),
             products: orderProducts,
             delivery_address,
-            payment_method: paymentMethod || "manual", // manual or sslcommerz
+            payment_method: req.body.payment_method || "manual", // manual or sslcommerz
             payment_status: "pending", // manual always pending
             payment_details: paymentDetails || undefined,
-            payment_type: payment_type || "full",
+            payment_type: payment_type || undefined,
             order_status: "pending",
-            subTotalAmt: subtotal,
-            deliveryCharge: deliveryCharge,
-            totalAmt: totalOrderAmount,
+            deliveryCharge: deliveryChargeFromReq,
         });
         await order.save();
         res.status(201).json({
@@ -120,6 +121,14 @@ const updateOrderStatus = async (req, res) => {
             res.status(400).json({ success: false, message: "Invalid order ID" });
             return;
         }
+        const allowedStatuses = ["pending", "processing", "shipped", "delivered", "cancelled", "completed"];
+        if (!allowedStatuses.includes(status)) {
+            res.status(400).json({
+                success: false,
+                message: `Invalid status provided. Allowed statuses are: ${allowedStatuses.join(", ")}`,
+            });
+            return;
+        }
         const order = await order_model_1.default.findByIdAndUpdate(id, { order_status: status }, { new: true });
         if (!order) {
             res.status(404).json({ success: false, message: "Order not found" });
@@ -142,20 +151,20 @@ exports.updateOrderStatus = updateOrderStatus;
 // POST /order/manual-payment
 const ManualPayment = async (req, res) => {
     try {
-        const { orderId, providerNumber, transactionId, manualFor } = req.body;
-        if (!orderId || !providerNumber || !transactionId) {
+        const { orderId, phoneNumber, transactionId, manualFor } = req.body;
+        if (!orderId || !phoneNumber || !transactionId) {
             return res.status(400).json({
                 success: false,
                 message: "Order ID, phone number, and transaction ID are required",
             });
         }
-        const order = await order_model_1.default.findOne({ orderId });
+        const order = await order_model_1.default.findById(orderId);
         if (!order) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
         // Save manual payment info but keep status pending
         order.payment_method = "manual";
-        order.payment_details = { providerNumber, transactionId, manualFor };
+        order.payment_details = { providerNumber: phoneNumber, transactionId, manualFor };
         order.payment_status = "pending"; // ❌ DO NOT mark as paid yet
         order.order_status = "pending"; // still pending admin confirmation
         await order.save();
@@ -171,6 +180,61 @@ const ManualPayment = async (req, res) => {
     }
 };
 exports.ManualPayment = ManualPayment;
+/**
+ * @desc Get all orders for admin
+ * @route GET /api/admin/orders/all
+ * @access Private (Admin)
+ */
+const getAllOrders = async (req, res) => {
+    try {
+        const orders = await order_model_1.default.find()
+            .populate("products.productId")
+            .populate("userId", "name email") // Populate user details
+            .sort({ createdAt: -1 });
+        res.json({
+            success: true,
+            message: "All orders fetched successfully",
+            data: orders,
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message || "Internal Server Error",
+        });
+    }
+};
+exports.getAllOrders = getAllOrders;
+/**
+ * @desc Get orders by status for admin
+ * @route GET /api/admin/orders/status/:status
+ * @access Private (Admin)
+ */
+const getOrdersByStatus = async (req, res) => {
+    try {
+        const { status } = req.params;
+        if (!status) {
+            res.status(400).json({ success: false, message: "Order status is required" });
+            return;
+        }
+        const orders = await order_model_1.default.find({ order_status: status })
+            .populate("products.productId")
+            .populate("userId", "name email") // Populate user details
+            .sort({ createdAt: -1 });
+        res.json({
+            success: true,
+            message: `Orders with status "${status}" fetched successfully`,
+            data: orders,
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message || "Internal Server Error",
+        });
+    }
+};
+exports.getOrdersByStatus = getOrdersByStatus;
 /**
  * @desc Confirm manual payment for an order (Admin only)
  * @route PUT /api/orders/:id/confirm-payment

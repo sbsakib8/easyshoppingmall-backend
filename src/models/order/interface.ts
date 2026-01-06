@@ -31,7 +31,15 @@ export interface IOrder extends Document {
   userId: mongoose.Types.ObjectId | string;
   orderId: string;
   products: IOrderProduct[];
-  delivery_address: string;
+  delivery_address: {
+    address_line: string;
+    district?: string;
+    division?: string;
+    upazila_thana?: string;
+    pincode?: string;
+    country?: string;
+    mobile?: number;
+  };
   deliveryCharge: number;
   subTotalAmt: number;
   totalAmt: number;

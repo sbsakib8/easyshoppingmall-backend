@@ -4,8 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getOrderPayments = exports.getAllOrders = exports.getAllPayments = void 0;
-const payment_model_1 = require("../payment/payment.model");
 const order_model_1 = __importDefault(require("../order/order.model")); // Corrected import path
+const payment_model_1 = require("../payment/payment.model");
 const getAllPayments = async (_req, res) => {
     const payments = await payment_model_1.PaymentModel.find()
         .populate("orderId")
@@ -16,8 +16,7 @@ exports.getAllPayments = getAllPayments;
 const getAllOrders = async (_req, res) => {
     const orders = await order_model_1.default.find()
         .populate("userId")
-        .populate("products.product")
-        .populate("delivery_address");
+        .populate("products.productId");
     res.json(orders);
 };
 exports.getAllOrders = getAllOrders;

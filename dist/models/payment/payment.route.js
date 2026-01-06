@@ -1,8 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const isAuth_1 = require("../../middlewares/isAuth");
 const payment_controller_1 = require("./payment.controller");
-const isAuth_1 = require("../../middlewares/isAuth"); // Adjusted import path based on the provided folder structure
 const router = (0, express_1.Router)();
-router.post("/initiate", isAuth_1.isAuth, payment_controller_1.initiatePayment);
+router.post("/initiate", isAuth_1.isAuth, payment_controller_1.initSslPayment);
+router.post("/success", payment_controller_1.paymentSuccess);
+router.post("/fail", payment_controller_1.paymentFail);
+router.post("/cancel", payment_controller_1.paymentCancel);
+router.post("/ipn", payment_controller_1.paymentIpn);
 exports.default = router;
