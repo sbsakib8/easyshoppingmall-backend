@@ -31,7 +31,15 @@ export interface IOrder extends Document {
   userId: mongoose.Types.ObjectId | string;
   orderId: string;
   products: IOrderProduct[];
-  delivery_address: string;
+  delivery_address: {
+    address_line: string;
+    district?: string;
+    division?: string;
+    upazila_thana?: string;
+    pincode?: string;
+    country?: string;
+    mobile?: number;
+  };
   deliveryCharge: number;
   subTotalAmt: number;
   totalAmt: number;
@@ -40,10 +48,11 @@ export interface IOrder extends Document {
   // Payment Fields
   payment_method: "manual" | "sslcommerz";
   payment_type: "full" | "delivery";
-  payment_status: "pending" | "paid" | "failed" | "refunded";
+  payment_status: "pending" | "paid" | "failed" | "refunded" | "partial";
   payment_details?: IManualPaymentDetails | ISSLPaymentDetails;
   paymentId?: string;
   invoice_receipt?: string;
+  tran_id?: string;
   // Order Status
   order_status: "pending" | "processing" | "shipped" | "delivered" | "cancelled" | "completed";
   createdAt?: Date;
@@ -55,4 +64,5 @@ export interface AuthUser {
   name?: string;
   email?: string;
   role?: "user" | "admin";
+  mobile?: string;
 }

@@ -6,7 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isAuth = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const config_1 = __importDefault(require("../config"));
-const isAuth = (req, res, next) => {
+const user_model_1 = __importDefault(require("../models/user/user.model")); // Import UserModel
+const isAuth = async (req, res, next) => {
     try {
         const token = req.cookies?.token;
         if (!token) {
@@ -18,7 +19,19 @@ const isAuth = (req, res, next) => {
             res.status(401).json({ message: "Unauthorized: Invalid token" });
             return;
         }
+        const user = await user_model_1.default.findById(decoded.userId); // Find user by ID
+        if (!user) {
+            res.status(401).json({ message: "Unauthorized: User not found" });
+            return;
+        }
         req.userId = decoded.userId;
+        req.user = {
+            _id: user._id.toString(), // Convert ObjectId to string
+            name: user.name,
+            email: user.email,
+            role: user.role === "ADMIN" ? "admin" : "user", // Map role
+            mobile: user.mobile || undefined, // Populate mobile
+        };
         next();
     }
     catch (error) {

@@ -20,7 +20,9 @@ interface RequestWithUser extends Request {
  */
 export const createOrder = async (req: Request, res: Response) => {
   try {
-    const { userId, delivery_address, paymentMethod, paymentDetails, payment_type, deliveryCharge, subtotal } = req.body;
+    const { userId, delivery_address, paymentMethod, paymentDetails, payment_type } = req.body;
+    const subtotalFromReq = Number(req.body.subtotal) || 0;
+    const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0;
 
     if (!userId || !delivery_address) {
       return res.status(400).json({
@@ -45,18 +47,18 @@ export const createOrder = async (req: Request, res: Response) => {
 
     const orderProducts = validProducts.map((item: any) => {
       const product = item.productId;
+      const productPrice = Number(product.price) || 0; // Ensure productPrice is a number, default to 0
+      const quantity = Number(item.quantity) || 0; // Ensure quantity is a number, default to 0
       return {
         productId: product._id,
         name: product.productName || "Unnamed Product",
         image: product.images || [],
-        quantity: item.quantity,
-        price: item.price,
-        totalPrice: item.totalPrice,
+        quantity: quantity,
+        price: productPrice,
+        totalPrice: quantity * productPrice, // Calculate totalPrice using the numeric values
         size: item.size,
       };
     });
-
-    const totalOrderAmount = subtotal + deliveryCharge;
 
     // Create order
     const order = new OrderModel({
@@ -64,14 +66,12 @@ export const createOrder = async (req: Request, res: Response) => {
       orderId: uuidv4(),
       products: orderProducts,
       delivery_address,
-      payment_method: paymentMethod || "manual", // manual or sslcommerz
+      payment_method: req.body.payment_method || "manual", // manual or sslcommerz
       payment_status: "pending", // manual always pending
       payment_details: paymentDetails || undefined,
-      payment_type: payment_type || "full",
+      payment_type: payment_type || undefined,
       order_status: "pending",
-      subTotalAmt: subtotal,
-      deliveryCharge: deliveryCharge,
-      totalAmt: totalOrderAmount,
+      deliveryCharge: deliveryChargeFromReq,
     });
 
     await order.save();
@@ -140,6 +140,15 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       return;
     }
 
+    const allowedStatuses = ["pending", "processing", "shipped", "delivered", "cancelled", "completed"];
+    if (!allowedStatuses.includes(status)) {
+      res.status(400).json({
+        success: false,
+        message: `Invalid status provided. Allowed statuses are: ${allowedStatuses.join(", ")}`,
+      });
+      return;
+    }
+
     const order = await OrderModel.findByIdAndUpdate(
       id,
       { order_status: status },
@@ -167,23 +176,23 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
 // POST /order/manual-payment
 export const ManualPayment = async (req: Request, res: Response) => {
   try {
-    const { orderId, providerNumber, transactionId, manualFor } = req.body;
+    const { orderId, phoneNumber, transactionId, manualFor } = req.body;
 
-    if (!orderId || !providerNumber || !transactionId) {
+    if (!orderId || !phoneNumber || !transactionId) {
       return res.status(400).json({
         success: false,
         message: "Order ID, phone number, and transaction ID are required",
       });
     }
 
-    const order = await OrderModel.findOne({ orderId });
+    const order = await OrderModel.findById(orderId);
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
     // Save manual payment info but keep status pending
     order.payment_method = "manual";
-    order.payment_details = { providerNumber, transactionId, manualFor };
+    order.payment_details = { providerNumber: phoneNumber, transactionId, manualFor };
     order.payment_status = "pending"; // ❌ DO NOT mark as paid yet
     order.order_status = "pending";   // still pending admin confirmation
 
@@ -200,6 +209,63 @@ export const ManualPayment = async (req: Request, res: Response) => {
   }
 };
 
+
+/**
+ * @desc Get all orders for admin
+ * @route GET /api/admin/orders/all
+ * @access Private (Admin)
+ */
+export const getAllOrders = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const orders = await OrderModel.find()
+      .populate("products.productId")
+      .populate("userId", "name email") // Populate user details
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      message: "All orders fetched successfully",
+      data: orders,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+
+/**
+ * @desc Get orders by status for admin
+ * @route GET /api/admin/orders/status/:status
+ * @access Private (Admin)
+ */
+export const getOrdersByStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { status } = req.params;
+
+    if (!status) {
+      res.status(400).json({ success: false, message: "Order status is required" });
+      return;
+    }
+
+    const orders = await OrderModel.find({ order_status: status })
+      .populate("products.productId")
+      .populate("userId", "name email") // Populate user details
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      message: `Orders with status "${status}" fetched successfully`,
+      data: orders,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
 
 /**
  * @desc Confirm manual payment for an order (Admin only)

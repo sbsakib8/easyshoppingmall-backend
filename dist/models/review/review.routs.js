@@ -10,6 +10,7 @@ const review_controller_1 = require("./review.controller");
 const router = express_1.default.Router();
 // Admin routes
 router.get("/admin", isAuth_1.isAuth, isAdmin_1.isAdmin, review_controller_1.getPendingReviews);
+router.get("/admin/all", isAuth_1.isAuth, isAdmin_1.isAdmin, review_controller_1.getAllReviews); // New route for all reviews
 router.patch("/admin/:id/approve", isAuth_1.isAuth, isAdmin_1.isAdmin, review_controller_1.approveReview);
 router.patch("/admin/:id/reject", isAuth_1.isAuth, isAdmin_1.isAdmin, review_controller_1.rejectReview);
 // User routes
