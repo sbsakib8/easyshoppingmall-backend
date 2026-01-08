@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import AddressModel from "../address/address.model";
-import UserModel from "../address/address.model";
+import AddressModel from "./address.model";
+import UserModel from "../user/user.model";
 
 // Extend Express Request to include userId (set by middleware)
 export interface AuthRequest extends Request {
@@ -22,12 +22,13 @@ export const addAddressController = async (
       });
     }
 
-    const { address_line, city, state, pincode, country, mobile } = request.body;
+    const { address_line, district, division, upazila_thana, pincode, country, mobile } = request.body;
 
     const createAddress = new AddressModel({
       address_line,
-      city,
-      state,
+      district,
+      division,
+      upazila_thana,
       country,
       pincode,
       mobile,
@@ -102,15 +103,16 @@ export const updateAddressController = async (
       });
     }
 
-    const { _id, address_line, city, state, country, pincode, mobile } =
+    const { _id, address_line, district, division, upazila_thana, country, pincode, mobile } =
       request.body;
 
     const updateAddress = await AddressModel.updateOne(
       { _id, userId },
       {
         address_line,
-        city,
-        state,
+        district,
+        division,
+        upazila_thana,
         country,
         mobile,
         pincode,
