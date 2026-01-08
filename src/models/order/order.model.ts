@@ -76,7 +76,7 @@ const orderSchema = new Schema<IOrder>(
     payment_details: {
       manual: {
         provider: { type: String },
-        senderNumber: { type: String }, // Renamed from providerNumber
+        senderNumber: { type: String },
         transactionId: { type: String },
         paidFor: { type: String, enum: ["full"] },
       },
@@ -113,7 +113,7 @@ orderSchema.pre<IOrder>("save", function (next) {
   this.subTotalAmt = subTotal;
   this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0);
 
-    if (
+  if (
     this.payment_method === "manual" &&
     this.payment_details &&
     this.payment_details.manual // Check if manual property exists on payment_details

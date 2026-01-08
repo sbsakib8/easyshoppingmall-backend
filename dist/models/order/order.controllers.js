@@ -5,9 +5,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.confirmManualPayment = exports.getOrdersByStatus = exports.getAllOrders = exports.createManualOrder = exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
+const cart_utils_1 = require("../../utils/cart.utils");
 const cart_model_1 = require("../cart/cart.model");
 const order_model_1 = __importDefault(require("./order.model"));
-const cart_utils_1 = require("../../utils/cart.utils");
 const { v4: uuidv4 } = require('uuid');
 /**
  * @desc Create a new order from user's cart
@@ -263,12 +263,7 @@ const createManualOrder = async (req, res) => {
                 size: item.size,
             };
         });
-        // Calculate delivery charge (assuming it's either fixed or passed in req.body, but for manual, we might calculate here)
-        // For now, let's assume it's calculated from the cart total or fixed,
-        // or passed if needed, but for manual payment, it's typically full amount.
-        // However, since prompt specified "Manual Full Payment", delivery type might not apply directly.
-        // The previous createOrder uses deliveryChargeFromReq, let's reuse that structure for consistency
-        const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0; // if it's passed or 0
+        const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0;
         // Create manual order
         const order = new order_model_1.default({
             userId,
@@ -277,11 +272,11 @@ const createManualOrder = async (req, res) => {
             products: orderProducts,
             address: delivery_address,
             payment_method: "manual",
-            payment_status: "pending", // As per requirement
-            payment_details: {}, // Changed from null to {} to prevent implicit subdocument creation
-            payment_type: "full", // As per requirement: "Manual Full Payment"
+            payment_status: "pending",
+            payment_details: {},
+            payment_type: "full",
             order_status: "pending",
-            deliveryCharge: deliveryChargeFromReq, // Use calculated or default delivery charge
+            deliveryCharge: deliveryChargeFromReq,
         });
         await order.save();
         res.status(201).json({

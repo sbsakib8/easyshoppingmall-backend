@@ -307,64 +307,69 @@ export const userImage = async (req: AuthRequest, res: Response) => {
 
 
 // user update profile
-export const updateUserProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+export const updateUserProfile = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.params.id;
 
-    const {
-      name,
-      email,
-      mobile,
-      customerstatus,
-      image,
-      status,
-      verify_email,
-      role,
-      date_of_birth,
-      gender,
-      address, // expecting an object like { _id: "...", address_line: "...", ... }
-    } = req.body;
+    // ✅ AUTH CHECK (NO req.user)
+    if (req.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden",
+      });
+    }
+
+    const { name, email, mobile, gender, date_of_birth, address } = req.body;
 
     const user = await User.findById(userId);
     if (!user) {
-      res.status(404).json({ success: false, message: "User not found" });
-      return;
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
     if (name !== undefined) user.name = name;
     if (email !== undefined) user.email = email;
     if (mobile !== undefined) user.mobile = mobile;
-    if (customerstatus !== undefined) user.customerstatus = customerstatus;
-    if (image !== undefined) user.image = image;
-    if (status !== undefined) user.status = status;
-    if (verify_email !== undefined) user.verify_email = verify_email;
-    if (role !== undefined) user.role = role;
-    if (date_of_birth !== undefined) user.date_of_birth = date_of_birth;
     if (gender !== undefined) user.gender = gender;
+    if (date_of_birth !== undefined) user.date_of_birth = date_of_birth;
 
     await user.save();
-    
-    let addressUpdateResult = null;
-    //  update address
-    if (address && typeof address === 'object' && address._id) {
+
+    let updatedAddress = null;
+
+    // ✅ UPDATE ADDRESS
+    if (address?._id) {
       const { _id, ...addressFields } = address;
-      console.log("Updating address with fields:", addressFields); // for debugging
-      addressUpdateResult = await AddressModel.updateOne({ _id, userId: user._id }, { $set: addressFields });
+
+      updatedAddress = await AddressModel.findByIdAndUpdate(
+        _id,
+        { $set: addressFields },
+        { new: true }
+      );
     }
+
+    // ✅ POPULATE ADDRESS PROPERLY
+    const populatedUser = await User.findById(user._id).populate({
+      path: "address_details",
+      model: "Address",
+    });
 
     res.status(200).json({
       success: true,
       message: "Profile updated successfully",
-      user,
-      addressUpdateResult,
+      user: populatedUser,
     });
-  } catch (error) {
+
+  } catch (error: any) {
     res.status(500).json({
       success: false,
-      message: (error as Error).message,
+      message: error.message,
     });
   }
 };
+
+
+
+
 
 // delete user
 export const deleteUser = async (req: AuthRequest, res: Response): Promise<void> => {

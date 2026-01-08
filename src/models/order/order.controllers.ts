@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { AuthRequest } from "../../middlewares/isAuth";
+import { clearUserCart } from "../../utils/cart.utils";
 import { CartModel } from "../cart/cart.model";
 import { AuthUser } from "./interface";
 import OrderModel from "./order.model";
-import { clearUserCart } from "../../utils/cart.utils";
 const { v4: uuidv4 } = require('uuid');
 
 /**
@@ -309,12 +309,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       };
     });
 
-    // Calculate delivery charge (assuming it's either fixed or passed in req.body, but for manual, we might calculate here)
-    // For now, let's assume it's calculated from the cart total or fixed,
-    // or passed if needed, but for manual payment, it's typically full amount.
-    // However, since prompt specified "Manual Full Payment", delivery type might not apply directly.
-    // The previous createOrder uses deliveryChargeFromReq, let's reuse that structure for consistency
-    const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0; // if it's passed or 0
+    const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0;
 
     // Create manual order
     const order = new OrderModel({
@@ -324,11 +319,11 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       products: orderProducts,
       address: delivery_address,
       payment_method: "manual",
-      payment_status: "pending", // As per requirement
-      payment_details: {}, // Changed from null to {} to prevent implicit subdocument creation
-      payment_type: "full", // As per requirement: "Manual Full Payment"
+      payment_status: "pending",
+      payment_details: {},
+      payment_type: "full",
       order_status: "pending",
-      deliveryCharge: deliveryChargeFromReq, // Use calculated or default delivery charge
+      deliveryCharge: deliveryChargeFromReq,
     });
 
     await order.save();

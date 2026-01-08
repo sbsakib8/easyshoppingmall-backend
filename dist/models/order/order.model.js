@@ -103,7 +103,7 @@ const orderSchema = new mongoose_1.Schema({
     payment_details: {
         manual: {
             provider: { type: String },
-            senderNumber: { type: String }, // Renamed from providerNumber
+            senderNumber: { type: String },
             transactionId: { type: String },
             paidFor: { type: String, enum: ["full"] },
         },
