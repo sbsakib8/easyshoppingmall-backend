@@ -344,16 +344,19 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
 
     await user.save();
     
+    let addressUpdateResult = null;
     //  update address
     if (address && typeof address === 'object' && address._id) {
       const { _id, ...addressFields } = address;
-      await AddressModel.updateOne({ _id, userId: user._id }, { $set: addressFields });
+      console.log("Updating address with fields:", addressFields); // for debugging
+      addressUpdateResult = await AddressModel.updateOne({ _id, userId: user._id }, { $set: addressFields });
     }
 
     res.status(200).json({
       success: true,
       message: "Profile updated successfully",
       user,
+      addressUpdateResult,
     });
   } catch (error) {
     res.status(500).json({
