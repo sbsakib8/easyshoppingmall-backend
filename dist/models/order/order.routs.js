@@ -10,10 +10,16 @@ const order_controllers_1 = require("../order/order.controllers");
 const router = express_1.default.Router();
 /**
  * @route   POST /api/orders/create
- * @desc    Create a new order from user's cart
+ * @desc    Create a new generic order from user's cart (can be used for SSLCommerz)
  * @access  Private (User)
  */
-router.post("/create", order_controllers_1.createOrder);
+router.post("/create", isAuth_1.isAuth, order_controllers_1.createOrder);
+/**
+ * @route   POST /api/orders/manual
+ * @desc    Create a new manual order from user's cart
+ * @access  Private (User)
+ */
+router.post("/manual", isAuth_1.isAuth, order_controllers_1.createManualOrder);
 /**
  * @route   GET /api/orders/my-orders
  * @desc    Get all orders of logged-in user
@@ -40,9 +46,9 @@ router.get("/admin/status/:status", isAuth_1.isAuth, isAdmin_1.isAdmin, order_co
  */
 router.put("/:id/status", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.updateOrderStatus);
 /**
- * @route   PUT /api/orders/:id/confirm-payment
- * @desc    Confirm manual payment (admin only)
+ * @route   PATCH /api/admin/orders/:id/verify
+ * @desc    Confirm manual payment by admin
  * @access  Private (Admin)
  */
-router.put("/:id/confirm-payment", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.confirmManualPayment);
+router.patch("/admin/orders/:id/verify", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.confirmManualPayment);
 exports.default = router;

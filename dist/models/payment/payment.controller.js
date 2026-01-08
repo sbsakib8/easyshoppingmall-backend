@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.paymentIpn = exports.paymentCancel = exports.paymentFail = exports.paymentSuccess = exports.initSslPayment = void 0;
 const sslcommerz_lts_1 = __importDefault(require("sslcommerz-lts"));
 const config_1 = __importDefault(require("../../config"));
-const cart_model_1 = require("../cart/cart.model");
+const cart_utils_1 = require("../../utils/cart.utils");
 const order_model_1 = __importDefault(require("../order/order.model"));
 /**
  * POST /api/payment/init
@@ -29,13 +29,14 @@ const initSslPayment = async (req, res) => {
         console.log("Sub Total:", subTotal);
         console.log("Delivery Charge:", deliveryCharge);
         console.log("Final Amount:", amount);
+        console.log("Order object in initSslPayment:", order); // Added for debugging
         if (amount <= 0)
             return res.status(400).json({ message: "Invalid payable amount" });
         // Unique transaction ID
         const tranId = `${order.orderId}-${Date.now()}`;
         // SSLCommerz required data
         const sslData = {
-            total_amount: String(Number(amount.toFixed(2))), // Explicitly convert to string
+            total_amount: String(Number(amount.toFixed(2))),
             currency: "BDT",
             tran_id: tranId,
             product_name: "Ecommerce Order",
@@ -43,26 +44,25 @@ const initSslPayment = async (req, res) => {
             product_profile: "general",
             cus_name: req.user.name || "Customer",
             cus_email: req.user.email || "customer@test.com",
-            cus_phone: String(req.user.mobile || order.delivery_address.mobile || "01700000000"), // Ensure phone is string
-            cus_add1: String(order.delivery_address.address_line || "N/A"), // Ensure string
-            cus_city: String(order.delivery_address.district || "N/A"), // Ensure string
-            cus_postcode: String(order.delivery_address.pincode || "1200"), // Ensure string
-            cus_country: String(order.delivery_address.country || "Bangladesh"), // Ensure string
+            cus_phone: String(req.user.mobile || order.address?.mobile || "01700000000"),
+            cus_add1: String(order.address?.address_line || "N/A"),
+            cus_city: String(order.address?.district || "N/A"),
+            cus_postcode: String(order.address?.pincode || "1200"),
+            cus_country: String(order.address?.country || "Bangladesh"),
             // REQUIRED SHIPPING FIELDS
             shipping_method: "YES",
             ship_name: req.user.name || "Customer",
-            ship_add1: String(order.delivery_address.address_line || "N/A"), // Ensure string
-            ship_city: String(order.delivery_address.district || "N/A"), // Ensure string
-            ship_postcode: String(order.delivery_address.pincode || "1200"), // Ensure string
-            ship_country: String(order.delivery_address.country || "Bangladesh"), // Ensure string
+            ship_add1: String(order.address?.address_line || "N/A"),
+            ship_city: String(order.address?.district || "N/A"),
+            ship_postcode: String(order.address?.pincode || "1200"),
+            ship_country: String(order.address?.country || "Bangladesh"),
             success_url: `${process.env.BACKEND_URL}/payment/success`,
-            fail_url: `${process.env.BACKEND_URL}/api/payment/fail`,
-            cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel`,
-            ipn_url: `${process.env.BACKEND_URL}/api/payment/ipn`,
+            fail_url: `${process.env.BACKEND_URL}/payment/fail`,
+            cancel_url: `${process.env.BACKEND_URL}/payment/cancel`,
+            ipn_url: `${process.env.BACKEND_URL}/payment/ipn`,
         };
         // Use correct credentials & mode
-        const sslcz = new sslcommerz_lts_1.default(config_1.default.sslcommerzstoreid, config_1.default.sslcommerzstorepassword, false // false for live, true for sandbox
-        );
+        const sslcz = new sslcommerz_lts_1.default(config_1.default.sslcommerzstoreid, config_1.default.sslcommerzstorepassword, false);
         const apiResponse = await sslcz.init(sslData);
         console.log("SSLCommerz Init Response:", apiResponse);
         if (!apiResponse?.GatewayPageURL) {
@@ -75,7 +75,7 @@ const initSslPayment = async (req, res) => {
         // Save tran_id and mark payment as pending
         order.tran_id = tranId;
         order.payment_status = "pending";
-        order.payment_details = { sessionKey: apiResponse.sessionkey || "" };
+        order.payment_details = { ssl: { tran_id: tranId } };
         await order.save();
         return res.json({ success: true, url: apiResponse.GatewayPageURL });
     }
@@ -99,8 +99,7 @@ const paymentSuccess = async (req, res) => {
         // =================================================================
         // 🔒 CRITICAL: VALIDATE THE PAYMENT WITH SSLCOMMERZ
         // =================================================================
-        const sslcz = new sslcommerz_lts_1.default(config_1.default.sslcommerzstoreid, config_1.default.sslcommerzstorepassword, false // false for live, true for sandbox
-        );
+        const sslcz = new sslcommerz_lts_1.default(config_1.default.sslcommerzstoreid, config_1.default.sslcommerzstorepassword, false);
         const validation = await sslcz.validate(req.body);
         if (validation?.status !== 'VALID' && validation?.status !== 'VALIDATED') {
             await order_model_1.default.findOneAndUpdate({ tran_id: tran_id }, {
@@ -122,19 +121,13 @@ const paymentSuccess = async (req, res) => {
             order.amount_paid = order.deliveryCharge;
             order.amount_due = order.subTotalAmt;
         }
-        else { // "full" payment
+        else {
             order.amount_paid = order.totalAmt;
             order.amount_due = 0;
         }
         await order.save();
         // Clear user's cart
-        const cart = await cart_model_1.CartModel.findOne({ userId: order.userId });
-        if (cart) {
-            cart.products = [];
-            cart.subTotalAmt = 0;
-            cart.totalAmt = 0;
-            await cart.save();
-        }
+        await (0, cart_utils_1.clearUserCart)(order.userId);
         return res.redirect(`${process.env.FRONTEND_URL}/payment/success?tranId=${tran_id}`);
     }
     catch (error) {
@@ -190,20 +183,13 @@ const paymentIpn = async (req, res) => {
             return res.status(400).send("IPN: tran_id missing");
         }
         // =================================================================
-        // 🔒 CRITICAL: VALIDATE THE IPN DATA WITH SSLCOMMERZ
+        // CRITICAL: VALIDATE THE IPN DATA WITH SSLCOMMERZ
         // =================================================================
-        const sslcz = new sslcommerz_lts_1.default(config_1.default.sslcommerzstoreid, config_1.default.sslcommerzstorepassword, false // false for live, true for sandbox
-        );
+        const sslcz = new sslcommerz_lts_1.default(config_1.default.sslcommerzstoreid, config_1.default.sslcommerzstorepassword, false);
         const validation = await sslcz.validate(ipnData);
         if (validation?.status !== 'VALID' && validation?.status !== 'VALIDATED') {
-            // Payment is not valid, log it but don't necessarily fail the order yet,
-            // as the primary success/fail handlers are the source of truth.
-            console.log(`IPN validation failed for tran_id: ${tran_id}`);
             return res.status(200).send("IPN Handled - Validation Failed");
         }
-        // =================================================================
-        // ✅ IPN IS VALID - UPDATE ORDER IF IT'S STILL PENDING
-        // =================================================================
         const order = await order_model_1.default.findOne({ tran_id: tran_id });
         if (!order) {
             return res.status(404).send("IPN: Order not found");
@@ -222,13 +208,7 @@ const paymentIpn = async (req, res) => {
                 order.amount_due = 0;
             }
             await order.save();
-            const cart = await cart_model_1.CartModel.findOne({ userId: order.userId });
-            if (cart) {
-                cart.products = [];
-                cart.subTotalAmt = 0;
-                cart.totalAmt = 0;
-                await cart.save();
-            }
+            await (0, cart_utils_1.clearUserCart)(order.userId);
             console.log(`IPN processed successfully for tran_id: ${tran_id}`);
         }
         return res.status(200).send("IPN Handled");

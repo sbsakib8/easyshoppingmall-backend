@@ -46,9 +46,7 @@ const getProductReviews = async (req, res) => {
         const reviews = await review_model_1.Review.find({
             productId,
             status: "approved",
-        })
-            .populate("userId", "name email image") // populate user name and image
-            .sort({ createdAt: -1 });
+        });
         res.json({ success: true, reviews });
     }
     catch (error) {
@@ -99,9 +97,7 @@ exports.rejectReview = rejectReview;
 // Get pending reviews (admin)
 const getPendingReviews = async (req, res) => {
     try {
-        const reviews = await review_model_1.Review.find({ status: "pending" })
-            .populate("userId", "name image")
-            .sort({ createdAt: -1 });
+        const reviews = await review_model_1.Review.find({ status: "pending" });
         res.json({ success: true, reviews });
     }
     catch (error) {
@@ -112,9 +108,7 @@ exports.getPendingReviews = getPendingReviews;
 // Get all reviews (admin)
 const getAllReviews = async (req, res) => {
     try {
-        const reviews = await review_model_1.Review.find()
-            .populate("userId", "name image")
-            .sort({ createdAt: -1 });
+        const reviews = await review_model_1.Review.find();
         res.json({ success: true, reviews });
     }
     catch (error) {

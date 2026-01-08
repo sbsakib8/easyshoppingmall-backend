@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import SSLCommerzPayment from "sslcommerz-lts";
 import processdata from "../../config";
 import { AuthRequest } from "../../middlewares/isAuth"; // Import AuthRequest
-import { CartModel } from "../cart/cart.model";
+import { clearUserCart } from "../../utils/cart.utils";
 import OrderModel from "../order/order.model";
 
 /**
@@ -29,6 +29,7 @@ export const initSslPayment = async (req: AuthRequest, res: Response) => {
     console.log("Sub Total:", subTotal);
     console.log("Delivery Charge:", deliveryCharge);
     console.log("Final Amount:", amount);
+    console.log("Order object in initSslPayment:", order); // Added for debugging
 
     if (amount <= 0) return res.status(400).json({ message: "Invalid payable amount" });
 
@@ -37,7 +38,7 @@ export const initSslPayment = async (req: AuthRequest, res: Response) => {
 
     // SSLCommerz required data
     const sslData = {
-      total_amount: String(Number(amount.toFixed(2))), // Explicitly convert to string
+      total_amount: String(Number(amount.toFixed(2))),
       currency: "BDT",
       tran_id: tranId,
 
@@ -47,31 +48,31 @@ export const initSslPayment = async (req: AuthRequest, res: Response) => {
 
       cus_name: req.user.name || "Customer",
       cus_email: req.user.email || "customer@test.com",
-      cus_phone: String(req.user.mobile || order.delivery_address.mobile || "01700000000"), // Ensure phone is string
-      cus_add1: String(order.delivery_address.address_line || "N/A"), // Ensure string
-      cus_city: String(order.delivery_address.district || "N/A"),     // Ensure string
-      cus_postcode: String(order.delivery_address.pincode || "1200"), // Ensure string
-      cus_country: String(order.delivery_address.country || "Bangladesh"), // Ensure string
+      cus_phone: String(req.user.mobile || order.address?.mobile || "01700000000"),
+      cus_add1: String(order.address?.address_line || "N/A"),
+      cus_city: String(order.address?.district || "N/A"),
+      cus_postcode: String(order.address?.pincode || "1200"),
+      cus_country: String(order.address?.country || "Bangladesh"),
 
       // REQUIRED SHIPPING FIELDS
       shipping_method: "YES",
       ship_name: req.user.name || "Customer",
-      ship_add1: String(order.delivery_address.address_line || "N/A"), // Ensure string
-      ship_city: String(order.delivery_address.district || "N/A"),     // Ensure string
-      ship_postcode: String(order.delivery_address.pincode || "1200"), // Ensure string
-      ship_country: String(order.delivery_address.country || "Bangladesh"), // Ensure string
+      ship_add1: String(order.address?.address_line || "N/A"),
+      ship_city: String(order.address?.district || "N/A"),
+      ship_postcode: String(order.address?.pincode || "1200"),
+      ship_country: String(order.address?.country || "Bangladesh"),
 
       success_url: `${process.env.BACKEND_URL}/payment/success`,
-      fail_url: `${process.env.BACKEND_URL}/api/payment/fail`,
-      cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel`,
-      ipn_url: `${process.env.BACKEND_URL}/api/payment/ipn`,
+      fail_url: `${process.env.BACKEND_URL}/payment/fail`,
+      cancel_url: `${process.env.BACKEND_URL}/payment/cancel`,
+      ipn_url: `${process.env.BACKEND_URL}/payment/ipn`,
     };
 
     // Use correct credentials & mode
     const sslcz = new SSLCommerzPayment(
       processdata.sslcommerzstoreid,
       processdata.sslcommerzstorepassword,
-      false // false for live, true for sandbox
+      false
     );
 
     const apiResponse = await sslcz.init(sslData);
@@ -88,7 +89,7 @@ export const initSslPayment = async (req: AuthRequest, res: Response) => {
     // Save tran_id and mark payment as pending
     order.tran_id = tranId;
     order.payment_status = "pending";
-    order.payment_details = { sessionKey: apiResponse.sessionkey || "" };
+    order.payment_details = { ssl: { tran_id: tranId } };
     await order.save();
 
     return res.json({ success: true, url: apiResponse.GatewayPageURL });
@@ -121,7 +122,7 @@ export const paymentSuccess = async (req: Request, res: Response) => {
     const sslcz = new SSLCommerzPayment(
       processdata.sslcommerzstoreid,
       processdata.sslcommerzstorepassword,
-      false // false for live, true for sandbox
+      false
     );
 
     const validation = await sslcz.validate(req.body);
@@ -151,7 +152,7 @@ export const paymentSuccess = async (req: Request, res: Response) => {
     if (order.payment_type === "delivery") {
       order.amount_paid = order.deliveryCharge;
       order.amount_due = order.subTotalAmt;
-    } else { // "full" payment
+    } else {
       order.amount_paid = order.totalAmt;
       order.amount_due = 0;
     }
@@ -159,13 +160,7 @@ export const paymentSuccess = async (req: Request, res: Response) => {
     await order.save();
 
     // Clear user's cart
-    const cart = await CartModel.findOne({ userId: order.userId });
-    if (cart) {
-      cart.products = [];
-      cart.subTotalAmt = 0;
-      cart.totalAmt = 0;
-      await cart.save();
-    }
+    await clearUserCart(order.userId);
 
     return res.redirect(`${process.env.FRONTEND_URL}/payment/success?tranId=${tran_id}`);
 
@@ -234,26 +229,21 @@ export const paymentIpn = async (req: Request, res: Response) => {
     }
 
     // =================================================================
-    // 🔒 CRITICAL: VALIDATE THE IPN DATA WITH SSLCOMMERZ
+    // CRITICAL: VALIDATE THE IPN DATA WITH SSLCOMMERZ
     // =================================================================
     const sslcz = new SSLCommerzPayment(
       processdata.sslcommerzstoreid,
       processdata.sslcommerzstorepassword,
-      false // false for live, true for sandbox
+      false
     );
 
     const validation = await sslcz.validate(ipnData);
 
     if (validation?.status !== 'VALID' && validation?.status !== 'VALIDATED') {
-      // Payment is not valid, log it but don't necessarily fail the order yet,
-      // as the primary success/fail handlers are the source of truth.
-      console.log(`IPN validation failed for tran_id: ${tran_id}`);
+
       return res.status(200).send("IPN Handled - Validation Failed");
     }
 
-    // =================================================================
-    // ✅ IPN IS VALID - UPDATE ORDER IF IT'S STILL PENDING
-    // =================================================================
     const order = await OrderModel.findOne({ tran_id: tran_id });
     if (!order) {
       return res.status(404).send("IPN: Order not found");
@@ -274,15 +264,7 @@ export const paymentIpn = async (req: Request, res: Response) => {
       }
 
       await order.save();
-
-      const cart = await CartModel.findOne({ userId: order.userId });
-      if (cart) {
-        cart.products = [];
-        cart.subTotalAmt = 0;
-        cart.totalAmt = 0;
-        await cart.save();
-      }
-
+      await clearUserCart(order.userId);
       console.log(`IPN processed successfully for tran_id: ${tran_id}`);
     }
 

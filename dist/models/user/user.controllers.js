@@ -7,6 +7,7 @@ exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.get
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 const genaretetoken_1 = __importDefault(require("../../utils/genaretetoken"));
 const nodemailer_1 = require("../../utils/nodemailer");
+const address_model_1 = __importDefault(require("../address/address.model"));
 const user_model_1 = __importDefault(require("../user/user.model"));
 // Cookie 
 const cookieOptions = {
@@ -282,11 +283,17 @@ exports.userImage = userImage;
 const updateUserProfile = async (req, res) => {
     try {
         const userId = req.params.id;
-        const { name, email, mobile, customerstatus, image, status, verify_email, role, } = req.body;
+        // ✅ AUTH CHECK (NO req.user)
+        if (req.userId !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden",
+            });
+        }
+        const { name, email, mobile, gender, date_of_birth, address } = req.body;
         const user = await user_model_1.default.findById(userId);
         if (!user) {
-            res.status(404).json({ success: false, message: "User not found" });
-            return;
+            return res.status(404).json({ success: false, message: "User not found" });
         }
         if (name !== undefined)
             user.name = name;
@@ -294,21 +301,26 @@ const updateUserProfile = async (req, res) => {
             user.email = email;
         if (mobile !== undefined)
             user.mobile = mobile;
-        if (customerstatus !== undefined)
-            user.customerstatus = customerstatus;
-        if (image !== undefined)
-            user.image = image;
-        if (status !== undefined)
-            user.status = status;
-        if (verify_email !== undefined)
-            user.verify_email = verify_email;
-        if (role !== undefined)
-            user.role = role;
+        if (gender !== undefined)
+            user.gender = gender;
+        if (date_of_birth !== undefined)
+            user.date_of_birth = date_of_birth;
         await user.save();
+        let updatedAddress = null;
+        // ✅ UPDATE ADDRESS
+        if (address?._id) {
+            const { _id, ...addressFields } = address;
+            updatedAddress = await address_model_1.default.findByIdAndUpdate(_id, { $set: addressFields }, { new: true });
+        }
+        // ✅ POPULATE ADDRESS PROPERLY
+        const populatedUser = await user_model_1.default.findById(user._id).populate({
+            path: "address_details",
+            model: "Address",
+        });
         res.status(200).json({
             success: true,
             message: "Profile updated successfully",
-            user,
+            user: populatedUser,
         });
     }
     catch (error) {
