@@ -108,7 +108,9 @@ exports.getPendingReviews = getPendingReviews;
 // Get all reviews (admin)
 const getAllReviews = async (req, res) => {
     try {
-        const reviews = await review_model_1.Review.find();
+        const reviews = await review_model_1.Review.find({})
+            .populate("userId", "name email") // include user name & email
+            .populate("productId", "productName images"); // include product name only
         res.json({ success: true, reviews });
     }
     catch (error) {
