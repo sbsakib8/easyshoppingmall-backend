@@ -319,6 +319,8 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       status,
       verify_email,
       role,
+      date_of_birth,
+      gender,
     } = req.body;
 
     const user = await User.findById(userId);
@@ -335,6 +337,8 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     if (status !== undefined) user.status = status;
     if (verify_email !== undefined) user.verify_email = verify_email;
     if (role !== undefined) user.role = role;
+    if (date_of_birth !== undefined) user.date_of_birth = date_of_birth;
+    if (gender !== undefined) user.gender = gender;
 
     await user.save();
 

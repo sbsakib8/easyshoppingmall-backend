@@ -20,6 +20,8 @@ export interface IUser extends Document {
     forgot_password_expiry?: Date | null;
     isotpverified?: boolean;
     role: "ADMIN" | "USER";
+    date_of_birth?: Date | null;
+    gender?: "Male" | "Female" | "Other" | null;
     createdAt?: Date;
     updatedAt?: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -103,6 +105,15 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
             type: String,
             enum: ['ADMIN', "USER"],
             default: "USER"
+        },
+        date_of_birth: {
+            type: Date,
+            default: null,
+        },
+        gender: {
+            type: String,
+            enum: ["Male", "Female", "Other"],
+            default: null,
         }
     },
     { timestamps: true }
