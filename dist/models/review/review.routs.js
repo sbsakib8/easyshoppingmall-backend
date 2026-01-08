@@ -16,5 +16,5 @@ router.patch("/admin/:id/reject", isAuth_1.isAuth, isAdmin_1.isAdmin, review_con
 // User routes
 router.post("/:productId", isAuth_1.isAuth, review_controller_1.createReview);
 router.get("/:productId", review_controller_1.getProductReviews);
-router.delete("/:id", isAuth_1.isAuth, review_controller_1.deleteReview);
+router.delete("/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, review_controller_1.deleteReview);
 exports.default = router;

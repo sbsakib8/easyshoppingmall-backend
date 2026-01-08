@@ -120,8 +120,6 @@ export const getPendingReviews = async (req: Request, res: Response) => {
 export const getAllReviews = async (req: Request, res: Response) => {
     try {
         const reviews = await Review.find()
-            .populate("userId", "name image")
-            .sort({ createdAt: -1 });
 
         res.json({ success: true, reviews });
     } catch (error: any) {

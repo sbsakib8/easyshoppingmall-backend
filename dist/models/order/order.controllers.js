@@ -3,10 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.confirmManualPayment = exports.getOrdersByStatus = exports.getAllOrders = exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
+exports.confirmManualPayment = exports.getOrdersByStatus = exports.getAllOrders = exports.createManualOrder = exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
-const cart_model_1 = require("../cart/cart.model"); // ✅ fix typo (card → cart)
+const cart_model_1 = require("../cart/cart.model");
 const order_model_1 = __importDefault(require("./order.model"));
+const cart_utils_1 = require("../../utils/cart.utils");
 const { v4: uuidv4 } = require('uuid');
 /**
  * @desc Create a new order from user's cart
@@ -15,13 +16,23 @@ const { v4: uuidv4 } = require('uuid');
  */
 const createOrder = async (req, res) => {
     try {
-        const { userId, delivery_address, paymentMethod, paymentDetails, payment_type } = req.body;
-        const subtotalFromReq = Number(req.body.subtotal) || 0;
+        const { delivery_address, payment_method, payment_details, payment_type } = req.body; // Renamed paymentMethod to payment_method, paymentDetails to payment_details
+        const userId = req.userId; // Get userId from AuthRequest
+        const subtotalFromReq = Number(req.body.subtotal) || 0; // Not used in this version after product price calculation
         const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0;
         if (!userId || !delivery_address) {
             return res.status(400).json({
                 success: false,
                 message: "Missing required fields (userId, delivery_address)",
+            });
+        }
+        // Validate delivery_address structure
+        const requiredAddressFields = ["address_line", "district", "division", "upazila_thana", "pincode", "country", "mobile"];
+        const missingAddressFields = requiredAddressFields.filter(field => !delivery_address[field]);
+        if (missingAddressFields.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Missing required address fields: ${missingAddressFields.join(", ")}`,
             });
         }
         const cart = await cart_model_1.CartModel.findOne({ userId }).populate("products.productId");
@@ -34,32 +45,46 @@ const createOrder = async (req, res) => {
         }
         const orderProducts = validProducts.map((item) => {
             const product = item.productId;
-            const productPrice = Number(product.price) || 0; // Ensure productPrice is a number, default to 0
-            const quantity = Number(item.quantity) || 0; // Ensure quantity is a number, default to 0
+            const productPrice = Number(product.price) || 0;
+            const quantity = Number(item.quantity) || 0;
             return {
                 productId: product._id,
                 name: product.productName || "Unnamed Product",
                 image: product.images || [],
                 quantity: quantity,
                 price: productPrice,
-                totalPrice: quantity * productPrice, // Calculate totalPrice using the numeric values
+                totalPrice: quantity * productPrice,
                 size: item.size,
             };
         });
         // Create order
         const order = new order_model_1.default({
             userId,
+            cart: cart._id, // Assign cart ID
             orderId: uuidv4(),
             products: orderProducts,
-            delivery_address,
-            payment_method: req.body.payment_method || "manual", // manual or sslcommerz
-            payment_status: "pending", // manual always pending
-            payment_details: paymentDetails || undefined,
-            payment_type: payment_type || undefined,
+            address: delivery_address, // Changed to address
+            payment_method: payment_method, // payment_method must be explicit
+            payment_status: "pending",
+            payment_details: payment_details || null, // Expect payment_details for non-manual
+            payment_type: payment_type || "full",
             order_status: "pending",
             deliveryCharge: deliveryChargeFromReq,
         });
+        if (!payment_method) {
+            return res.status(400).json({
+                success: false,
+                message: "Payment method is required for this endpoint.",
+            });
+        }
+        if (payment_method === "manual") {
+            return res.status(400).json({
+                success: false,
+                message: "For manual payments, please use the /api/orders/manual endpoint.",
+            });
+        }
         await order.save();
+        // Cart will be cleared after payment is confirmed (in paymentSuccess, confirmManualPayment, paymentIpn)
         res.status(201).json({
             success: true,
             message: "Order placed successfully",
@@ -151,26 +176,38 @@ exports.updateOrderStatus = updateOrderStatus;
 // POST /order/manual-payment
 const ManualPayment = async (req, res) => {
     try {
-        const { orderId, phoneNumber, transactionId, manualFor } = req.body;
-        if (!orderId || !phoneNumber || !transactionId) {
+        const { orderId, provider, senderNumber, transactionId } = req.body;
+        if (!orderId || !provider || !senderNumber || !transactionId) {
             return res.status(400).json({
                 success: false,
-                message: "Order ID, phone number, and transaction ID are required",
+                message: "Order ID, provider, sender number, and transaction ID are required.",
             });
         }
         const order = await order_model_1.default.findById(orderId);
         if (!order) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
-        // Save manual payment info but keep status pending
-        order.payment_method = "manual";
-        order.payment_details = { providerNumber: phoneNumber, transactionId, manualFor };
-        order.payment_status = "pending"; // ❌ DO NOT mark as paid yet
-        order.order_status = "pending"; // still pending admin confirmation
+        if (order.payment_method !== 'manual') {
+            return res.status(400).json({ success: false, message: "This order is not set for manual payment." });
+        }
+        if (order.payment_status === 'submitted' || order.payment_status === 'paid') {
+            return res.status(400).json({ success: false, message: "Payment info already submitted or payment already made." });
+        }
+        // Update payment status and details
+        order.payment_details = {
+            manual: {
+                provider: provider,
+                senderNumber: senderNumber,
+                transactionId: transactionId,
+                paidFor: "full", // As per requirement for Manual Full Payment
+            },
+        };
+        order.payment_status = "submitted";
+        // order_status remains 'pending' until admin verification
         await order.save();
         res.json({
             success: true,
-            message: "Manual payment submitted, pending admin confirmation",
+            message: "Manual payment info submitted, pending admin confirmation",
             order,
         });
     }
@@ -180,6 +217,88 @@ const ManualPayment = async (req, res) => {
     }
 };
 exports.ManualPayment = ManualPayment;
+/**
+ * @desc Create a new manual order from user's cart
+ * @route POST /api/orders/manual
+ * @access Private (User)
+ */
+const createManualOrder = async (req, res) => {
+    try {
+        const { delivery_address } = req.body;
+        const userId = req.userId;
+        if (!userId || !delivery_address) {
+            return res.status(400).json({
+                success: false,
+                message: "Missing required fields (userId, delivery_address)",
+            });
+        }
+        // Validate delivery_address structure
+        const requiredAddressFields = ["address_line", "district", "division", "upazila_thana", "pincode", "country", "mobile"];
+        const missingAddressFields = requiredAddressFields.filter(field => !delivery_address[field]);
+        if (missingAddressFields.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Missing required address fields: ${missingAddressFields.join(", ")}`,
+            });
+        }
+        const cart = await cart_model_1.CartModel.findOne({ userId }).populate("products.productId");
+        if (!cart || cart.products.length === 0) {
+            return res.status(404).json({ success: false, message: "Cart is empty" });
+        }
+        const validProducts = cart.products.filter((item) => item.productId && "_id" in item.productId);
+        if (validProducts.length === 0) {
+            return res.status(400).json({ success: false, message: "No valid products in cart" });
+        }
+        const orderProducts = validProducts.map((item) => {
+            const product = item.productId;
+            const productPrice = Number(product.price) || 0;
+            const quantity = Number(item.quantity) || 0;
+            return {
+                productId: product._id,
+                name: product.productName || "Unnamed Product",
+                image: product.images || [],
+                quantity: quantity,
+                price: productPrice,
+                totalPrice: quantity * productPrice,
+                size: item.size,
+            };
+        });
+        // Calculate delivery charge (assuming it's either fixed or passed in req.body, but for manual, we might calculate here)
+        // For now, let's assume it's calculated from the cart total or fixed,
+        // or passed if needed, but for manual payment, it's typically full amount.
+        // However, since prompt specified "Manual Full Payment", delivery type might not apply directly.
+        // The previous createOrder uses deliveryChargeFromReq, let's reuse that structure for consistency
+        const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0; // if it's passed or 0
+        // Create manual order
+        const order = new order_model_1.default({
+            userId,
+            cart: cart._id,
+            orderId: uuidv4(),
+            products: orderProducts,
+            address: delivery_address,
+            payment_method: "manual",
+            payment_status: "pending", // As per requirement
+            payment_details: {}, // Changed from null to {} to prevent implicit subdocument creation
+            payment_type: "full", // As per requirement: "Manual Full Payment"
+            order_status: "pending",
+            deliveryCharge: deliveryChargeFromReq, // Use calculated or default delivery charge
+        });
+        await order.save();
+        res.status(201).json({
+            success: true,
+            message: "Manual order placed successfully",
+            data: order,
+        });
+    }
+    catch (error) {
+        console.error("Manual Order Creation Error:", error);
+        res.status(500).json({
+            success: false,
+            message: error.message || "Internal Server Error",
+        });
+    }
+};
+exports.createManualOrder = createManualOrder;
 /**
  * @desc Get all orders for admin
  * @route GET /api/admin/orders/all
@@ -256,6 +375,10 @@ const confirmManualPayment = async (req, res) => {
         if (order.payment_status === 'paid') {
             return res.status(400).json({ success: false, message: "This order has already been paid." });
         }
+        // Only confirm if payment_status is 'submitted'
+        if (order.payment_status !== 'submitted') {
+            return res.status(400).json({ success: false, message: "Manual payment not yet submitted or already processed." });
+        }
         // Update payment status
         order.payment_status = "paid";
         order.order_status = "processing";
@@ -269,14 +392,7 @@ const confirmManualPayment = async (req, res) => {
             order.amount_due = 0;
         }
         await order.save();
-        // Clear the user's cart
-        const cart = await cart_model_1.CartModel.findOne({ userId: order.userId });
-        if (cart) {
-            cart.products = [];
-            cart.subTotalAmt = 0;
-            cart.totalAmt = 0;
-            await cart.save();
-        }
+        await (0, cart_utils_1.clearUserCart)(order.userId); // Clear cart as per API 3 requirement
         res.json({
             success: true,
             message: "Manual payment confirmed successfully",

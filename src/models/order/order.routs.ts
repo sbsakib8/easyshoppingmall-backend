@@ -3,7 +3,8 @@ import { isAdmin } from "../../middlewares/isAdmin";
 import { isAuth } from "../../middlewares/isAuth";
 import {
   confirmManualPayment,
-  createOrder,
+  createOrder, // Re-added createOrder
+  createManualOrder,
   getAllOrders,
   getMyOrders,
   getOrdersByStatus,
@@ -15,10 +16,17 @@ const router = express.Router();
 
 /**
  * @route   POST /api/orders/create
- * @desc    Create a new order from user's cart
+ * @desc    Create a new generic order from user's cart (can be used for SSLCommerz)
  * @access  Private (User)
  */
-router.post("/create", createOrder);
+router.post("/create", isAuth, createOrder);
+
+/**
+ * @route   POST /api/orders/manual
+ * @desc    Create a new manual order from user's cart
+ * @access  Private (User)
+ */
+router.post("/manual", isAuth, createManualOrder);
 
 /**
  * @route   GET /api/orders/my-orders
@@ -51,10 +59,10 @@ router.get("/admin/status/:status", isAuth, isAdmin, getOrdersByStatus);
 router.put("/:id/status", isAuth, isAdmin, updateOrderStatus);
 
 /**
- * @route   PUT /api/orders/:id/confirm-payment
- * @desc    Confirm manual payment (admin only)
+ * @route   PATCH /api/admin/orders/:id/verify
+ * @desc    Confirm manual payment by admin
  * @access  Private (Admin)
  */
-router.put("/:id/confirm-payment", isAuth, isAdmin, confirmManualPayment);
+router.patch("/admin/orders/:id/verify", isAuth, isAdmin, confirmManualPayment);
 
 export default router;

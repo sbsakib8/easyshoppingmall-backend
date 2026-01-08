@@ -1,4 +1,4 @@
-import mongoose, { Document } from "mongoose";
+import mongoose, { Document, Types } from "mongoose";
 
 // Order Product Interface
 export interface IOrderProduct {
@@ -13,50 +13,58 @@ export interface IOrderProduct {
   weight?: string;
 }
 
-// Payment Details for Manual Payment
-export interface IManualPaymentDetails {
-  manualFor: "full" | "delivery";
-  providerNumber?: string;
-  transactionId?: string;
-}
-
-// Payment Details for SSL Commerz
-export interface ISSLPaymentDetails {
-  sessionKey: string;
-  paymentId?: string;
-}
-
 // Main Order Interface
-export interface IOrder extends Document {
-  userId: mongoose.Types.ObjectId | string;
+export interface IOrder {
+  _id: Types.ObjectId;
   orderId: string;
-  products: IOrderProduct[];
-  delivery_address: {
-    address_line: string;
-    district?: string;
-    division?: string;
-    upazila_thana?: string;
-    pincode?: string;
-    country?: string;
-    mobile?: number;
-  };
-  deliveryCharge: number;
+  userId: Types.ObjectId;
+  cart: Types.ObjectId;
+  products: {
+    productId: Types.ObjectId;
+    name: string;
+    image: string[];
+    quantity: number;
+    price: number;
+    totalPrice: number;
+    size?: string;
+    color?: string;
+    weight?: string;
+  }[];
   subTotalAmt: number;
   totalAmt: number;
   amount_paid?: number;
   amount_due?: number;
-  // Payment Fields
-  payment_method: "manual" | "sslcommerz";
-  payment_type: "full" | "delivery";
-  payment_status: "pending" | "paid" | "failed" | "refunded" | "partial";
-  payment_details?: IManualPaymentDetails | ISSLPaymentDetails;
+  deliveryCharge: number;
+  payment_method: string;
+  payment_type: "full" | "advance" | "delivery";
+  payment_status: "pending" | "submitted" | "paid" | "failed" | "refunded";
+  payment_details: {
+    manual?: {
+      provider?: string;
+      senderNumber?: string; // Renamed from providerNumber
+      transactionId?: string;
+      paidFor?: "full";
+    };
+    ssl?: {
+      tran_id?: string;
+      val_id?: string;
+    };
+  } | null;
   paymentId?: string;
   invoice_receipt?: string;
   tran_id?: string;
-  // Order Status
-  order_status: "pending" | "processing" | "shipped" | "delivered" | "cancelled" | "completed";
-  createdAt?: Date;
-  updatedAt?: Date;
+  address: {
+    address_line: string;
+    district: string;
+    division: string;
+    upazila_thana: string;
+    pincode: string;
+    country: string;
+    mobile: number;
+  };
+  order_status: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface AuthUser {
