@@ -3,6 +3,7 @@ import { AuthRequest } from "../../middlewares/isAuth";
 import uploadClouinary from "../../utils/cloudinary";
 import generateToken from "../../utils/genaretetoken";
 import { sendEmail } from "../../utils/nodemailer";
+import AddressModel from "../address/address.model";
 import type { IUser } from "../user/user.model";
 import User from "../user/user.model";
 
@@ -321,6 +322,7 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       role,
       date_of_birth,
       gender,
+      address, // expecting an object like { _id: "...", address_line: "...", ... }
     } = req.body;
 
     const user = await User.findById(userId);
@@ -341,6 +343,12 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     if (gender !== undefined) user.gender = gender;
 
     await user.save();
+    
+    //  update address
+    if (address && typeof address === 'object' && address._id) {
+      const { _id, ...addressFields } = address;
+      await AddressModel.updateOne({ _id, userId: user._id }, { $set: addressFields });
+    }
 
     res.status(200).json({
       success: true,
