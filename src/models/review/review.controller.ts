@@ -47,7 +47,8 @@ export const getProductReviews = async (req: Request, res: Response) => {
         const reviews = await Review.find({
             productId,
             status: "approved",
-        })
+        }).populate("userId", "name email")
+            .populate("productId", "productName images");
 
 
         res.json({ success: true, reviews });
@@ -65,7 +66,8 @@ export const approveReview = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Invalid review id" });
         }
 
-        const review = await Review.findById(reviewId);
+        const review = await Review.findById(reviewId).populate("userId", "name email")
+            .populate("productId", "productName images");;
         if (!review) {
             return res.status(404).json({ message: "Review not found" });
         }
@@ -88,7 +90,8 @@ export const rejectReview = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Invalid review id" });
         }
 
-        const review = await Review.findById(reviewId);
+        const review = await Review.findById(reviewId).populate("userId", "name email")
+            .populate("productId", "productName images");
         if (!review) {
             return res.status(404).json({ message: "Review not found" });
         }
@@ -105,7 +108,8 @@ export const rejectReview = async (req: Request, res: Response) => {
 // Get pending reviews (admin)
 export const getPendingReviews = async (req: Request, res: Response) => {
     try {
-        const reviews = await Review.find({ status: "pending" })
+        const reviews = await Review.find({ status: "pending" }).populate("userId", "name email")
+            .populate("productId", "productName images");
 
 
         res.json({ success: true, reviews });
