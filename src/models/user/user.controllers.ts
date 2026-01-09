@@ -3,7 +3,6 @@ import { AuthRequest } from "../../middlewares/isAuth";
 import uploadClouinary from "../../utils/cloudinary";
 import generateToken from "../../utils/genaretetoken";
 import { sendEmail } from "../../utils/nodemailer";
-import AddressModel from "../address/address.model";
 import type { IUser } from "../user/user.model";
 import User from "../user/user.model";
 
@@ -236,31 +235,26 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
 
 // user controller 
 
-export const getUserProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getUserProfile = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.userId;
-    if (!userId) {
-      res.status(401).json({ success: false, message: "Unauthorized" });
-      return;
+    if (!req.userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const user = await User.findById(userId).select(
+    const user = await User.findById(req.userId).select(
       "-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified"
     );
 
     if (!user) {
-      res.status(404).json({ success: false, message: "User not found" });
-      return;
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
     res.status(200).json({ success: true, user });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: (error as Error).message,
-    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 //  get all users
 export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -281,7 +275,10 @@ export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void
 // user imge push 
 export const userImage = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.params.id;
+    if (req.userId !== req.params.id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
     if (!req.file) {
       return res.status(400).json({ message: "No image file provided" });
     }
@@ -289,15 +286,14 @@ export const userImage = async (req: AuthRequest, res: Response) => {
     const imageUrl = await uploadClouinary(req.file.buffer);
 
     const user = await User.findByIdAndUpdate(
-      userId,
+      req.userId,
       { image: imageUrl },
       { new: true }
-    );
+    ).select("-password");
 
     res.status(200).json({
       success: true,
       message: "Profile image updated successfully",
-      image: imageUrl,
       user,
     });
   } catch (error: any) {
@@ -306,12 +302,12 @@ export const userImage = async (req: AuthRequest, res: Response) => {
 };
 
 
+
 // user update profile
 export const updateUserProfile = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.params.id;
 
-    // ✅ AUTH CHECK (NO req.user)
     if (req.userId !== userId) {
       return res.status(403).json({
         success: false,
@@ -326,46 +322,28 @@ export const updateUserProfile = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    if (name !== undefined) user.name = name;
-    if (email !== undefined) user.email = email;
-    if (mobile !== undefined) user.mobile = mobile;
-    if (gender !== undefined) user.gender = gender;
-    if (date_of_birth !== undefined) user.date_of_birth = date_of_birth;
+    if (name) user.name = name;
+    if (email) user.email = email;
+    if (mobile) user.mobile = mobile;
+    if (gender) user.gender = gender;
+    if (date_of_birth) user.date_of_birth = date_of_birth;
 
     await user.save();
 
-    let updatedAddress = null;
-
-    // ✅ UPDATE ADDRESS
-    if (address?._id) {
-      const { _id, ...addressFields } = address;
-
-      updatedAddress = await AddressModel.findByIdAndUpdate(
-        _id,
-        { $set: addressFields },
-        { new: true }
-      );
-    }
-
-    // ✅ POPULATE ADDRESS PROPERLY
-    const populatedUser = await User.findById(user._id).populate({
-      path: "address_details",
-      model: "Address",
-    });
+    const populatedUser = await User.findById(user._id).populate(
+      "address_details"
+    );
 
     res.status(200).json({
       success: true,
       message: "Profile updated successfully",
       user: populatedUser,
     });
-
   } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 
 
