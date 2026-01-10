@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
+import { AuthRequest } from "../../middlewares/isAuth";
 import { Review } from "./review.model";
 
 // Create review
@@ -132,29 +133,48 @@ export const getAllReviews = async (req: Request, res: Response) => {
 };
 
 // Delete own review (user)
-export const deleteReview = async (req: Request, res: Response) => {
+export const deleteReview = async (req: AuthRequest, res: Response) => {
     try {
         const reviewId = req.params.id;
-        const userId = req.user?.id;
+        const user = req.user;
+
+        if (!user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
 
         if (!mongoose.Types.ObjectId.isValid(reviewId)) {
             return res.status(400).json({ message: "Invalid review id" });
         }
 
-        const review = await Review.findOneAndDelete({
-            _id: reviewId,
-            userId: userId,
-        });
+        //  ADMIN can delete any review
+        const query: any = { _id: reviewId };
+
+        //  Normal user can delete only own review
+        if (user.role !== "admin") {
+            query.userId = user._id;
+        }
+
+        const review = await Review.findOneAndDelete(query);
 
         if (!review) {
             return res.status(404).json({
-                message: "Review not found or you are not authorized to delete it.",
+                message:
+                    user.role === "admin"
+                        ? "Review not found"
+                        : "Review not found or you are not authorized",
             });
         }
 
-        res.json({ success: true, message: "Review deleted successfully" });
+        return res.status(200).json({
+            success: true,
+            message: "Review deleted successfully",
+        });
     } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Server error",
+        });
     }
 };
+
 

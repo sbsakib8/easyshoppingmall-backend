@@ -7,6 +7,7 @@ exports.confirmManualPayment = exports.getOrdersByStatus = exports.getAllOrders 
 const mongoose_1 = __importDefault(require("mongoose"));
 const cart_utils_1 = require("../../utils/cart.utils");
 const cart_model_1 = require("../cart/cart.model");
+const user_model_1 = __importDefault(require("../user/user.model"));
 const order_model_1 = __importDefault(require("./order.model"));
 const { v4: uuidv4 } = require('uuid');
 /**
@@ -77,14 +78,11 @@ const createOrder = async (req, res) => {
                 message: "Payment method is required for this endpoint.",
             });
         }
-        if (payment_method === "manual") {
-            return res.status(400).json({
-                success: false,
-                message: "For manual payments, please use the /api/orders/manual endpoint.",
-            });
-        }
         await order.save();
         // Cart will be cleared after payment is confirmed (in paymentSuccess, confirmManualPayment, paymentIpn)
+        await user_model_1.default.findByIdAndUpdate(userId, {
+            $push: { orderHistory: order._id },
+        });
         res.status(201).json({
             success: true,
             message: "Order placed successfully",
@@ -205,6 +203,10 @@ const ManualPayment = async (req, res) => {
         order.payment_status = "submitted";
         // order_status remains 'pending' until admin verification
         await order.save();
+        // Add the order to the user's order history
+        await user_model_1.default.findByIdAndUpdate(order.userId, {
+            $push: { orderHistory: order._id },
+        });
         res.json({
             success: true,
             message: "Manual payment info submitted, pending admin confirmation",
@@ -279,6 +281,9 @@ const createManualOrder = async (req, res) => {
             deliveryCharge: deliveryChargeFromReq,
         });
         await order.save();
+        await user_model_1.default.findByIdAndUpdate(userId, {
+            $push: { orderHistory: order._id },
+        });
         res.status(201).json({
             success: true,
             message: "Manual order placed successfully",

@@ -7,7 +7,6 @@ exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.get
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 const genaretetoken_1 = __importDefault(require("../../utils/genaretetoken"));
 const nodemailer_1 = require("../../utils/nodemailer");
-const address_model_1 = __importDefault(require("../address/address.model"));
 const user_model_1 = __importDefault(require("../user/user.model"));
 // Cookie 
 const cookieOptions = {
@@ -38,10 +37,7 @@ const signUp = async (req, res) => {
         res.status(201).json({
             success: true,
             message: "User registered successfully",
-            id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
+            user,
         });
     }
     catch (error) {
@@ -53,7 +49,43 @@ exports.signUp = signUp;
 const signIn = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await user_model_1.default.findOne({ email });
+        const user = await user_model_1.default.findOne({ email }).populate("address_details")
+            .populate({
+            path: "shopping_cart",
+            populate: {
+                path: "products.productId",
+                model: "Product",
+                populate: {
+                    path: "category",
+                    select: "name"
+                }
+            },
+        })
+            .populate({
+            path: "orderHistory",
+            populate: [
+                {
+                    path: "products.productId",
+                    model: "Product",
+                    populate: {
+                        path: "category",
+                        select: "name"
+                    }
+                },
+                {
+                    path: "cart",
+                    model: "Cart",
+                    populate: {
+                        path: "products.productId",
+                        model: "Product",
+                        populate: {
+                            path: "category",
+                            select: "name"
+                        }
+                    }
+                },
+            ],
+        });
         if (!user) {
             res.status(401).json({ message: "user does not exist" });
             return;
@@ -74,10 +106,7 @@ const signIn = async (req, res) => {
         res.json({
             success: true,
             message: "User Signin successfully",
-            id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
+            user,
         });
     }
     catch (error) {
@@ -223,24 +252,57 @@ const googleAuth = async (req, res) => {
 exports.googleAuth = googleAuth;
 // user controller 
 const getUserProfile = async (req, res) => {
+    const userId = req.userId;
     try {
-        const userId = req.userId;
-        if (!userId) {
-            res.status(401).json({ success: false, message: "Unauthorized" });
-            return;
+        if (!req.userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
         }
-        const user = await user_model_1.default.findById(userId).select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified");
+        const user = await user_model_1.default.findById(userId)
+            .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+            .populate("address_details")
+            .populate({
+            path: "shopping_cart",
+            populate: {
+                path: "products.productId",
+                model: "Product",
+                populate: {
+                    path: "category",
+                    select: "name"
+                }
+            },
+        })
+            .populate({
+            path: "orderHistory",
+            populate: [
+                {
+                    path: "products.productId",
+                    model: "Product",
+                    populate: {
+                        path: "category",
+                        select: "name"
+                    }
+                },
+                {
+                    path: "cart",
+                    model: "Cart",
+                    populate: {
+                        path: "products.productId",
+                        model: "Product",
+                        populate: {
+                            path: "category",
+                            select: "name"
+                        }
+                    }
+                },
+            ],
+        });
         if (!user) {
-            res.status(404).json({ success: false, message: "User not found" });
-            return;
+            return res.status(404).json({ success: false, message: "User not found" });
         }
         res.status(200).json({ success: true, user });
     }
     catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 exports.getUserProfile = getUserProfile;
@@ -261,16 +323,55 @@ exports.getAllUsers = getAllUsers;
 // user imge push 
 const userImage = async (req, res) => {
     try {
-        const userId = req.params.id;
+        if (req.userId !== req.params.id) {
+            return res.status(403).json({ message: "Forbidden" });
+        }
         if (!req.file) {
             return res.status(400).json({ message: "No image file provided" });
         }
         const imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
-        const user = await user_model_1.default.findByIdAndUpdate(userId, { image: imageUrl }, { new: true });
+        const user = await user_model_1.default.findByIdAndUpdate(req.userId, { image: imageUrl }, { new: true })
+            .select("-password")
+            .populate("address_details")
+            .populate({
+            path: "shopping_cart",
+            populate: {
+                path: "products.productId",
+                model: "Product",
+                populate: {
+                    path: "category",
+                    select: "name"
+                }
+            },
+        })
+            .populate({
+            path: "orderHistory",
+            populate: [
+                {
+                    path: "products.productId",
+                    model: "Product",
+                    populate: {
+                        path: "category",
+                        select: "name"
+                    }
+                },
+                {
+                    path: "cart",
+                    model: "Cart",
+                    populate: {
+                        path: "products.productId",
+                        model: "Product",
+                        populate: {
+                            path: "category",
+                            select: "name"
+                        }
+                    }
+                },
+            ],
+        });
         res.status(200).json({
             success: true,
             message: "Profile image updated successfully",
-            image: imageUrl,
             user,
         });
     }
@@ -283,7 +384,6 @@ exports.userImage = userImage;
 const updateUserProfile = async (req, res) => {
     try {
         const userId = req.params.id;
-        // ✅ AUTH CHECK (NO req.user)
         if (req.userId !== userId) {
             return res.status(403).json({
                 success: false,
@@ -295,27 +395,54 @@ const updateUserProfile = async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
-        if (name !== undefined)
+        if (name)
             user.name = name;
-        if (email !== undefined)
+        if (email)
             user.email = email;
-        if (mobile !== undefined)
+        if (mobile)
             user.mobile = mobile;
-        if (gender !== undefined)
+        if (gender)
             user.gender = gender;
-        if (date_of_birth !== undefined)
+        if (date_of_birth)
             user.date_of_birth = date_of_birth;
         await user.save();
-        let updatedAddress = null;
-        // ✅ UPDATE ADDRESS
-        if (address?._id) {
-            const { _id, ...addressFields } = address;
-            updatedAddress = await address_model_1.default.findByIdAndUpdate(_id, { $set: addressFields }, { new: true });
-        }
-        // ✅ POPULATE ADDRESS PROPERLY
-        const populatedUser = await user_model_1.default.findById(user._id).populate({
-            path: "address_details",
-            model: "Address",
+        const populatedUser = await user_model_1.default.findById(user._id)
+            .populate("address_details")
+            .populate({
+            path: "shopping_cart",
+            populate: {
+                path: "products.productId",
+                model: "Product",
+                populate: {
+                    path: "category",
+                    select: "name"
+                }
+            },
+        })
+            .populate({
+            path: "orderHistory",
+            populate: [
+                {
+                    path: "products.productId",
+                    model: "Product",
+                    populate: {
+                        path: "category",
+                        select: "name"
+                    }
+                },
+                {
+                    path: "cart",
+                    model: "Cart",
+                    populate: {
+                        path: "products.productId",
+                        model: "Product",
+                        populate: {
+                            path: "category",
+                            select: "name"
+                        }
+                    }
+                },
+            ],
         });
         res.status(200).json({
             success: true,
@@ -324,10 +451,7 @@ const updateUserProfile = async (req, res) => {
         });
     }
     catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 exports.updateUserProfile = updateUserProfile;

@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { AuthRequest } from "../../middlewares/isAuth";
 import { clearUserCart } from "../../utils/cart.utils";
 import { CartModel } from "../cart/cart.model";
+import UserModel from "../user/user.model";
 import { AuthUser } from "./interface";
 import OrderModel from "./order.model";
 const { v4: uuidv4 } = require('uuid');
@@ -95,15 +96,11 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
       });
     }
 
-    if (payment_method === "manual") {
-      return res.status(400).json({
-        success: false,
-        message: "For manual payments, please use the /api/orders/manual endpoint.",
-      });
-    }
-
     await order.save();
     // Cart will be cleared after payment is confirmed (in paymentSuccess, confirmManualPayment, paymentIpn)
+    await UserModel.findByIdAndUpdate(userId, {
+      $push: { orderHistory: order._id },
+    });
 
     res.status(201).json({
       success: true,
@@ -240,6 +237,11 @@ export const ManualPayment = async (req: Request, res: Response) => {
     // order_status remains 'pending' until admin verification
 
     await order.save();
+    
+    // Add the order to the user's order history
+    await UserModel.findByIdAndUpdate(order.userId, {
+      $push: { orderHistory: order._id },
+    });
 
     res.json({
       success: true,
@@ -328,6 +330,10 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
 
     await order.save();
 
+    await UserModel.findByIdAndUpdate(userId, {
+      $push: { orderHistory: order._id },
+    });
+    
     res.status(201).json({
       success: true,
       message: "Manual order placed successfully",
