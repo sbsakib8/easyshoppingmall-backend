@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { AuthUser } from "../order/interface";
 import ProductModel from "../product/product.model";
+import UserModel from "../user/user.model";
 import { CartModel } from "./cart.model";
 import { ICartProduct } from "./interface";
 
@@ -23,10 +24,13 @@ const isSameVariant = (
 ) => {
   if (item.productId.toString() !== productId) return false;
 
-  // Only match variant fields if they are provided
-  if (color != null && (item.color ?? null) !== color) return false;
-  if (size != null && (item.size ?? null) !== size) return false;
-  if (weight != null && (item.weight ?? null) !== weight) return false;
+  const itemColor = item.color ?? null;
+  const itemSize = item.size ?? null;
+  const itemWeight = item.weight ?? null;
+
+  if (color && itemColor !== color) return false;
+  if (size && itemSize !== size) return false;
+  if (weight && itemWeight !== weight) return false;
 
   return true;
 };
@@ -39,7 +43,9 @@ const isSameVariant = (
  */
 export const addToCart = async (req: Request, res: Response) => {
   try {
-    let { userId, productId, quantity, price, color, size, weight } = req.body;
+    let { productId, quantity, price, color, size, weight } = req.body;
+    const userId = (req as any).userId;
+
 
     if (!userId || !productId || !quantity) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
@@ -107,6 +113,9 @@ export const addToCart = async (req: Request, res: Response) => {
     cart.totalAmt = cart.subTotalAmt;
 
     await cart.save();
+    await UserModel.findByIdAndUpdate(userId, {
+      $addToSet: { shopping_cart: cart._id },
+    });
 
     res.json({
       success: true,
@@ -226,10 +235,19 @@ export const removeFromCart = async (req: Request, res: Response) => {
       )
     );
 
-    cart.subTotalAmt = cart.products.reduce((s: number, p: ICartProduct) => s + p.totalPrice, 0);
-    cart.totalAmt = cart.subTotalAmt;
+    if (cart.products.length === 0) {
+      await CartModel.findByIdAndDelete(cart._id);
+      await UserModel.findByIdAndUpdate(userId, {
+        $pull: { shopping_cart: cart._id },
+      });
+      return res.json({ success: true, message: "Removed from cart and cart deleted" });
+    } else {
+      cart.subTotalAmt = cart.products.reduce((s: number, p: ICartProduct) => s + p.totalPrice, 0);
+      cart.totalAmt = cart.subTotalAmt;
+      await cart.save();
+    }
 
-    await cart.save();
+
 
     res.json({ success: true, message: "Removed from cart", data: cart });
   } catch (err: any) {
@@ -252,11 +270,14 @@ export const clearCart = async (req: Request, res: Response): Promise<Response> 
       return res.status(404).json({ success: false, message: "Cart not found" });
     }
 
-    cart.products = [];
-    cart.subTotalAmt = 0;
-    cart.totalAmt = 0;
+    // Remove the cart reference from the user's shopping_cart
+    await UserModel.findByIdAndUpdate(userId, {
+      $pull: { shopping_cart: cart._id },
+    });
 
-    await cart.save();
+    // then delete the cart itself
+    await CartModel.findByIdAndDelete(cart._id);
+
 
     return res.status(200).json({ success: true, message: "Cart cleared successfully" });
   } catch (error: any) {

@@ -46,7 +46,8 @@ const getProductReviews = async (req, res) => {
         const reviews = await review_model_1.Review.find({
             productId,
             status: "approved",
-        });
+        }).populate("userId", "name email")
+            .populate("productId", "productName images");
         res.json({ success: true, reviews });
     }
     catch (error) {
@@ -61,7 +62,9 @@ const approveReview = async (req, res) => {
         if (!mongoose_1.default.Types.ObjectId.isValid(reviewId)) {
             return res.status(400).json({ message: "Invalid review id" });
         }
-        const review = await review_model_1.Review.findById(reviewId);
+        const review = await review_model_1.Review.findById(reviewId).populate("userId", "name email")
+            .populate("productId", "productName images");
+        ;
         if (!review) {
             return res.status(404).json({ message: "Review not found" });
         }
@@ -81,7 +84,8 @@ const rejectReview = async (req, res) => {
         if (!mongoose_1.default.Types.ObjectId.isValid(reviewId)) {
             return res.status(400).json({ message: "Invalid review id" });
         }
-        const review = await review_model_1.Review.findById(reviewId);
+        const review = await review_model_1.Review.findById(reviewId).populate("userId", "name email")
+            .populate("productId", "productName images");
         if (!review) {
             return res.status(404).json({ message: "Review not found" });
         }
@@ -97,7 +101,8 @@ exports.rejectReview = rejectReview;
 // Get pending reviews (admin)
 const getPendingReviews = async (req, res) => {
     try {
-        const reviews = await review_model_1.Review.find({ status: "pending" });
+        const reviews = await review_model_1.Review.find({ status: "pending" }).populate("userId", "name email")
+            .populate("productId", "productName images");
         res.json({ success: true, reviews });
     }
     catch (error) {
@@ -122,23 +127,37 @@ exports.getAllReviews = getAllReviews;
 const deleteReview = async (req, res) => {
     try {
         const reviewId = req.params.id;
-        const userId = req.user?.id;
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
         if (!mongoose_1.default.Types.ObjectId.isValid(reviewId)) {
             return res.status(400).json({ message: "Invalid review id" });
         }
-        const review = await review_model_1.Review.findOneAndDelete({
-            _id: reviewId,
-            userId: userId,
-        });
+        //  ADMIN can delete any review
+        const query = { _id: reviewId };
+        //  Normal user can delete only own review
+        if (user.role !== "admin") {
+            query.userId = user._id;
+        }
+        const review = await review_model_1.Review.findOneAndDelete(query);
         if (!review) {
             return res.status(404).json({
-                message: "Review not found or you are not authorized to delete it.",
+                message: user.role === "admin"
+                    ? "Review not found"
+                    : "Review not found or you are not authorized",
             });
         }
-        res.json({ success: true, message: "Review deleted successfully" });
+        return res.status(200).json({
+            success: true,
+            message: "Review deleted successfully",
+        });
     }
     catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Server error",
+        });
     }
 };
 exports.deleteReview = deleteReview;

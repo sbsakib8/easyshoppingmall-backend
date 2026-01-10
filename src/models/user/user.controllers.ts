@@ -39,10 +39,7 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
     res.status(201).json({
       success: true,
       message: "User registered successfully",
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
+      user,
     },);
   } catch (error: any) {
     res.status(500).json({ message: error.message });
@@ -54,7 +51,43 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).populate("address_details")
+      .populate({
+        path: "shopping_cart",
+        populate: {
+          path: "products.productId",
+          model: "Product",
+          populate: {
+            path: "category",
+            select: "name"
+          }
+        },
+      })
+      .populate({
+        path: "orderHistory",
+        populate: [
+          {
+            path: "products.productId",
+            model: "Product",
+            populate: {
+              path: "category",
+              select: "name"
+            }
+          },
+          {
+            path: "cart",
+            model: "Cart",
+            populate: {
+              path: "products.productId",
+              model: "Product",
+              populate: {
+                path: "category",
+                select: "name"
+              }
+            }
+          },
+        ],
+      });
     if (!user) {
       res.status(401).json({ message: "user does not exist" });
       return;
@@ -76,10 +109,7 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
     res.json({
       success: true,
       message: "User Signin successfully",
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
+      user,
     });
 
   } catch (error: any) {
@@ -236,14 +266,53 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
 // user controller 
 
 export const getUserProfile = async (req: AuthRequest, res: Response) => {
+  const userId = (req as any).userId;
+
   try {
     if (!req.userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const user = await User.findById(req.userId).select(
-      "-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified"
-    );
+    const user = await User.findById(userId)
+      .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+      .populate("address_details")
+      .populate({
+        path: "shopping_cart",
+        populate: {
+          path: "products.productId",
+          model: "Product",
+          populate: {
+            path: "category",
+            select: "name"
+          }
+        },
+      })
+      .populate({
+        path: "orderHistory",
+        populate: [
+          {
+            path: "products.productId",
+            model: "Product",
+            populate: {
+              path: "category",
+              select: "name"
+            }
+          },
+          {
+            path: "cart",
+            model: "Cart",
+            populate: {
+              path: "products.productId",
+              model: "Product",
+              populate: {
+                path: "category",
+                select: "name"
+              }
+            }
+          },
+        ],
+      });
+
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
@@ -289,7 +358,45 @@ export const userImage = async (req: AuthRequest, res: Response) => {
       req.userId,
       { image: imageUrl },
       { new: true }
-    ).select("-password");
+    )
+      .select("-password")
+      .populate("address_details")
+      .populate({
+        path: "shopping_cart",
+        populate: {
+          path: "products.productId",
+          model: "Product",
+          populate: {
+            path: "category",
+            select: "name"
+          }
+        },
+      })
+      .populate({
+        path: "orderHistory",
+        populate: [
+          {
+            path: "products.productId",
+            model: "Product",
+            populate: {
+              path: "category",
+              select: "name"
+            }
+          },
+          {
+            path: "cart",
+            model: "Cart",
+            populate: {
+              path: "products.productId",
+              model: "Product",
+              populate: {
+                path: "category",
+                select: "name"
+              }
+            }
+          },
+        ],
+      });
 
     res.status(200).json({
       success: true,
@@ -330,9 +437,44 @@ export const updateUserProfile = async (req: AuthRequest, res: Response) => {
 
     await user.save();
 
-    const populatedUser = await User.findById(user._id).populate(
-      "address_details"
-    );
+    const populatedUser = await User.findById(user._id)
+      .populate("address_details")
+      .populate({
+        path: "shopping_cart",
+        populate: {
+          path: "products.productId",
+          model: "Product",
+          populate: {
+            path: "category",
+            select: "name"
+          }
+        },
+      })
+      .populate({
+        path: "orderHistory",
+        populate: [
+          {
+            path: "products.productId",
+            model: "Product",
+            populate: {
+              path: "category",
+              select: "name"
+            }
+          },
+          {
+            path: "cart",
+            model: "Cart",
+            populate: {
+              path: "products.productId",
+              model: "Product",
+              populate: {
+                path: "category",
+                select: "name"
+              }
+            }
+          },
+        ],
+      });
 
     res.status(200).json({
       success: true,

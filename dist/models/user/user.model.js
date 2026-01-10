@@ -57,13 +57,13 @@ const userSchema = new mongoose_1.default.Schema({
     shopping_cart: [
         {
             type: mongoose_1.default.Schema.ObjectId,
-            ref: 'cartProduct'
+            ref: 'Cart'
         }
     ],
     orderHistory: [
         {
             type: mongoose_1.default.Schema.ObjectId,
-            ref: 'order'
+            ref: 'Order'
         }
     ],
     forgot_password_otp: {
