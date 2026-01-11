@@ -361,38 +361,33 @@ exports.getOrdersByStatus = getOrdersByStatus;
  */
 const confirmManualPayment = async (req, res) => {
     try {
-        const { id } = req.params;
-        if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ success: false, message: "Invalid order ID" });
-        }
-        const order = await order_model_1.default.findById(id);
+        const { id } = req.params; // this is orderId (UUID)
+        const order = await order_model_1.default.findOne({ orderId: id });
         if (!order) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
-        if (order.payment_method !== 'manual') {
-            return res.status(400).json({ success: false, message: "This is not a manual payment order." });
+        if (order.payment_method !== "manual") {
+            return res.status(400).json({ success: false, message: "Not a manual payment order" });
         }
-        if (order.payment_status === 'paid') {
-            return res.status(400).json({ success: false, message: "This order has already been paid." });
+        if (order.payment_status !== "submitted") {
+            return res.status(400).json({
+                success: false,
+                message: "Manual payment not submitted or already processed",
+            });
         }
-        // Only confirm if payment_status is 'submitted'
-        if (order.payment_status !== 'submitted') {
-            return res.status(400).json({ success: false, message: "Manual payment not yet submitted or already processed." });
-        }
-        // Update payment status
         order.payment_status = "paid";
         order.order_status = "processing";
-        // Calculate amount_paid and amount_due based on payment type
         if (order.payment_type === "delivery") {
             order.amount_paid = order.deliveryCharge;
             order.amount_due = order.subTotalAmt;
         }
-        else { // "full" payment
+        else {
             order.amount_paid = order.totalAmt;
             order.amount_due = 0;
         }
         await order.save();
-        await (0, cart_utils_1.clearUserCart)(order.userId); // Clear cart as per API 3 requirement
+        // ✅ CLEAR CART
+        await (0, cart_utils_1.clearUserCart)(order.userId);
         res.json({
             success: true,
             message: "Manual payment confirmed successfully",
@@ -400,10 +395,7 @@ const confirmManualPayment = async (req, res) => {
         });
     }
     catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message || "Internal Server Error",
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 exports.confirmManualPayment = confirmManualPayment;

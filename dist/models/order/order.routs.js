@@ -50,5 +50,5 @@ router.put("/:id/status", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_
  * @desc    Confirm manual payment by admin
  * @access  Private (Admin)
  */
-router.patch("/admin/orders/:id/verify", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.confirmManualPayment);
+router.put("/admin/orders/:id/verify", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.confirmManualPayment);
 exports.default = router;
