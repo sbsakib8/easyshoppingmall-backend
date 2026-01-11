@@ -309,7 +309,7 @@ exports.getUserProfile = getUserProfile;
 //  get all users
 const getAllUsers = async (req, res) => {
     try {
-        const users = await user_model_1.default.find().select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified");
+        const users = await user_model_1.default.find().select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified").populate("address_details");
         res.status(200).json({ success: true, users });
     }
     catch (error) {
