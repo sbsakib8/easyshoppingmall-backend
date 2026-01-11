@@ -390,10 +390,14 @@ const updateUserProfile = async (req, res) => {
                 message: "Forbidden",
             });
         }
-        const { name, email, mobile, gender, date_of_birth, address } = req.body;
+        const { name, email, mobile, gender, date_of_birth, address_details, // ✅ correct field
+         } = req.body;
         const user = await user_model_1.default.findById(userId);
         if (!user) {
-            return res.status(404).json({ success: false, message: "User not found" });
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
         }
         if (name)
             user.name = name;
@@ -405,18 +409,21 @@ const updateUserProfile = async (req, res) => {
             user.gender = gender;
         if (date_of_birth)
             user.date_of_birth = date_of_birth;
+        // ✅ update address ONLY if provided
+        if (address_details) {
+            user.address_details = Array.isArray(address_details)
+                ? address_details
+                : [address_details];
+        }
         await user.save();
         const populatedUser = await user_model_1.default.findById(user._id)
+            .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
             .populate("address_details")
             .populate({
             path: "shopping_cart",
             populate: {
                 path: "products.productId",
-                model: "Product",
-                populate: {
-                    path: "category",
-                    select: "name"
-                }
+                populate: { path: "category", select: "name" },
             },
         })
             .populate({
@@ -424,23 +431,14 @@ const updateUserProfile = async (req, res) => {
             populate: [
                 {
                     path: "products.productId",
-                    model: "Product",
-                    populate: {
-                        path: "category",
-                        select: "name"
-                    }
+                    populate: { path: "category", select: "name" },
                 },
                 {
                     path: "cart",
-                    model: "Cart",
                     populate: {
                         path: "products.productId",
-                        model: "Product",
-                        populate: {
-                            path: "category",
-                            select: "name"
-                        }
-                    }
+                        populate: { path: "category", select: "name" },
+                    },
                 },
             ],
         });
@@ -451,7 +449,10 @@ const updateUserProfile = async (req, res) => {
         });
     }
     catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
     }
 };
 exports.updateUserProfile = updateUserProfile;

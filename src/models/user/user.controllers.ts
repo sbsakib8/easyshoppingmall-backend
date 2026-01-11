@@ -328,44 +328,9 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
 //  get all users
 export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const users = await User.find().select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
-      .populate("address_details")
-      .populate({
-        path: "shopping_cart",
-        populate: {
-          path: "products.productId",
-          model: "Product",
-          populate: {
-            path: "category",
-            select: "name"
-          }
-        },
-      })
-      .populate({
-        path: "orderHistory",
-        populate: [
-          {
-            path: "products.productId",
-            model: "Product",
-            populate: {
-              path: "category",
-              select: "name"
-            }
-          },
-          {
-            path: "cart",
-            model: "Cart",
-            populate: {
-              path: "products.productId",
-              model: "Product",
-              populate: {
-                path: "category",
-                select: "name"
-              }
-            }
-          },
-        ],
-      });
+    const users = await User.find().select(
+      "-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified"
+    );
 
     res.status(200).json({ success: true, users });
   } catch (error) {
@@ -457,11 +422,21 @@ export const updateUserProfile = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { name, email, mobile, gender, date_of_birth, address } = req.body;
+    const {
+      name,
+      email,
+      mobile,
+      gender,
+      date_of_birth,
+      address_details, // ✅ correct field
+    } = req.body;
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
 
     if (name) user.name = name;
@@ -470,19 +445,23 @@ export const updateUserProfile = async (req: AuthRequest, res: Response) => {
     if (gender) user.gender = gender;
     if (date_of_birth) user.date_of_birth = date_of_birth;
 
+    // ✅ update address ONLY if provided
+    if (address_details) {
+      user.address_details = Array.isArray(address_details)
+        ? address_details
+        : [address_details];
+    }
+
     await user.save();
 
     const populatedUser = await User.findById(user._id)
+      .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
       .populate("address_details")
       .populate({
         path: "shopping_cart",
         populate: {
           path: "products.productId",
-          model: "Product",
-          populate: {
-            path: "category",
-            select: "name"
-          }
+          populate: { path: "category", select: "name" },
         },
       })
       .populate({
@@ -490,23 +469,14 @@ export const updateUserProfile = async (req: AuthRequest, res: Response) => {
         populate: [
           {
             path: "products.productId",
-            model: "Product",
-            populate: {
-              path: "category",
-              select: "name"
-            }
+            populate: { path: "category", select: "name" },
           },
           {
             path: "cart",
-            model: "Cart",
             populate: {
               path: "products.productId",
-              model: "Product",
-              populate: {
-                path: "category",
-                select: "name"
-              }
-            }
+              populate: { path: "category", select: "name" },
+            },
           },
         ],
       });
@@ -517,9 +487,13 @@ export const updateUserProfile = async (req: AuthRequest, res: Response) => {
       user: populatedUser,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
+
 
 
 

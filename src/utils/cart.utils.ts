@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { CartModel } from "../models/cart/cart.model";
 
 export const clearUserCart = async (
