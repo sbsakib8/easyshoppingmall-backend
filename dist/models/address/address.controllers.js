@@ -88,7 +88,7 @@ const updateAddressController = async (request, response) => {
             });
         }
         const { _id, address_line, district, division, upazila_thana, country, pincode, mobile } = request.body;
-        const updateAddress = await address_model_1.default.updateOne({ _id, userId }, {
+        const updatedAddress = await address_model_1.default.findOneAndUpdate({ _id, userId }, {
             address_line,
             district,
             division,
@@ -96,12 +96,19 @@ const updateAddressController = async (request, response) => {
             country,
             mobile,
             pincode,
-        });
+        }, { new: true });
+        if (!updatedAddress) {
+            return response.status(404).json({
+                message: "Address not found",
+                error: true,
+                success: false,
+            });
+        }
         return response.json({
             message: "Address Updated",
             error: false,
             success: true,
-            data: updateAddress,
+            data: updatedAddress,
         });
     }
     catch (error) {

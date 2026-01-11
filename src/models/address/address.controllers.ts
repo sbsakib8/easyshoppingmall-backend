@@ -106,7 +106,7 @@ export const updateAddressController = async (
     const { _id, address_line, district, division, upazila_thana, country, pincode, mobile } =
       request.body;
 
-    const updateAddress = await AddressModel.updateOne(
+    const updatedAddress = await AddressModel.findOneAndUpdate(
       { _id, userId },
       {
         address_line,
@@ -116,14 +116,23 @@ export const updateAddressController = async (
         country,
         mobile,
         pincode,
-      }
+      },
+      { new: true }
     );
+
+    if (!updatedAddress) {
+      return response.status(404).json({
+        message: "Address not found",
+        error: true,
+        success: false,
+      });
+    }
 
     return response.json({
       message: "Address Updated",
       error: false,
       success: true,
-      data: updateAddress,
+      data: updatedAddress,
     });
   } catch (error: any) {
     return response.status(500).json({
