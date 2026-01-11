@@ -8,7 +8,7 @@ const isAuth_1 = require("../../middlewares/isAuth");
 const cartController_1 = require("../cart/cartController");
 const router = express_1.default.Router();
 // 🛒 Cart
-router.post("/add", cartController_1.addToCart);
+router.post("/add", isAuth_1.isAuth, cartController_1.addToCart);
 router.get("/:userId", isAuth_1.isAuth, cartController_1.getCart);
 router.put("/update", cartController_1.updateCartItem);
 router.delete("/remove/:userId/:productId", cartController_1.removeFromCart);

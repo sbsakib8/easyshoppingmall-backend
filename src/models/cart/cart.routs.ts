@@ -11,7 +11,7 @@ import {
 const router = express.Router();
 
 // 🛒 Cart
-router.post("/add", addToCart);
+router.post("/add",isAuth, addToCart);
 router.get("/:userId",isAuth, getCart);
 router.put("/update", updateCartItem);
 router.delete("/remove/:userId/:productId", removeFromCart);

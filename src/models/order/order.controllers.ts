@@ -237,11 +237,12 @@ export const ManualPayment = async (req: Request, res: Response) => {
     // order_status remains 'pending' until admin verification
 
     await order.save();
-    
+
     // Add the order to the user's order history
     await UserModel.findByIdAndUpdate(order.userId, {
       $push: { orderHistory: order._id },
     });
+
 
     res.json({
       success: true,
@@ -333,7 +334,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
     await UserModel.findByIdAndUpdate(userId, {
       $push: { orderHistory: order._id },
     });
-    
+
     res.status(201).json({
       success: true,
       message: "Manual order placed successfully",
@@ -413,55 +414,46 @@ export const getOrdersByStatus = async (req: Request, res: Response): Promise<vo
  */
 export const confirmManualPayment = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; // this is orderId (UUID)
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid order ID" });
-    }
-
-    const order = await OrderModel.findById(id);
+    const order = await OrderModel.findOne({ orderId: id });
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    if (order.payment_method !== 'manual') {
-      return res.status(400).json({ success: false, message: "This is not a manual payment order." });
+    if (order.payment_method !== "manual") {
+      return res.status(400).json({ success: false, message: "Not a manual payment order" });
     }
 
-    if (order.payment_status === 'paid') {
-      return res.status(400).json({ success: false, message: "This order has already been paid." });
-    }
-    // Only confirm if payment_status is 'submitted'
-    if (order.payment_status !== 'submitted') {
-      return res.status(400).json({ success: false, message: "Manual payment not yet submitted or already processed." });
+    if (order.payment_status !== "submitted") {
+      return res.status(400).json({
+        success: false,
+        message: "Manual payment not submitted or already processed",
+      });
     }
 
-    // Update payment status
     order.payment_status = "paid";
     order.order_status = "processing";
 
-    // Calculate amount_paid and amount_due based on payment type
     if (order.payment_type === "delivery") {
       order.amount_paid = order.deliveryCharge;
       order.amount_due = order.subTotalAmt;
-    } else { // "full" payment
+    } else {
       order.amount_paid = order.totalAmt;
       order.amount_due = 0;
     }
 
     await order.save();
-    await clearUserCart(order.userId); // Clear cart as per API 3 requirement
+
+    // ✅ CLEAR CART
+    await clearUserCart(order.userId);
 
     res.json({
       success: true,
       message: "Manual payment confirmed successfully",
       data: order,
     });
-
   } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Internal Server Error",
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
