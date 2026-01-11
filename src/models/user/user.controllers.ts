@@ -330,7 +330,8 @@ export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void
   try {
     const users = await User.find().select(
       "-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified"
-    );
+    ).populate("address_details")
+
 
     res.status(200).json({ success: true, users });
   } catch (error) {
