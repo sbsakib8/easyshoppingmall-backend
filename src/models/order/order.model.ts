@@ -1,4 +1,4 @@
-import mongoose, { Model, Schema } from "mongoose";
+import mongoose, { Document, Model, Schema } from "mongoose";
 import { IOrder } from "./interface";
 
 const orderSchema = new Schema<IOrder>(
@@ -100,18 +100,20 @@ const orderSchema = new Schema<IOrder>(
 );
 
 // FIX PRE-HOOK TYPES
-orderSchema.pre<IOrder>("save", function (next) {
-  let subTotal = 0;
+orderSchema.pre<IOrder & Document>("save", function (next) {
+  if (this.isNew) {
+    let subTotal = 0;
 
-  this.products.forEach((p) => {
-    const quantity = Number(p.quantity) || 0;
-    const price = Number(p.price) || 0;
-    p.totalPrice = quantity * price;
-    subTotal += p.totalPrice;
-  });
+    this.products.forEach((p) => {
+      const quantity = Number(p.quantity) || 0;
+      const price = Number(p.price) || 0;
+      p.totalPrice = quantity * price;
+      subTotal += p.totalPrice;
+    });
 
-  this.subTotalAmt = subTotal;
-  this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0);
+    this.subTotalAmt = subTotal;
+    this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0);
+  }
 
   if (
     this.payment_method === "manual" &&

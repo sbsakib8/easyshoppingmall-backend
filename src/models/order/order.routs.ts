@@ -2,9 +2,9 @@ import express from "express";
 import { isAdmin } from "../../middlewares/isAdmin";
 import { isAuth } from "../../middlewares/isAuth";
 import {
-  confirmManualPayment,
-  createOrder, // Re-added createOrder
+  confirmManualPayment, // Re-added createOrder
   createManualOrder,
+  createOrder,
   getAllOrders,
   getMyOrders,
   getOrdersByStatus,
@@ -63,6 +63,6 @@ router.put("/:id/status", isAuth, isAdmin, updateOrderStatus);
  * @desc    Confirm manual payment by admin
  * @access  Private (Admin)
  */
-router.patch("/admin/orders/:id/verify", isAuth, isAdmin, confirmManualPayment);
+router.put("/admin/orders/:id/verify", isAuth, isAdmin, confirmManualPayment);
 
 export default router;
