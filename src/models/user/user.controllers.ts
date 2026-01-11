@@ -328,9 +328,44 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
 //  get all users
 export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const users = await User.find().select(
-      "-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified"
-    );
+    const users = await User.find().select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+      .populate("address_details")
+      .populate({
+        path: "shopping_cart",
+        populate: {
+          path: "products.productId",
+          model: "Product",
+          populate: {
+            path: "category",
+            select: "name"
+          }
+        },
+      })
+      .populate({
+        path: "orderHistory",
+        populate: [
+          {
+            path: "products.productId",
+            model: "Product",
+            populate: {
+              path: "category",
+              select: "name"
+            }
+          },
+          {
+            path: "cart",
+            model: "Cart",
+            populate: {
+              path: "products.productId",
+              model: "Product",
+              populate: {
+                path: "category",
+                select: "name"
+              }
+            }
+          },
+        ],
+      });
 
     res.status(200).json({ success: true, users });
   } catch (error) {
