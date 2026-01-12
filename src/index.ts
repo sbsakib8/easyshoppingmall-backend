@@ -2,6 +2,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import type { Application, Request, Response } from "express";
 import express from "express";
+import connectDB from "./config/db.connect";
 import addressRouter from "./models/address/address.routs";
 import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routs";
 import homeBannerRoutes from "./models/banners/homeBanner/homeBanner.routs";
@@ -15,11 +16,14 @@ import websiteInfo from "./models/content/websiteInfo/websiteinfo.routs";
 import notifications from "./models/notification/notification.routs";
 import orderRoute from './models/order/order.routs';
 import paymentRouter from './models/payment/payment.route';
+
+import adminRoutes from './models/admin/admin.route';
 import productRouter from "./models/product/product.routs";
+import reviewRouter from './models/review/review.routs';
 import subcategoriesRoutes from "./models/subcategory/subcategory.routs";
 import userRoutes from "./models/user/user.routs";
 import wishlistRouter from './models/wishlist/wishlist.routs';
-import connectDB from "./config/db.connect";
+
 // middleware
 const app: Application = express();
 app.use(express.json());
@@ -30,8 +34,8 @@ app.use(cookieParser());
 app.use(cors(
   {
     origin: ["http://localhost:3000",
-    "https://easyshoppingmallbd.com",
-    "https://easyshoppingmallbd.vercel.app"],
+      "https://easyshoppingmallbd.com",
+      "https://easyshoppingmallbd.vercel.app"],
     credentials: true,
   }
 ));
@@ -55,6 +59,9 @@ app.use("/api/cart", cartRouter)
 app.use("/api/orders", orderRoute)
 app.use("/api/wishlist", wishlistRouter)
 app.use("/api/payment", paymentRouter)
+app.use('/api/review', reviewRouter)
+
+app.use("/api/admin", adminRoutes)
 
 
 app.get("/", (req: Request, res: Response) => {

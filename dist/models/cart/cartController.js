@@ -5,19 +5,22 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clearCart = exports.removeFromCart = exports.updateCartItem = exports.getCart = exports.addToCart = void 0;
 const product_model_1 = __importDefault(require("../product/product.model"));
-const cardproduct_model_1 = require("./cardproduct.model");
+const user_model_1 = __importDefault(require("../user/user.model"));
+const cart_model_1 = require("./cart.model");
 /**
  * Helper to check if two cart items are the same variant
  */
 const isSameVariant = (item, productId, color, size, weight) => {
     if (item.productId.toString() !== productId)
         return false;
-    // Only match variant fields if they are provided
-    if (color != null && (item.color ?? null) !== color)
+    const itemColor = item.color ?? null;
+    const itemSize = item.size ?? null;
+    const itemWeight = item.weight ?? null;
+    if (color && itemColor !== color)
         return false;
-    if (size != null && (item.size ?? null) !== size)
+    if (size && itemSize !== size)
         return false;
-    if (weight != null && (item.weight ?? null) !== weight)
+    if (weight && itemWeight !== weight)
         return false;
     return true;
 };
@@ -28,7 +31,8 @@ const isSameVariant = (item, productId, color, size, weight) => {
  */
 const addToCart = async (req, res) => {
     try {
-        let { userId, productId, quantity, price, color, size, weight } = req.body;
+        let { productId, quantity, price, color, size, weight } = req.body;
+        const userId = req.userId;
         if (!userId || !productId || !quantity) {
             return res.status(400).json({ success: false, message: "Missing required fields" });
         }
@@ -49,9 +53,9 @@ const addToCart = async (req, res) => {
                 (product.productWeight?.length ? product.productWeight[0] : null);
         // 🔥 Price fallback
         price = price ?? product.price;
-        let cart = await cardproduct_model_1.CartModel.findOne({ userId });
+        let cart = await cart_model_1.CartModel.findOne({ userId });
         if (!cart) {
-            cart = new cardproduct_model_1.CartModel({
+            cart = new cart_model_1.CartModel({
                 userId,
                 products: [{
                         productId,
@@ -65,7 +69,7 @@ const addToCart = async (req, res) => {
             });
         }
         else {
-            const existingProduct = cart.products.find(item => isSameVariant(item, productId, color, size, weight));
+            const existingProduct = cart.products.find((item) => isSameVariant(item, productId, color, size, weight));
             if (existingProduct) {
                 existingProduct.quantity += quantity;
                 existingProduct.totalPrice = existingProduct.quantity * existingProduct.price;
@@ -85,6 +89,9 @@ const addToCart = async (req, res) => {
         cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);
         cart.totalAmt = cart.subTotalAmt;
         await cart.save();
+        await user_model_1.default.findByIdAndUpdate(userId, {
+            $addToSet: { shopping_cart: cart._id },
+        });
         res.json({
             success: true,
             message: "Product added to cart",
@@ -108,7 +115,7 @@ const getCart = async (req, res) => {
             return res.status(401).json({ success: false, message: "Unauthorized user" });
         }
         // const cart = await CartModel.findOne({ userId }).populate("products.productId");
-        const cart = await cardproduct_model_1.CartModel.findOne({ userId })
+        const cart = await cart_model_1.CartModel.findOne({ userId })
             .populate({
             path: "products.productId",
             populate: {
@@ -137,11 +144,11 @@ const updateCartItem = async (req, res) => {
         if (!userId || !productId || quantity == null) {
             return res.status(400).json({ success: false, message: "Missing required fields" });
         }
-        const cart = await cardproduct_model_1.CartModel.findOne({ userId });
+        const cart = await cart_model_1.CartModel.findOne({ userId });
         if (!cart) {
             return res.status(404).json({ success: false, message: "Cart not found" });
         }
-        const product = cart.products.find(item => isSameVariant(item, productId, color ?? undefined, size ?? undefined, weight ?? undefined));
+        const product = cart.products.find((item) => isSameVariant(item, productId, color ?? undefined, size ?? undefined, weight ?? undefined));
         if (!product) {
             return res.status(404).json({ success: false, message: "Cart item not found" });
         }
@@ -166,14 +173,23 @@ const removeFromCart = async (req, res) => {
     try {
         const { userId, productId } = req.params;
         const { color, size, weight } = req.query;
-        const cart = await cardproduct_model_1.CartModel.findOne({ userId });
+        const cart = await cart_model_1.CartModel.findOne({ userId });
         if (!cart) {
             return res.status(404).json({ success: false, message: "Cart not found" });
         }
-        cart.products = cart.products.filter(item => !isSameVariant(item, productId, color ? String(color) : undefined, size ? String(size) : undefined, weight ? String(weight) : undefined));
-        cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);
-        cart.totalAmt = cart.subTotalAmt;
-        await cart.save();
+        cart.products = cart.products.filter((item) => !isSameVariant(item, productId, color ? String(color) : undefined, size ? String(size) : undefined, weight ? String(weight) : undefined));
+        if (cart.products.length === 0) {
+            await cart_model_1.CartModel.findByIdAndDelete(cart._id);
+            await user_model_1.default.findByIdAndUpdate(userId, {
+                $pull: { shopping_cart: cart._id },
+            });
+            return res.json({ success: true, message: "Removed from cart and cart deleted" });
+        }
+        else {
+            cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);
+            cart.totalAmt = cart.subTotalAmt;
+            await cart.save();
+        }
         res.json({ success: true, message: "Removed from cart", data: cart });
     }
     catch (err) {
@@ -189,14 +205,16 @@ exports.removeFromCart = removeFromCart;
 const clearCart = async (req, res) => {
     try {
         const { userId } = req.params;
-        const cart = await cardproduct_model_1.CartModel.findOne({ userId });
+        const cart = await cart_model_1.CartModel.findOne({ userId });
         if (!cart) {
             return res.status(404).json({ success: false, message: "Cart not found" });
         }
-        cart.products = [];
-        cart.subTotalAmt = 0;
-        cart.totalAmt = 0;
-        await cart.save();
+        // Remove the cart reference from the user's shopping_cart
+        await user_model_1.default.findByIdAndUpdate(userId, {
+            $pull: { shopping_cart: cart._id },
+        });
+        // then delete the cart itself
+        await cart_model_1.CartModel.findByIdAndDelete(cart._id);
         return res.status(200).json({ success: true, message: "Cart cleared successfully" });
     }
     catch (error) {

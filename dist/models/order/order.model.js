@@ -34,7 +34,6 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const deliveryCharge_1 = require("../../utils/deliveryCharge");
 const orderSchema = new mongoose_1.Schema({
     userId: {
         type: mongoose_1.Schema.Types.ObjectId,
@@ -45,6 +44,11 @@ const orderSchema = new mongoose_1.Schema({
         type: String,
         required: true,
         unique: true,
+    },
+    cart: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Cart",
+        required: true,
     },
     // Product Details
     products: [
@@ -61,9 +65,14 @@ const orderSchema = new mongoose_1.Schema({
         },
     ],
     // Delivery Details
-    delivery_address: {
-        type: String,
-        required: true,
+    address: {
+        address_line: { type: String, required: true },
+        district: { type: String, default: "" },
+        division: { type: String, default: "" },
+        upazila_thana: { type: String, default: "" },
+        pincode: { type: String, default: "" },
+        country: { type: String, default: "" },
+        mobile: { type: Number, default: null },
     },
     deliveryCharge: {
         type: Number,
@@ -82,19 +91,29 @@ const orderSchema = new mongoose_1.Schema({
     },
     payment_type: {
         type: String,
-        enum: ["full", "delivery"],
+        enum: ["full", "advance", "delivery"],
         default: "full",
+        required: true,
     },
     payment_status: {
         type: String,
-        enum: ["pending", "paid", "failed", "refunded"],
+        enum: ["pending", "submitted", "paid", "failed", "refunded"],
         default: "pending",
     },
     payment_details: {
-        type: mongoose_1.Schema.Types.Mixed,
-        default: null,
+        manual: {
+            provider: { type: String },
+            senderNumber: { type: String },
+            transactionId: { type: String },
+            paidFor: { type: String, enum: ["full"] },
+        },
+        ssl: {
+            tran_id: { type: String },
+            val_id: { type: String },
+        },
     },
     paymentId: { type: String, default: "" },
+    tran_id: { type: String, index: true },
     invoice_receipt: { type: String, default: "" },
     // Order Status
     order_status: {
@@ -105,35 +124,28 @@ const orderSchema = new mongoose_1.Schema({
 }, { timestamps: true });
 // FIX PRE-HOOK TYPES
 orderSchema.pre("save", function (next) {
-    const order = this;
-    // product totals
-    order.products.forEach((p) => {
-        p.totalPrice = p.quantity * p.price;
-    });
-    // subtotal
-    order.subTotalAmt = order.products.reduce((sum, p) => sum + p.totalPrice, 0);
-    // delivery charge from address
-    const district = order.delivery_address;
-    order.deliveryCharge = (0, deliveryCharge_1.calculateDeliveryCharge)(district);
-    // final total
-    order.totalAmt = order.subTotalAmt + order.deliveryCharge;
-    // Calculate amount_paid and amount_due based on payment_status and payment_type
-    if (order.payment_status === "paid") {
-        if (order.payment_type === "delivery") {
-            // Only delivery charge is paid, products payment is due
-            order.amount_paid = order.deliveryCharge;
-            order.amount_due = order.subTotalAmt;
-        }
-        else {
-            // Full amount is paid
-            order.amount_paid = order.totalAmt;
-            order.amount_due = 0;
-        }
+    if (this.isNew) {
+        let subTotal = 0;
+        this.products.forEach((p) => {
+            const quantity = Number(p.quantity) || 0;
+            const price = Number(p.price) || 0;
+            p.totalPrice = quantity * price;
+            subTotal += p.totalPrice;
+        });
+        this.subTotalAmt = subTotal;
+        this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0);
     }
-    else {
-        // Nothing paid yet
-        order.amount_paid = 0;
-        order.amount_due = order.totalAmt;
+    if (this.payment_method === "manual" &&
+        this.payment_details &&
+        this.payment_details.manual // Check if manual property exists on payment_details
+    ) {
+        const manualDetails = this.payment_details.manual;
+        // Only validate if any of the manual payment details are actually provided
+        if (manualDetails.senderNumber !== undefined || manualDetails.transactionId !== undefined) {
+            if (!manualDetails.senderNumber || !manualDetails.transactionId) {
+                return next(new Error("Sender number and transaction ID are required for manual payment when details are provided."));
+            }
+        }
     }
     next();
 });

@@ -1,5 +1,4 @@
-import mongoose, { Model, Schema } from "mongoose";
-import { calculateDeliveryCharge } from "../../utils/deliveryCharge";
+import mongoose, { Document, Model, Schema } from "mongoose";
 import { IOrder } from "./interface";
 
 const orderSchema = new Schema<IOrder>(
@@ -14,6 +13,11 @@ const orderSchema = new Schema<IOrder>(
       type: String,
       required: true,
       unique: true,
+    },
+    cart: {
+      type: Schema.Types.ObjectId,
+      ref: "Cart",
+      required: true,
     },
 
     // Product Details
@@ -32,9 +36,14 @@ const orderSchema = new Schema<IOrder>(
     ],
 
     // Delivery Details
-    delivery_address: {
-      type: String,
-      required: true,
+    address: {
+      address_line: { type: String, required: true },
+      district: { type: String, default: "" },
+      division: { type: String, default: "" },
+      upazila_thana: { type: String, default: "" },
+      pincode: { type: String, default: "" },
+      country: { type: String, default: "" },
+      mobile: { type: Number, default: null },
     },
     deliveryCharge: {
       type: Number,
@@ -57,17 +66,27 @@ const orderSchema = new Schema<IOrder>(
       type: String,
       enum: ["full", "delivery"],
       default: "full",
+      required: true,
     },
     payment_status: {
       type: String,
-      enum: ["pending", "paid", "failed", "refunded"],
+      enum: ["pending", "submitted", "paid", "failed", "refunded"],
       default: "pending",
     },
     payment_details: {
-      type: Schema.Types.Mixed,
-      default: null,
+      manual: {
+        provider: { type: String },
+        senderNumber: { type: String },
+        transactionId: { type: String },
+        paidFor: { type: String, enum: ["full"] },
+      },
+      ssl: {
+        tran_id: { type: String },
+        val_id: { type: String },
+      },
     },
     paymentId: { type: String, default: "" },
+    tran_id: { type: String, index: true },
     invoice_receipt: { type: String, default: "" },
 
     // Order Status
@@ -81,47 +100,40 @@ const orderSchema = new Schema<IOrder>(
 );
 
 // FIX PRE-HOOK TYPES
-orderSchema.pre("save", function (next) {
-  const order = this as any;
+orderSchema.pre<IOrder & Document>("save", function (next) {
+  let subTotal = 0;
 
-  // product totals
-  order.products.forEach((p: any) => {
-    p.totalPrice = p.quantity * p.price;
+  this.products.forEach((p) => {
+    const quantity = Number(p.quantity) || 0;
+    const price = Number(p.price) || 0;
+    p.totalPrice = quantity * price;
+    subTotal += p.totalPrice;
   });
 
-  // subtotal
-  order.subTotalAmt = order.products.reduce(
-    (sum: number, p: any) => sum + p.totalPrice,
-    0
-  );
+  this.subTotalAmt = subTotal;
+  this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0);
 
-  // delivery charge from address
-  const district = order.delivery_address;
-  order.deliveryCharge = calculateDeliveryCharge(district);
+  if (
+    this.payment_method === "manual" &&
+    this.payment_details &&
+    this.payment_details.manual // Check if manual property exists on payment_details
+  ) {
+    const manualDetails = this.payment_details.manual;
 
-  // final total
-  order.totalAmt = order.subTotalAmt + order.deliveryCharge;
-
-  // Calculate amount_paid and amount_due based on payment_status and payment_type
-  if (order.payment_status === "paid") {
-    if (order.payment_type === "delivery") {
-      // Only delivery charge is paid, products payment is due
-      order.amount_paid = order.deliveryCharge;
-      order.amount_due = order.subTotalAmt;
-    } else {
-      // Full amount is paid
-      order.amount_paid = order.totalAmt;
-      order.amount_due = 0;
+    // Only validate if any of the manual payment details are actually provided
+    if (manualDetails.senderNumber !== undefined || manualDetails.transactionId !== undefined) {
+      if (!manualDetails.senderNumber || !manualDetails.transactionId) {
+        return next(
+          new Error(
+            "Sender number and transaction ID are required for manual payment when details are provided."
+          )
+        );
+      }
     }
-  } else {
-    // Nothing paid yet
-    order.amount_paid = 0;
-    order.amount_due = order.totalAmt;
   }
 
   next();
 });
-
 
 const OrderModel: Model<IOrder> = mongoose.model<IOrder>("Order", orderSchema);
 

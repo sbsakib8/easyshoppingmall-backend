@@ -4,10 +4,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.getAllUsers = exports.getUserProfile = exports.googleAuth = exports.resetpassword = exports.verifyotp = exports.sendotp = exports.signOut = exports.signIn = exports.signUp = void 0;
-const user_model_1 = __importDefault(require("../user/user.model"));
+const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 const genaretetoken_1 = __importDefault(require("../../utils/genaretetoken"));
 const nodemailer_1 = require("../../utils/nodemailer");
-const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
+const user_model_1 = __importDefault(require("../user/user.model"));
 // Cookie 
 const cookieOptions = {
     httpOnly: true,
@@ -37,10 +37,7 @@ const signUp = async (req, res) => {
         res.status(201).json({
             success: true,
             message: "User registered successfully",
-            id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
+            user,
         });
     }
     catch (error) {
@@ -52,7 +49,43 @@ exports.signUp = signUp;
 const signIn = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await user_model_1.default.findOne({ email });
+        const user = await user_model_1.default.findOne({ email }).populate("address_details")
+            .populate({
+            path: "shopping_cart",
+            populate: {
+                path: "products.productId",
+                model: "Product",
+                populate: {
+                    path: "category",
+                    select: "name"
+                }
+            },
+        })
+            .populate({
+            path: "orderHistory",
+            populate: [
+                {
+                    path: "products.productId",
+                    model: "Product",
+                    populate: {
+                        path: "category",
+                        select: "name"
+                    }
+                },
+                {
+                    path: "cart",
+                    model: "Cart",
+                    populate: {
+                        path: "products.productId",
+                        model: "Product",
+                        populate: {
+                            path: "category",
+                            select: "name"
+                        }
+                    }
+                },
+            ],
+        });
         if (!user) {
             res.status(401).json({ message: "user does not exist" });
             return;
@@ -73,10 +106,7 @@ const signIn = async (req, res) => {
         res.json({
             success: true,
             message: "User Signin successfully",
-            id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
+            user,
         });
     }
     catch (error) {
@@ -222,31 +252,64 @@ const googleAuth = async (req, res) => {
 exports.googleAuth = googleAuth;
 // user controller 
 const getUserProfile = async (req, res) => {
+    const userId = req.userId;
     try {
-        const userId = req.userId;
-        if (!userId) {
-            res.status(401).json({ success: false, message: "Unauthorized" });
-            return;
+        if (!req.userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
         }
-        const user = await user_model_1.default.findById(userId).select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified");
+        const user = await user_model_1.default.findById(userId)
+            .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+            .populate("address_details")
+            .populate({
+            path: "shopping_cart",
+            populate: {
+                path: "products.productId",
+                model: "Product",
+                populate: {
+                    path: "category",
+                    select: "name"
+                }
+            },
+        })
+            .populate({
+            path: "orderHistory",
+            populate: [
+                {
+                    path: "products.productId",
+                    model: "Product",
+                    populate: {
+                        path: "category",
+                        select: "name"
+                    }
+                },
+                {
+                    path: "cart",
+                    model: "Cart",
+                    populate: {
+                        path: "products.productId",
+                        model: "Product",
+                        populate: {
+                            path: "category",
+                            select: "name"
+                        }
+                    }
+                },
+            ],
+        });
         if (!user) {
-            res.status(404).json({ success: false, message: "User not found" });
-            return;
+            return res.status(404).json({ success: false, message: "User not found" });
         }
         res.status(200).json({ success: true, user });
     }
     catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 exports.getUserProfile = getUserProfile;
 //  get all users
 const getAllUsers = async (req, res) => {
     try {
-        const users = await user_model_1.default.find().select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified");
+        const users = await user_model_1.default.find().select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified").populate("address_details");
         res.status(200).json({ success: true, users });
     }
     catch (error) {
@@ -260,34 +323,60 @@ exports.getAllUsers = getAllUsers;
 // user imge push 
 const userImage = async (req, res) => {
     try {
-        const userId = req.params.id;
-        if (!userId) {
-            return res.status(400).json({ message: "User ID is required" });
+        if (req.userId !== req.params.id) {
+            return res.status(403).json({ message: "Forbidden" });
         }
-        let imageUrl;
-        if (req.file) {
-            imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
-        }
-        else {
+        if (!req.file) {
             return res.status(400).json({ message: "No image file provided" });
         }
-        const updatedUser = await user_model_1.default.findByIdAndUpdate(userId, { image: imageUrl }, { new: true });
-        if (!updatedUser) {
-            return res.status(404).json({ message: "User not found" });
-        }
+        const imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
+        const user = await user_model_1.default.findByIdAndUpdate(req.userId, { image: imageUrl }, { new: true })
+            .select("-password")
+            .populate("address_details")
+            .populate({
+            path: "shopping_cart",
+            populate: {
+                path: "products.productId",
+                model: "Product",
+                populate: {
+                    path: "category",
+                    select: "name"
+                }
+            },
+        })
+            .populate({
+            path: "orderHistory",
+            populate: [
+                {
+                    path: "products.productId",
+                    model: "Product",
+                    populate: {
+                        path: "category",
+                        select: "name"
+                    }
+                },
+                {
+                    path: "cart",
+                    model: "Cart",
+                    populate: {
+                        path: "products.productId",
+                        model: "Product",
+                        populate: {
+                            path: "category",
+                            select: "name"
+                        }
+                    }
+                },
+            ],
+        });
         res.status(200).json({
-            message: "Profile image updated successfully ✅",
             success: true,
-            image: imageUrl,
-            user: updatedUser,
+            message: "Profile image updated successfully",
+            user,
         });
     }
     catch (error) {
-        console.error(error);
-        res.status(500).json({
-            message: error.message || "Server error",
-            success: false,
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 exports.userImage = userImage;
@@ -295,33 +384,68 @@ exports.userImage = userImage;
 const updateUserProfile = async (req, res) => {
     try {
         const userId = req.params.id;
-        const { name, email, mobile, customerstatus, image, status, verify_email, role, } = req.body;
+        if (req.userId !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden",
+            });
+        }
+        const { name, email, mobile, gender, date_of_birth, address_details, // ✅ correct field
+         } = req.body;
         const user = await user_model_1.default.findById(userId);
         if (!user) {
-            res.status(404).json({ success: false, message: "User not found" });
-            return;
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
         }
-        if (name !== undefined)
+        if (name)
             user.name = name;
-        if (email !== undefined)
+        if (email)
             user.email = email;
-        if (mobile !== undefined)
+        if (mobile)
             user.mobile = mobile;
-        if (customerstatus !== undefined)
-            user.customerstatus = customerstatus;
-        if (image !== undefined)
-            user.image = image;
-        if (status !== undefined)
-            user.status = status;
-        if (verify_email !== undefined)
-            user.verify_email = verify_email;
-        if (role !== undefined)
-            user.role = role;
+        if (gender)
+            user.gender = gender;
+        if (date_of_birth)
+            user.date_of_birth = date_of_birth;
+        // ✅ update address ONLY if provided
+        if (address_details) {
+            user.address_details = Array.isArray(address_details)
+                ? address_details
+                : [address_details];
+        }
         await user.save();
+        const populatedUser = await user_model_1.default.findById(user._id)
+            .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+            .populate("address_details")
+            .populate({
+            path: "shopping_cart",
+            populate: {
+                path: "products.productId",
+                populate: { path: "category", select: "name" },
+            },
+        })
+            .populate({
+            path: "orderHistory",
+            populate: [
+                {
+                    path: "products.productId",
+                    populate: { path: "category", select: "name" },
+                },
+                {
+                    path: "cart",
+                    populate: {
+                        path: "products.productId",
+                        populate: { path: "category", select: "name" },
+                    },
+                },
+            ],
+        });
         res.status(200).json({
             success: true,
             message: "Profile updated successfully",
-            user,
+            user: populatedUser,
         });
     }
     catch (error) {

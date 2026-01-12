@@ -51,19 +51,19 @@ const userSchema = new mongoose_1.default.Schema({
     address_details: [
         {
             type: mongoose_1.default.Schema.ObjectId,
-            ref: 'address'
+            ref: 'Address'
         }
     ],
     shopping_cart: [
         {
             type: mongoose_1.default.Schema.ObjectId,
-            ref: 'cartProduct'
+            ref: 'Cart'
         }
     ],
     orderHistory: [
         {
             type: mongoose_1.default.Schema.ObjectId,
-            ref: 'order'
+            ref: 'Order'
         }
     ],
     forgot_password_otp: {
@@ -82,6 +82,15 @@ const userSchema = new mongoose_1.default.Schema({
         type: String,
         enum: ['ADMIN', "USER"],
         default: "USER"
+    },
+    date_of_birth: {
+        type: Date,
+        default: null,
+    },
+    gender: {
+        type: String,
+        enum: ["Male", "Female", "Other"],
+        default: null,
     }
 }, { timestamps: true });
 userSchema.pre("save", async function (next) {

@@ -1,8 +1,8 @@
 import express from "express";
-import { deleteUser, getAllUsers, getUserProfile, googleAuth, resetpassword, sendotp, signIn, signOut, signUp, updateUserProfile, userImage, verifyotp } from "./user.controllers";
+import { isAdmin } from "../../middlewares/isAdmin";
 import { isAuth } from "../../middlewares/isAuth";
 import { upload } from "../../middlewares/multer";
-import { isAdmin } from "../../middlewares/isAdmin";
+import { deleteUser, getAllUsers, getUserProfile, googleAuth, resetpassword, sendotp, signIn, signOut, signUp, updateUserProfile, userImage, verifyotp } from "./user.controllers";
 
 const router = express.Router();
 
@@ -16,14 +16,14 @@ router.post("/verify-otp", verifyotp);
 router.post("/reset-password", resetpassword);
 
 // google auth
- router.post("/google-auth", googleAuth);
+router.post("/google-auth", googleAuth);
 
 //  user routes
-router.get("/userprofile",isAuth, getUserProfile);
-router.get("/getallusers",isAuth,isAdmin, getAllUsers);
+router.get("/userprofile", isAuth, getUserProfile);
+router.get("/getallusers", isAuth, isAdmin, getAllUsers);
 router.delete("/userdelete/:id", isAuth, isAdmin, deleteUser);
-router.put("/userupdate/:id",isAuth,isAdmin, updateUserProfile);
-router.post("/user-image/:id",isAuth,upload.single("image"), userImage);
+router.put("/userupdate/:id", isAuth, updateUserProfile);
+router.put("/user-image/:id", isAuth, upload.single("image"), userImage);
 
 
 export default router;

@@ -12,7 +12,7 @@ export interface IUser extends Document {
     verify_email?: boolean;
     last_login_date?: Date | null;
     status: "Active" | "Inactive" | "Blocked";
-    customerstatus: "NewCustomer"| "TopCustomer" | "ReturningCustomer" | "VIPCustomer" | "WholesaleCustomer" | "Reseller" | "3starCustomer" | "4starCustomer" | "5starCustomer" ;
+    customerstatus: "NewCustomer" | "TopCustomer" | "ReturningCustomer" | "VIPCustomer" | "WholesaleCustomer" | "Reseller" | "3starCustomer" | "4starCustomer" | "5starCustomer";
     address_details: Types.ObjectId[];
     shopping_cart: Types.ObjectId[];
     orderHistory: Types.ObjectId[];
@@ -20,6 +20,8 @@ export interface IUser extends Document {
     forgot_password_expiry?: Date | null;
     isotpverified?: boolean;
     role: "ADMIN" | "USER";
+    date_of_birth?: Date | null;
+    gender?: "Male" | "Female" | "Other" | null;
     createdAt?: Date;
     updatedAt?: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -61,30 +63,30 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
         },
         status: {
             type: String,
-            enum: [ 'Active', 'Inactive', 'Blocked' ],
+            enum: ['Active', 'Inactive', 'Blocked'],
             default: "Active"
         },
         customerstatus: {
             type: String,
-            enum: [ 'NewCustomer', 'TopCustomer', 'ReturningCustomer', 'VIPCustomer', 'WholesaleCustomer', 'Reseller', '3starCustomer', '4starCustomer', '5starCustomer' ],
+            enum: ['NewCustomer', 'TopCustomer', 'ReturningCustomer', 'VIPCustomer', 'WholesaleCustomer', 'Reseller', '3starCustomer', '4starCustomer', '5starCustomer'],
             default: "NewCustomer"
         },
         address_details: [
             {
                 type: mongoose.Schema.ObjectId,
-                ref: 'address'
+                ref: 'Address'
             }
         ],
         shopping_cart: [
             {
                 type: mongoose.Schema.ObjectId,
-                ref: 'cartProduct'
+                ref: 'Cart'
             }
         ],
         orderHistory: [
             {
                 type: mongoose.Schema.ObjectId,
-                ref: 'order'
+                ref: 'Order'
             }
         ],
         forgot_password_otp: {
@@ -103,6 +105,15 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
             type: String,
             enum: ['ADMIN', "USER"],
             default: "USER"
+        },
+        date_of_birth: {
+            type: Date,
+            default: null,
+        },
+        gender: {
+            type: String,
+            enum: ["Male", "Female", "Other"],
+            default: null,
         }
     },
     { timestamps: true }

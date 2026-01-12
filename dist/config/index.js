@@ -14,5 +14,7 @@ const processdata = {
     cloudname: process.env.CLOUD_NAME || " ",
     cloudapikey: process.env.CLOUD_API_KEY || " ",
     cloudapisecret: process.env.CLOUD_API_SECRET || " ",
+    sslcommerzstoreid: process.env.SSLC_STORE_ID || " ",
+    sslcommerzstorepassword: process.env.SSLC_STORE_PASSWORD || " ",
 };
 exports.default = processdata;
