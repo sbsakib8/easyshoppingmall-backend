@@ -202,12 +202,20 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
 // POST /order/manual-payment
 export const ManualPayment = async (req: Request, res: Response) => {
   try {
-    const { orderId, provider, senderNumber, transactionId } = req.body;
+    const { orderId, provider, senderNumber, transactionId, payment_type } = req.body;
 
     if (!orderId || !provider || !senderNumber || !transactionId) {
       return res.status(400).json({
         success: false,
         message: "Order ID, provider, sender number, and transaction ID are required.",
+      });
+    }
+
+    const allowedManualProviders = ["bkash", "nagad", "rocket", "upay"];
+    if (!allowedManualProviders.includes(provider)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid manual payment provider. Must be one of: ${allowedManualProviders.join(", ")}.`,
       });
     }
 
@@ -235,6 +243,10 @@ export const ManualPayment = async (req: Request, res: Response) => {
     };
     order.payment_status = "submitted";
     // order_status remains 'pending' until admin verification
+
+    if (payment_type) {
+      order.payment_type = payment_type;
+    }
 
     await order.save();
 
@@ -324,7 +336,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       payment_method: "manual",
       payment_status: "pending",
       payment_details: {},
-      payment_type: "full",
+      payment_type: req.body.payment_type || "full",
       order_status: "pending",
       deliveryCharge: deliveryChargeFromReq,
     });
@@ -334,6 +346,9 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
     await UserModel.findByIdAndUpdate(userId, {
       $push: { orderHistory: order._id },
     });
+
+    // Clear the user's cart
+    await clearUserCart(userId);
 
     res.status(201).json({
       success: true,
@@ -431,19 +446,36 @@ export const confirmManualPayment = async (req: Request, res: Response) => {
         message: "Manual payment not submitted or already processed",
       });
     }
+    const allowedManualProviders = ["bkash", "nagad", "rocket", "upay"];
+    const submittedProvider = order.payment_details?.manual?.provider;
+
+    if (!submittedProvider || !allowedManualProviders.includes(submittedProvider)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid or missing manual payment provider in submission. Must be one of: ${allowedManualProviders.join(", ")}.`,
+      });
+    }
 
     order.payment_status = "paid";
     order.order_status = "processing";
 
-    if (order.payment_type === "delivery") {
-      order.amount_paid = order.deliveryCharge;
-      order.amount_due = order.subTotalAmt;
-    } else {
-      order.amount_paid = order.totalAmt;
-      order.amount_due = 0;
+    // Ensure totalAmt and subTotalAmt are up-to-date before calculating paid/due amounts
+    await order.save(); // This will trigger the pre-save hook to recalculate totals
+    const updatedOrder = await OrderModel.findById(order._id); // Re-fetch the updated order document
+
+    if (!updatedOrder) {
+      return res.status(404).json({ success: false, message: "Order not found after update" });
     }
 
-    await order.save();
+    if (updatedOrder.payment_type === "delivery") {
+      updatedOrder.amount_paid = updatedOrder.deliveryCharge;
+      updatedOrder.amount_due = updatedOrder.totalAmt - updatedOrder.deliveryCharge;
+    } else { // Handles 'full' payment type
+      updatedOrder.amount_paid = updatedOrder.totalAmt;
+      updatedOrder.amount_due = 0;
+    }
+
+    await updatedOrder.save(); // Save the order with updated paid/due amounts
 
     // ✅ CLEAR CART
     await clearUserCart(order.userId);

@@ -3,6 +3,7 @@ import { AuthRequest } from "../../middlewares/isAuth";
 import uploadClouinary from "../../utils/cloudinary";
 import generateToken from "../../utils/genaretetoken";
 import { sendEmail } from "../../utils/nodemailer";
+import AddressModel from "../address/address.model";
 import type { IUser } from "../user/user.model";
 import User from "../user/user.model";
 
@@ -51,8 +52,19 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email }).populate("address_details")
-      .populate({
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      res.status(401).json({ message: "user does not exist" });
+      return;
+    }
+
+    await user.populate([
+      {
+        path: "address_details",
+        match: { userId: user._id },
+      },
+      {
         path: "shopping_cart",
         populate: {
           path: "products.productId",
@@ -62,8 +74,8 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
             select: "name"
           }
         },
-      })
-      .populate({
+      },
+      {
         path: "orderHistory",
         populate: [
           {
@@ -87,11 +99,8 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
             }
           },
         ],
-      });
-    if (!user) {
-      res.status(401).json({ message: "user does not exist" });
-      return;
-    }
+      }
+    ]);
     const ismatch = await user.comparePassword(password);
     if (!ismatch) {
       res.status(401).json({ message: "incorrect password" });
@@ -361,7 +370,10 @@ export const userImage = async (req: AuthRequest, res: Response) => {
       { new: true }
     )
       .select("-password")
-      .populate("address_details")
+      .populate({
+        path: "address_details",
+        match: { userId: req.userId },
+      })
       .populate({
         path: "shopping_cart",
         populate: {
@@ -409,8 +421,6 @@ export const userImage = async (req: AuthRequest, res: Response) => {
   }
 };
 
-
-
 // user update profile
 export const updateUserProfile = async (req: AuthRequest, res: Response) => {
   try {
@@ -429,7 +439,7 @@ export const updateUserProfile = async (req: AuthRequest, res: Response) => {
       mobile,
       gender,
       date_of_birth,
-      address_details, // ✅ correct field
+      address_details,
     } = req.body;
 
     const user = await User.findById(userId);
@@ -446,11 +456,18 @@ export const updateUserProfile = async (req: AuthRequest, res: Response) => {
     if (gender) user.gender = gender;
     if (date_of_birth) user.date_of_birth = date_of_birth;
 
-    // ✅ update address ONLY if provided
-    if (address_details) {
-      user.address_details = Array.isArray(address_details)
-        ? address_details
-        : [address_details];
+    if (address_details && Array.isArray(address_details)) {
+      for (const addr of address_details) {
+        if (addr._id) {
+          // Update existing address
+          await AddressModel.findByIdAndUpdate(addr._id, addr);
+        } else {
+          // Create new address
+          const newAddress = new AddressModel({ ...addr, userId });
+          const savedAddress = await newAddress.save();
+          user.address_details.push(savedAddress._id);
+        }
+      }
     }
 
     await user.save();
@@ -496,11 +513,6 @@ export const updateUserProfile = async (req: AuthRequest, res: Response) => {
 };
 
 
-
-
-
-
-
 // delete user
 export const deleteUser = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -511,12 +523,10 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
     res.status(200).json({ success: true, message: "User deleted successfully" });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({
       success: false,
       message: (error as Error).message,
     });
   }
 };
-
-
