@@ -36,7 +36,7 @@ export interface IOrder {
   amount_due?: number;
   deliveryCharge: number;
   payment_method: string;
-  payment_type: "full" | "advance" | "delivery";
+  payment_type: "full" | "delivery";
   payment_status: "pending" | "submitted" | "paid" | "failed" | "refunded";
   payment_details: {
     manual?: {

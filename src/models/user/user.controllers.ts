@@ -3,9 +3,9 @@ import { AuthRequest } from "../../middlewares/isAuth";
 import uploadClouinary from "../../utils/cloudinary";
 import generateToken from "../../utils/genaretetoken";
 import { sendEmail } from "../../utils/nodemailer";
+import AddressModel from "../address/address.model";
 import type { IUser } from "../user/user.model";
 import User from "../user/user.model";
-import AddressModel from "../address/address.model";
 
 // Cookie 
 const cookieOptions: CookieOptions = {
@@ -52,11 +52,19 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email }).populate({
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      res.status(401).json({ message: "user does not exist" });
+      return;
+    }
+
+    await user.populate([
+      {
         path: "address_details",
-        match: { userId: "user._id" },
-      })
-      .populate({
+        match: { userId: user._id },
+      },
+      {
         path: "shopping_cart",
         populate: {
           path: "products.productId",
@@ -66,8 +74,8 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
             select: "name"
           }
         },
-      })
-      .populate({
+      },
+      {
         path: "orderHistory",
         populate: [
           {
@@ -91,11 +99,8 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
             }
           },
         ],
-      });
-    if (!user) {
-      res.status(401).json({ message: "user does not exist" });
-      return;
-    }
+      }
+    ]);
     const ismatch = await user.comparePassword(password);
     if (!ismatch) {
       res.status(401).json({ message: "incorrect password" });
@@ -279,10 +284,7 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
 
     const user = await User.findById(userId)
       .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
-      .populate({
-        path: "address_details",
-        match: { userId: userId },
-      })
+      .populate("address_details")
       .populate({
         path: "shopping_cart",
         populate: {
