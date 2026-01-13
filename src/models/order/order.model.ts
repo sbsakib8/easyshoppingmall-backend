@@ -78,7 +78,7 @@ const orderSchema = new Schema<IOrder>(
         provider: { type: String },
         senderNumber: { type: String },
         transactionId: { type: String },
-        paidFor: { type: String, enum: ["full"] },
+        paidFor: { type: String, enum: ["full", "delivery"] },
       },
       ssl: {
         tran_id: { type: String },

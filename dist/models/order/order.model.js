@@ -91,7 +91,7 @@ const orderSchema = new mongoose_1.Schema({
     },
     payment_type: {
         type: String,
-        enum: ["full", "advance", "delivery"],
+        enum: ["full", "delivery"],
         default: "full",
         required: true,
     },
@@ -105,7 +105,7 @@ const orderSchema = new mongoose_1.Schema({
             provider: { type: String },
             senderNumber: { type: String },
             transactionId: { type: String },
-            paidFor: { type: String, enum: ["full"] },
+            paidFor: { type: String, enum: ["full", "delivery"] },
         },
         ssl: {
             tran_id: { type: String },
@@ -124,17 +124,15 @@ const orderSchema = new mongoose_1.Schema({
 }, { timestamps: true });
 // FIX PRE-HOOK TYPES
 orderSchema.pre("save", function (next) {
-    if (this.isNew) {
-        let subTotal = 0;
-        this.products.forEach((p) => {
-            const quantity = Number(p.quantity) || 0;
-            const price = Number(p.price) || 0;
-            p.totalPrice = quantity * price;
-            subTotal += p.totalPrice;
-        });
-        this.subTotalAmt = subTotal;
-        this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0);
-    }
+    let subTotal = 0;
+    this.products.forEach((p) => {
+        const quantity = Number(p.quantity) || 0;
+        const price = Number(p.price) || 0;
+        p.totalPrice = quantity * price;
+        subTotal += p.totalPrice;
+    });
+    this.subTotalAmt = subTotal;
+    this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0);
     if (this.payment_method === "manual" &&
         this.payment_details &&
         this.payment_details.manual // Check if manual property exists on payment_details
