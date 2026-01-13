@@ -1,4 +1,4 @@
-import mongoose, { Document, Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 
 // Order Product Interface
 export interface IOrderProduct {
@@ -43,7 +43,7 @@ export interface IOrder {
       provider?: string;
       senderNumber?: string; // Renamed from providerNumber
       transactionId?: string;
-      paidFor?: "full";
+      paidFor?: "full" | "delivery";
     };
     ssl?: {
       tran_id?: string;

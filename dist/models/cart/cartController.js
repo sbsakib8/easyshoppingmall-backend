@@ -179,11 +179,14 @@ const removeFromCart = async (req, res) => {
         }
         cart.products = cart.products.filter((item) => !isSameVariant(item, productId, color ? String(color) : undefined, size ? String(size) : undefined, weight ? String(weight) : undefined));
         if (cart.products.length === 0) {
-            await cart_model_1.CartModel.findByIdAndDelete(cart._id);
-            await user_model_1.default.findByIdAndUpdate(userId, {
-                $pull: { shopping_cart: cart._id },
+            cart.subTotalAmt = 0;
+            cart.totalAmt = 0;
+            await cart.save();
+            return res.json({
+                success: true,
+                message: "Cart is now empty",
+                data: cart,
             });
-            return res.json({ success: true, message: "Removed from cart and cart deleted" });
         }
         else {
             cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);
@@ -205,20 +208,29 @@ exports.removeFromCart = removeFromCart;
 const clearCart = async (req, res) => {
     try {
         const { userId } = req.params;
-        const cart = await cart_model_1.CartModel.findOne({ userId });
+        let cart = await cart_model_1.CartModel.findOne({ userId });
         if (!cart) {
-            return res.status(404).json({ success: false, message: "Cart not found" });
+            cart = await cart_model_1.CartModel.create({
+                userId,
+                products: [],
+                subTotalAmt: 0,
+                totalAmt: 0,
+            });
         }
-        // Remove the cart reference from the user's shopping_cart
-        await user_model_1.default.findByIdAndUpdate(userId, {
-            $pull: { shopping_cart: cart._id },
+        else {
+            cart.products = [];
+            cart.subTotalAmt = 0;
+            cart.totalAmt = 0;
+            await cart.save();
+        }
+        return res.status(200).json({
+            success: true,
+            message: "Cart cleared successfully",
+            data: cart,
         });
-        // then delete the cart itself
-        await cart_model_1.CartModel.findByIdAndDelete(cart._id);
-        return res.status(200).json({ success: true, message: "Cart cleared successfully" });
     }
     catch (error) {
-        return res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 exports.clearCart = clearCart;

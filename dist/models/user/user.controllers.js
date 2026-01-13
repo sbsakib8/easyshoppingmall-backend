@@ -49,22 +49,19 @@ exports.signUp = signUp;
 const signIn = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await user_model_1.default.findOne({ email }).populate("address_details")
-            .populate({
-            path: "shopping_cart",
-            populate: {
-                path: "products.productId",
-                model: "Product",
-                populate: {
-                    path: "category",
-                    select: "name"
-                }
+        const user = await user_model_1.default.findOne({ email });
+        if (!user) {
+            res.status(401).json({ message: "user does not exist" });
+            return;
+        }
+        await user.populate([
+            {
+                path: "address_details",
+                match: { userId: user._id },
             },
-        })
-            .populate({
-            path: "orderHistory",
-            populate: [
-                {
+            {
+                path: "shopping_cart",
+                populate: {
                     path: "products.productId",
                     model: "Product",
                     populate: {
@@ -72,24 +69,33 @@ const signIn = async (req, res) => {
                         select: "name"
                     }
                 },
-                {
-                    path: "cart",
-                    model: "Cart",
-                    populate: {
+            },
+            {
+                path: "orderHistory",
+                populate: [
+                    {
                         path: "products.productId",
                         model: "Product",
                         populate: {
                             path: "category",
                             select: "name"
                         }
-                    }
-                },
-            ],
-        });
-        if (!user) {
-            res.status(401).json({ message: "user does not exist" });
-            return;
-        }
+                    },
+                    {
+                        path: "cart",
+                        model: "Cart",
+                        populate: {
+                            path: "products.productId",
+                            model: "Product",
+                            populate: {
+                                path: "category",
+                                select: "name"
+                            }
+                        }
+                    },
+                ],
+            }
+        ]);
         const ismatch = await user.comparePassword(password);
         if (!ismatch) {
             res.status(401).json({ message: "incorrect password" });
@@ -332,7 +338,10 @@ const userImage = async (req, res) => {
         const imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
         const user = await user_model_1.default.findByIdAndUpdate(req.userId, { image: imageUrl }, { new: true })
             .select("-password")
-            .populate("address_details")
+            .populate({
+            path: "address_details",
+            match: { userId: req.userId },
+        })
             .populate({
             path: "shopping_cart",
             populate: {
@@ -384,68 +393,33 @@ exports.userImage = userImage;
 const updateUserProfile = async (req, res) => {
     try {
         const userId = req.params.id;
-        if (req.userId !== userId) {
-            return res.status(403).json({
-                success: false,
-                message: "Forbidden",
-            });
-        }
-        const { name, email, mobile, gender, date_of_birth, address_details, // ✅ correct field
-         } = req.body;
+        const { name, email, mobile, customerstatus, image, status, verify_email, role, } = req.body;
         const user = await user_model_1.default.findById(userId);
         if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found",
-            });
+            res.status(404).json({ success: false, message: "User not found" });
+            return;
         }
-        if (name)
+        if (name !== undefined)
             user.name = name;
-        if (email)
+        if (email !== undefined)
             user.email = email;
-        if (mobile)
+        if (mobile !== undefined)
             user.mobile = mobile;
-        if (gender)
-            user.gender = gender;
-        if (date_of_birth)
-            user.date_of_birth = date_of_birth;
-        // ✅ update address ONLY if provided
-        if (address_details) {
-            user.address_details = Array.isArray(address_details)
-                ? address_details
-                : [address_details];
-        }
+        if (customerstatus !== undefined)
+            user.customerstatus = customerstatus;
+        if (image !== undefined)
+            user.image = image;
+        if (status !== undefined)
+            user.status = status;
+        if (verify_email !== undefined)
+            user.verify_email = verify_email;
+        if (role !== undefined)
+            user.role = role;
         await user.save();
-        const populatedUser = await user_model_1.default.findById(user._id)
-            .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
-            .populate("address_details")
-            .populate({
-            path: "shopping_cart",
-            populate: {
-                path: "products.productId",
-                populate: { path: "category", select: "name" },
-            },
-        })
-            .populate({
-            path: "orderHistory",
-            populate: [
-                {
-                    path: "products.productId",
-                    populate: { path: "category", select: "name" },
-                },
-                {
-                    path: "cart",
-                    populate: {
-                        path: "products.productId",
-                        populate: { path: "category", select: "name" },
-                    },
-                },
-            ],
-        });
         res.status(200).json({
             success: true,
             message: "Profile updated successfully",
-            user: populatedUser,
+            user,
         });
     }
     catch (error) {
