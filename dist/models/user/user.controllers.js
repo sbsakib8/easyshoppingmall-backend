@@ -7,6 +7,7 @@ exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.get
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 const genaretetoken_1 = __importDefault(require("../../utils/genaretetoken"));
 const nodemailer_1 = require("../../utils/nodemailer");
+const address_model_1 = __importDefault(require("../address/address.model"));
 const user_model_1 = __importDefault(require("../user/user.model"));
 // Cookie 
 const cookieOptions = {
@@ -49,22 +50,19 @@ exports.signUp = signUp;
 const signIn = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await user_model_1.default.findOne({ email }).populate("address_details")
-            .populate({
-            path: "shopping_cart",
-            populate: {
-                path: "products.productId",
-                model: "Product",
-                populate: {
-                    path: "category",
-                    select: "name"
-                }
+        const user = await user_model_1.default.findOne({ email });
+        if (!user) {
+            res.status(401).json({ message: "user does not exist" });
+            return;
+        }
+        await user.populate([
+            {
+                path: "address_details",
+                match: { userId: user._id },
             },
-        })
-            .populate({
-            path: "orderHistory",
-            populate: [
-                {
+            {
+                path: "shopping_cart",
+                populate: {
                     path: "products.productId",
                     model: "Product",
                     populate: {
@@ -72,24 +70,33 @@ const signIn = async (req, res) => {
                         select: "name"
                     }
                 },
-                {
-                    path: "cart",
-                    model: "Cart",
-                    populate: {
+            },
+            {
+                path: "orderHistory",
+                populate: [
+                    {
                         path: "products.productId",
                         model: "Product",
                         populate: {
                             path: "category",
                             select: "name"
                         }
-                    }
-                },
-            ],
-        });
-        if (!user) {
-            res.status(401).json({ message: "user does not exist" });
-            return;
-        }
+                    },
+                    {
+                        path: "cart",
+                        model: "Cart",
+                        populate: {
+                            path: "products.productId",
+                            model: "Product",
+                            populate: {
+                                path: "category",
+                                select: "name"
+                            }
+                        }
+                    },
+                ],
+            }
+        ]);
         const ismatch = await user.comparePassword(password);
         if (!ismatch) {
             res.status(401).json({ message: "incorrect password" });
@@ -332,7 +339,10 @@ const userImage = async (req, res) => {
         const imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
         const user = await user_model_1.default.findByIdAndUpdate(req.userId, { image: imageUrl }, { new: true })
             .select("-password")
-            .populate("address_details")
+            .populate({
+            path: "address_details",
+            match: { userId: req.userId },
+        })
             .populate({
             path: "shopping_cart",
             populate: {
@@ -390,8 +400,7 @@ const updateUserProfile = async (req, res) => {
                 message: "Forbidden",
             });
         }
-        const { name, email, mobile, gender, date_of_birth, address_details, // ✅ correct field
-         } = req.body;
+        const { name, email, mobile, gender, date_of_birth, address_details, } = req.body;
         const user = await user_model_1.default.findById(userId);
         if (!user) {
             return res.status(404).json({
@@ -409,11 +418,19 @@ const updateUserProfile = async (req, res) => {
             user.gender = gender;
         if (date_of_birth)
             user.date_of_birth = date_of_birth;
-        // ✅ update address ONLY if provided
-        if (address_details) {
-            user.address_details = Array.isArray(address_details)
-                ? address_details
-                : [address_details];
+        if (address_details && Array.isArray(address_details)) {
+            for (const addr of address_details) {
+                if (addr._id) {
+                    // Update existing address
+                    await address_model_1.default.findByIdAndUpdate(addr._id, addr);
+                }
+                else {
+                    // Create new address
+                    const newAddress = new address_model_1.default({ ...addr, userId });
+                    const savedAddress = await newAddress.save();
+                    user.address_details.push(savedAddress._id);
+                }
+            }
         }
         await user.save();
         const populatedUser = await user_model_1.default.findById(user._id)

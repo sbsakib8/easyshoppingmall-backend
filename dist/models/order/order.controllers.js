@@ -174,11 +174,18 @@ exports.updateOrderStatus = updateOrderStatus;
 // POST /order/manual-payment
 const ManualPayment = async (req, res) => {
     try {
-        const { orderId, provider, senderNumber, transactionId } = req.body;
+        const { orderId, provider, senderNumber, transactionId, payment_type } = req.body;
         if (!orderId || !provider || !senderNumber || !transactionId) {
             return res.status(400).json({
                 success: false,
                 message: "Order ID, provider, sender number, and transaction ID are required.",
+            });
+        }
+        const allowedManualProviders = ["bkash", "nagad", "rocket", "upay"];
+        if (!allowedManualProviders.includes(provider)) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid manual payment provider. Must be one of: ${allowedManualProviders.join(", ")}.`,
             });
         }
         const order = await order_model_1.default.findById(orderId);
@@ -202,6 +209,9 @@ const ManualPayment = async (req, res) => {
         };
         order.payment_status = "submitted";
         // order_status remains 'pending' until admin verification
+        if (payment_type) {
+            order.payment_type = payment_type;
+        }
         await order.save();
         // Add the order to the user's order history
         await user_model_1.default.findByIdAndUpdate(order.userId, {
@@ -276,7 +286,7 @@ const createManualOrder = async (req, res) => {
             payment_method: "manual",
             payment_status: "pending",
             payment_details: {},
-            payment_type: "full",
+            payment_type: req.body.payment_type || "full",
             order_status: "pending",
             deliveryCharge: deliveryChargeFromReq,
         });
@@ -284,6 +294,8 @@ const createManualOrder = async (req, res) => {
         await user_model_1.default.findByIdAndUpdate(userId, {
             $push: { orderHistory: order._id },
         });
+        // Clear the user's cart
+        await (0, cart_utils_1.clearUserCart)(userId);
         res.status(201).json({
             success: true,
             message: "Manual order placed successfully",
@@ -375,17 +387,31 @@ const confirmManualPayment = async (req, res) => {
                 message: "Manual payment not submitted or already processed",
             });
         }
+        const allowedManualProviders = ["bkash", "nagad", "rocket", "upay"];
+        const submittedProvider = order.payment_details?.manual?.provider;
+        if (!submittedProvider || !allowedManualProviders.includes(submittedProvider)) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid or missing manual payment provider in submission. Must be one of: ${allowedManualProviders.join(", ")}.`,
+            });
+        }
         order.payment_status = "paid";
         order.order_status = "processing";
-        if (order.payment_type === "delivery") {
-            order.amount_paid = order.deliveryCharge;
-            order.amount_due = order.subTotalAmt;
+        // Ensure totalAmt and subTotalAmt are up-to-date before calculating paid/due amounts
+        await order.save(); // This will trigger the pre-save hook to recalculate totals
+        const updatedOrder = await order_model_1.default.findById(order._id); // Re-fetch the updated order document
+        if (!updatedOrder) {
+            return res.status(404).json({ success: false, message: "Order not found after update" });
         }
-        else {
-            order.amount_paid = order.totalAmt;
-            order.amount_due = 0;
+        if (updatedOrder.payment_type === "delivery") {
+            updatedOrder.amount_paid = updatedOrder.deliveryCharge;
+            updatedOrder.amount_due = updatedOrder.totalAmt - updatedOrder.deliveryCharge;
         }
-        await order.save();
+        else { // Handles 'full' payment type
+            updatedOrder.amount_paid = updatedOrder.totalAmt;
+            updatedOrder.amount_due = 0;
+        }
+        await updatedOrder.save(); // Save the order with updated paid/due amounts
         // ✅ CLEAR CART
         await (0, cart_utils_1.clearUserCart)(order.userId);
         res.json({
