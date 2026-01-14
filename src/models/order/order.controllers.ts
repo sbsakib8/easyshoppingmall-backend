@@ -238,7 +238,7 @@ export const ManualPayment = async (req: Request, res: Response) => {
         provider: provider,
         senderNumber: senderNumber,
         transactionId: transactionId,
-        paidFor: "full", // As per requirement for Manual Full Payment
+        paidFor: order.payment_type,
       },
     };
     order.payment_status = "submitted";
@@ -286,7 +286,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
     }
 
     // Validate delivery_address structure
-    const requiredAddressFields = ["address_line", "district", "division", "upazila_thana", "pincode", "country", "mobile"];
+    const requiredAddressFields = ["address_line", "district", "division", "upazila_thana", "country", "mobile"];
     const missingAddressFields = requiredAddressFields.filter(field => !delivery_address[field]);
     if (missingAddressFields.length > 0) {
       return res.status(400).json({
@@ -308,6 +308,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
     if (validProducts.length === 0) {
       return res.status(400).json({ success: false, message: "No valid products in cart" });
     }
+    const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0;
 
     const orderProducts = validProducts.map((item: any) => {
       const product = item.productId;
@@ -320,11 +321,13 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
         quantity: quantity,
         price: productPrice,
         totalPrice: quantity * productPrice,
-        size: item.size,
+
+        size: item.size ?? null,
+        color: item.color ?? null,
+        weight: item.weight ?? null,
       };
     });
 
-    const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0;
 
     // Create manual order
     const order = new OrderModel({
@@ -336,7 +339,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       payment_method: "manual",
       payment_status: "pending",
       payment_details: {},
-      payment_type: req.body.payment_type || "full",
+      payment_type: req.body.payment_type,
       order_status: "pending",
       deliveryCharge: deliveryChargeFromReq,
     });
