@@ -104,7 +104,12 @@ const orderSchema = new mongoose_1.Schema({
         manual: {
             provider: { type: String },
             senderNumber: { type: String },
-            transactionId: { type: String },
+            transactionId: {
+                type: String,
+                unique: true,
+                sparse: true,
+                index: true,
+            },
             paidFor: { type: String, enum: ["full", "delivery"] },
         },
         ssl: {
@@ -113,7 +118,7 @@ const orderSchema = new mongoose_1.Schema({
         },
     },
     paymentId: { type: String, default: "" },
-    tran_id: { type: String, index: true },
+    tran_id: { type: String, index: true, unique: true },
     invoice_receipt: { type: String, default: "" },
     // Order Status
     order_status: {
@@ -133,6 +138,17 @@ orderSchema.pre("save", function (next) {
     });
     this.subTotalAmt = subTotal;
     this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0);
+    // Payment amount calculation
+    if (this.payment_method === "manual") {
+        if (this.payment_type === "full") {
+            this.amount_paid = this.totalAmt;
+            this.amount_due = 0;
+        }
+        if (this.payment_type === "delivery") {
+            this.amount_paid = Number(this.deliveryCharge) || 0;
+            this.amount_due = this.totalAmt - this.amount_paid;
+        }
+    }
     if (this.payment_method === "manual" &&
         this.payment_details &&
         this.payment_details.manual // Check if manual property exists on payment_details
