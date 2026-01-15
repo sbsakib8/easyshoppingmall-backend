@@ -1,18 +1,19 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import mongoose from "mongoose";
 import { AuthRequest } from "../../middlewares/isAuth";
 import { Review } from "./review.model";
 
 // Create review
-export const createReview = async (req: Request, res: Response) => {
+export const createReview = async (req: AuthRequest, res: Response) => {
     try {
+
         const { rating, comment } = req.body;
         const productId = req.params.productId;
-        const userId = req.user?.id;
-
+        const userId = req.userId;
         if (!userId) {
             return res.status(401).json({ message: "Unauthorized" });
         }
+
 
         if (!rating || !comment) {
             return res.status(400).json({ message: "Rating & comment required" });
@@ -37,9 +38,10 @@ export const createReview = async (req: Request, res: Response) => {
 };
 
 // Get approved reviews for a product
-export const getProductReviews = async (req: Request, res: Response) => {
+export const getProductReviews = async (req: AuthRequest, res: Response) => {
     try {
         const productId = req.params.productId;
+
 
         if (!mongoose.Types.ObjectId.isValid(productId)) {
             return res.status(400).json({ success: false, message: "Invalid product id" });
@@ -52,14 +54,16 @@ export const getProductReviews = async (req: Request, res: Response) => {
             .populate("productId", "productName images");
 
 
+
         res.json({ success: true, reviews });
     } catch (error: any) {
+        console.log("❌ GET REVIEWS ERROR:", error.message);
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
 // Approve review (admin)
-export const approveReview = async (req: Request, res: Response) => {
+export const approveReview = async (req: AuthRequest, res: Response) => {
     try {
         const reviewId = req.params.id;
 
@@ -83,7 +87,7 @@ export const approveReview = async (req: Request, res: Response) => {
 };
 
 // Reject review (admin)
-export const rejectReview = async (req: Request, res: Response) => {
+export const rejectReview = async (req: AuthRequest, res: Response) => {
     try {
         const reviewId = req.params.id;
 
@@ -107,7 +111,7 @@ export const rejectReview = async (req: Request, res: Response) => {
 };
 
 // Get pending reviews (admin)
-export const getPendingReviews = async (req: Request, res: Response) => {
+export const getPendingReviews = async (req: AuthRequest, res: Response) => {
     try {
         const reviews = await Review.find({ status: "pending" }).populate("userId", "name email")
             .populate("productId", "productName images");
@@ -120,7 +124,7 @@ export const getPendingReviews = async (req: Request, res: Response) => {
 };
 
 // Get all reviews (admin)
-export const getAllReviews = async (req: Request, res: Response) => {
+export const getAllReviews = async (req: AuthRequest, res: Response) => {
     try {
         const reviews = await Review.find({})
             .populate("userId", "name email")      // include user name & email
@@ -136,11 +140,7 @@ export const getAllReviews = async (req: Request, res: Response) => {
 export const deleteReview = async (req: AuthRequest, res: Response) => {
     try {
         const reviewId = req.params.id;
-        const user = req.user;
-
-        if (!user) {
-            return res.status(401).json({ message: "Unauthorized" });
-        }
+        const userId = req.userId;
 
         if (!mongoose.Types.ObjectId.isValid(reviewId)) {
             return res.status(400).json({ message: "Invalid review id" });
@@ -150,8 +150,8 @@ export const deleteReview = async (req: AuthRequest, res: Response) => {
         const query: any = { _id: reviewId };
 
         //  Normal user can delete only own review
-        if (user.role !== "admin") {
-            query.userId = user._id;
+        if (req.user?.role !== "admin") {
+            query.userId = req.user?._id;
         }
 
         const review = await Review.findOneAndDelete(query);
@@ -159,7 +159,7 @@ export const deleteReview = async (req: AuthRequest, res: Response) => {
         if (!review) {
             return res.status(404).json({
                 message:
-                    user.role === "admin"
+                    req.user?.role === "admin"
                         ? "Review not found"
                         : "Review not found or you are not authorized",
             });
@@ -176,5 +176,3 @@ export const deleteReview = async (req: AuthRequest, res: Response) => {
         });
     }
 };
-
-
