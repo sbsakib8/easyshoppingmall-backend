@@ -181,33 +181,70 @@ const ManualPayment = async (req, res) => {
                 message: "Order ID, provider, sender number, and transaction ID are required.",
             });
         }
-        const order = await order_model_1.default.findById(orderId);
-        if (!order) {
-            return res.status(404).json({ success: false, message: "Order not found" });
+        const allowedManualProviders = ["bkash", "nagad", "rocket", "upay"];
+        if (!allowedManualProviders.includes(provider)) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid manual payment provider. Must be one of: ${allowedManualProviders.join(", ")}`,
+            });
         }
-        if (order.payment_method !== 'manual') {
-            return res.status(400).json({ success: false, message: "This order is not set for manual payment." });
+        // ❌ HARD BLOCK: duplicate transactionId (cloud-safe)
+        const existingTxn = await order_model_1.default.findOne({ transactionId });
+        if (existingTxn) {
+            return res.status(409).json({
+                success: false,
+                message: "This transaction ID has already been used.",
+            });
         }
-        if (order.payment_status === 'submitted' || order.payment_status === 'paid') {
-            return res.status(400).json({ success: false, message: "Payment info already submitted or payment already made." });
-        }
-        // Update payment status and details
-        order.payment_details = {
-            manual: {
-                provider: provider,
-                senderNumber: senderNumber,
-                transactionId: transactionId,
-                paidFor: "full", // As per requirement for Manual Full Payment
+        /**
+         * 🔒 ATOMIC UPDATE (CRITICAL)
+         * - Order must be manual
+         * - Payment must be pending
+         * - transactionId must not exist
+         */
+        const order = await order_model_1.default.findOneAndUpdate({
+            _id: orderId,
+            payment_method: "manual",
+            payment_status: "pending",
+            transactionId: { $exists: false },
+        }, {
+            $set: {
+                transactionId,
+                payment_status: "submitted",
+                payment_details: {
+                    manual: {
+                        provider,
+                        senderNumber,
+                        transactionId,
+                        paidFor: undefined, // backend decides below
+                    },
+                },
             },
-        };
-        order.payment_status = "submitted";
-        // order_status remains 'pending' until admin verification
+        }, { new: true });
+        if (!order) {
+            return res.status(409).json({
+                success: false,
+                message: "Order not found or payment already submitted.",
+            });
+        }
+        // ==============================
+        // 🧠 BACKEND-CONTROLLED LOGIC
+        // ==============================
+        if (order.payment_type === "delivery") {
+            order.amount_paid = order.deliveryCharge;
+            order.amount_due = order.totalAmt - order.deliveryCharge;
+        }
+        else {
+            order.amount_paid = order.totalAmt;
+            order.amount_due = 0;
+        }
+        order.payment_details.manual.paidFor = order.payment_type;
         await order.save();
-        // Add the order to the user's order history
+        // ✅ Add order to user's history (idempotent safe)
         await user_model_1.default.findByIdAndUpdate(order.userId, {
-            $push: { orderHistory: order._id },
+            $addToSet: { orderHistory: order._id },
         });
-        res.json({
+        return res.json({
             success: true,
             message: "Manual payment info submitted, pending admin confirmation",
             order,
@@ -215,7 +252,7 @@ const ManualPayment = async (req, res) => {
     }
     catch (err) {
         console.error("Manual Payment Error:", err);
-        res.status(500).json({ success: false, message: "Server error" });
+        return res.status(500).json({ success: false, message: "Server error" });
     }
 };
 exports.ManualPayment = ManualPayment;
@@ -225,66 +262,104 @@ exports.ManualPayment = ManualPayment;
  * @access Private (User)
  */
 const createManualOrder = async (req, res) => {
+    let order = null;
     try {
-        const { delivery_address } = req.body;
+        const { delivery_address, payment_details, payment_type, payment_method } = req.body;
         const userId = req.userId;
+        // ✅ 1. Basic validation
         if (!userId || !delivery_address) {
             return res.status(400).json({
                 success: false,
                 message: "Missing required fields (userId, delivery_address)",
             });
         }
-        // Validate delivery_address structure
-        const requiredAddressFields = ["address_line", "district", "division", "upazila_thana", "pincode", "country", "mobile"];
-        const missingAddressFields = requiredAddressFields.filter(field => !delivery_address[field]);
-        if (missingAddressFields.length > 0) {
+        // ✅ 2. Validate delivery_address
+        const requiredAddressFields = [
+            "address_line",
+            "district",
+            "division",
+            "upazila_thana",
+            "country",
+            "mobile",
+        ];
+        const missingFields = requiredAddressFields.filter(field => !delivery_address[field]);
+        if (missingFields.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: `Missing required address fields: ${missingAddressFields.join(", ")}`,
+                message: `Missing required address fields: ${missingFields.join(", ")}`,
             });
         }
+        // ✅ 3. Validate cart
         const cart = await cart_model_1.CartModel.findOne({ userId }).populate("products.productId");
         if (!cart || cart.products.length === 0) {
             return res.status(404).json({ success: false, message: "Cart is empty" });
         }
-        const validProducts = cart.products.filter((item) => item.productId && "_id" in item.productId);
+        // Type-safe check for valid products
+        const validProducts = cart.products.filter((item) => {
+            const product = item.productId;
+            // Only keep if product is an object and has _id
+            return product && typeof product === "object" && "_id" in product;
+        });
         if (validProducts.length === 0) {
             return res.status(400).json({ success: false, message: "No valid products in cart" });
         }
         const orderProducts = validProducts.map((item) => {
             const product = item.productId;
-            const productPrice = Number(product.price) || 0;
             const quantity = Number(item.quantity) || 0;
+            const price = Number(product.price) || 0;
             return {
                 productId: product._id,
                 name: product.productName || "Unnamed Product",
                 image: product.images || [],
-                quantity: quantity,
-                price: productPrice,
-                totalPrice: quantity * productPrice,
-                size: item.size,
+                quantity,
+                price,
+                totalPrice: quantity * price,
+                size: item.size ?? null,
+                color: item.color ?? null,
+                weight: item.weight ?? null,
             };
         });
-        const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0;
-        // Create manual order
-        const order = new order_model_1.default({
+        // ✅ 4. Manual payment validation & duplicate check
+        if (payment_method === "manual") {
+            if (!payment_details || !payment_details.transactionId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Transaction ID is required for manual payment",
+                });
+            }
+            const existingOrder = await order_model_1.default.findOne({
+                payment_method: "manual",
+                "payment_details.manual.transactionId": payment_details.transactionId,
+            });
+            if (existingOrder) {
+                return res.status(400).json({
+                    success: false,
+                    message: "এই ট্রানজ্যাকশন আইডি ইতিমধ্যেই ব্যবহার হয়েছে!",
+                });
+            }
+        }
+        // ✅ 5. Create order
+        order = new order_model_1.default({
             userId,
             cart: cart._id,
             orderId: uuidv4(),
             products: orderProducts,
             address: delivery_address,
-            payment_method: "manual",
-            payment_status: "pending",
-            payment_details: {},
-            payment_type: "full",
+            payment_method,
+            payment_type,
+            payment_details: payment_details || {},
             order_status: "pending",
-            deliveryCharge: deliveryChargeFromReq,
+            deliveryCharge: Number(req.body.deliveryCharge) || 0,
         });
         await order.save();
+        // ✅ 6. Update user's order history
         await user_model_1.default.findByIdAndUpdate(userId, {
             $push: { orderHistory: order._id },
         });
-        res.status(201).json({
+        // ✅ 7. Clear user's cart
+        await (0, cart_utils_1.clearUserCart)(userId);
+        // ✅ 8. Respond success
+        return res.status(201).json({
             success: true,
             message: "Manual order placed successfully",
             data: order,
@@ -292,7 +367,17 @@ const createManualOrder = async (req, res) => {
     }
     catch (error) {
         console.error("Manual Order Creation Error:", error);
-        res.status(500).json({
+        // ⚠️ Rollback partially created order
+        if (order?._id) {
+            try {
+                await order_model_1.default.findByIdAndDelete(order._id);
+                console.log("Rollback: Deleted partially created order:", order._id);
+            }
+            catch (rollbackError) {
+                console.error("Rollback failed:", rollbackError);
+            }
+        }
+        return res.status(500).json({
             success: false,
             message: error.message || "Internal Server Error",
         });
@@ -375,17 +460,31 @@ const confirmManualPayment = async (req, res) => {
                 message: "Manual payment not submitted or already processed",
             });
         }
+        const allowedManualProviders = ["bkash", "nagad", "rocket", "upay"];
+        const submittedProvider = order.payment_details?.manual?.provider;
+        if (!submittedProvider || !allowedManualProviders.includes(submittedProvider)) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid or missing manual payment provider in submission. Must be one of: ${allowedManualProviders.join(", ")}.`,
+            });
+        }
         order.payment_status = "paid";
         order.order_status = "processing";
-        if (order.payment_type === "delivery") {
-            order.amount_paid = order.deliveryCharge;
-            order.amount_due = order.subTotalAmt;
+        // Ensure totalAmt and subTotalAmt are up-to-date before calculating paid/due amounts
+        await order.save(); // This will trigger the pre-save hook to recalculate totals
+        const updatedOrder = await order_model_1.default.findById(order._id); // Re-fetch the updated order document
+        if (!updatedOrder) {
+            return res.status(404).json({ success: false, message: "Order not found after update" });
         }
-        else {
-            order.amount_paid = order.totalAmt;
-            order.amount_due = 0;
+        if (updatedOrder.payment_type === "delivery") {
+            updatedOrder.amount_paid = updatedOrder.deliveryCharge;
+            updatedOrder.amount_due = updatedOrder.totalAmt - updatedOrder.deliveryCharge;
         }
-        await order.save();
+        else { // Handles 'full' payment type
+            updatedOrder.amount_paid = updatedOrder.totalAmt;
+            updatedOrder.amount_due = 0;
+        }
+        await updatedOrder.save(); // Save the order with updated paid/due amounts
         // ✅ CLEAR CART
         await (0, cart_utils_1.clearUserCart)(order.userId);
         res.json({

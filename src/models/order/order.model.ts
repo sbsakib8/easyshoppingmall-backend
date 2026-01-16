@@ -77,8 +77,13 @@ const orderSchema = new Schema<IOrder>(
       manual: {
         provider: { type: String },
         senderNumber: { type: String },
-        transactionId: { type: String },
-        paidFor: { type: String, enum: ["full"] },
+        transactionId: {
+          type: String,
+          unique: true,
+          sparse: true,
+          index: true,
+        },
+        paidFor: { type: String, enum: ["full", "delivery"] },
       },
       ssl: {
         tran_id: { type: String },
@@ -86,7 +91,7 @@ const orderSchema = new Schema<IOrder>(
       },
     },
     paymentId: { type: String, default: "" },
-    tran_id: { type: String, index: true },
+    tran_id: { type: String, index: true, unique: true },
     invoice_receipt: { type: String, default: "" },
 
     // Order Status
@@ -112,7 +117,18 @@ orderSchema.pre<IOrder & Document>("save", function (next) {
 
   this.subTotalAmt = subTotal;
   this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0);
+  // Payment amount calculation
+  if (this.payment_method === "manual") {
+    if (this.payment_type === "full") {
+      this.amount_paid = this.totalAmt;
+      this.amount_due = 0;
+    }
 
+    if (this.payment_type === "delivery") {
+      this.amount_paid = Number(this.deliveryCharge) || 0;
+      this.amount_due = this.totalAmt - this.amount_paid;
+    }
+  }
   if (
     this.payment_method === "manual" &&
     this.payment_details &&

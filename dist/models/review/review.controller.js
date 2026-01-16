@@ -11,7 +11,7 @@ const createReview = async (req, res) => {
     try {
         const { rating, comment } = req.body;
         const productId = req.params.productId;
-        const userId = req.user?.id;
+        const userId = req.userId;
         if (!userId) {
             return res.status(401).json({ message: "Unauthorized" });
         }
@@ -51,6 +51,7 @@ const getProductReviews = async (req, res) => {
         res.json({ success: true, reviews });
     }
     catch (error) {
+        console.log("❌ GET REVIEWS ERROR:", error.message);
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -127,23 +128,20 @@ exports.getAllReviews = getAllReviews;
 const deleteReview = async (req, res) => {
     try {
         const reviewId = req.params.id;
-        const user = req.user;
-        if (!user) {
-            return res.status(401).json({ message: "Unauthorized" });
-        }
+        const userId = req.userId;
         if (!mongoose_1.default.Types.ObjectId.isValid(reviewId)) {
             return res.status(400).json({ message: "Invalid review id" });
         }
         //  ADMIN can delete any review
         const query = { _id: reviewId };
         //  Normal user can delete only own review
-        if (user.role !== "admin") {
-            query.userId = user._id;
+        if (req.user?.role !== "admin") {
+            query.userId = req.user?._id;
         }
         const review = await review_model_1.Review.findOneAndDelete(query);
         if (!review) {
             return res.status(404).json({
-                message: user.role === "admin"
+                message: req.user?.role === "admin"
                     ? "Review not found"
                     : "Review not found or you are not authorized",
             });

@@ -3,7 +3,6 @@ import { AuthRequest } from "../../middlewares/isAuth";
 import uploadClouinary from "../../utils/cloudinary";
 import generateToken from "../../utils/genaretetoken";
 import { sendEmail } from "../../utils/nodemailer";
-import AddressModel from "../address/address.model";
 import type { IUser } from "../user/user.model";
 import User from "../user/user.model";
 
@@ -422,92 +421,47 @@ export const userImage = async (req: AuthRequest, res: Response) => {
 };
 
 // user update profile
-export const updateUserProfile = async (req: AuthRequest, res: Response) => {
+export const updateUserProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.params.id;
-
-    if (req.userId !== userId) {
-      return res.status(403).json({
-        success: false,
-        message: "Forbidden",
-      });
-    }
 
     const {
       name,
       email,
       mobile,
-      gender,
-      date_of_birth,
-      address_details,
+      customerstatus,
+      image,
+      status,
+      verify_email,
+      role,
     } = req.body;
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
+      res.status(404).json({ success: false, message: "User not found" });
+      return;
     }
 
-    if (name) user.name = name;
-    if (email) user.email = email;
-    if (mobile) user.mobile = mobile;
-    if (gender) user.gender = gender;
-    if (date_of_birth) user.date_of_birth = date_of_birth;
-
-    if (address_details && Array.isArray(address_details)) {
-      for (const addr of address_details) {
-        if (addr._id) {
-          // Update existing address
-          await AddressModel.findByIdAndUpdate(addr._id, addr);
-        } else {
-          // Create new address
-          const newAddress = new AddressModel({ ...addr, userId });
-          const savedAddress = await newAddress.save();
-          user.address_details.push(savedAddress._id);
-        }
-      }
-    }
+    if (name !== undefined) user.name = name;
+    if (email !== undefined) user.email = email;
+    if (mobile !== undefined) user.mobile = mobile;
+    if (customerstatus !== undefined) user.customerstatus = customerstatus;
+    if (image !== undefined) user.image = image;
+    if (status !== undefined) user.status = status;
+    if (verify_email !== undefined) user.verify_email = verify_email;
+    if (role !== undefined) user.role = role;
 
     await user.save();
-
-    const populatedUser = await User.findById(user._id)
-      .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
-      .populate("address_details")
-      .populate({
-        path: "shopping_cart",
-        populate: {
-          path: "products.productId",
-          populate: { path: "category", select: "name" },
-        },
-      })
-      .populate({
-        path: "orderHistory",
-        populate: [
-          {
-            path: "products.productId",
-            populate: { path: "category", select: "name" },
-          },
-          {
-            path: "cart",
-            populate: {
-              path: "products.productId",
-              populate: { path: "category", select: "name" },
-            },
-          },
-        ],
-      });
 
     res.status(200).json({
       success: true,
       message: "Profile updated successfully",
-      user: populatedUser,
+      user,
     });
-  } catch (error: any) {
+  } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: (error as Error).message,
     });
   }
 };

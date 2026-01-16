@@ -236,12 +236,17 @@ export const removeFromCart = async (req: Request, res: Response) => {
     );
 
     if (cart.products.length === 0) {
-      await CartModel.findByIdAndDelete(cart._id);
-      await UserModel.findByIdAndUpdate(userId, {
-        $pull: { shopping_cart: cart._id },
+      cart.subTotalAmt = 0;
+      cart.totalAmt = 0;
+      await cart.save();
+
+      return res.json({
+        success: true,
+        message: "Cart is now empty",
+        data: cart,
       });
-      return res.json({ success: true, message: "Removed from cart and cart deleted" });
-    } else {
+    }
+    else {
       cart.subTotalAmt = cart.products.reduce((s: number, p: ICartProduct) => s + p.totalPrice, 0);
       cart.totalAmt = cart.subTotalAmt;
       await cart.save();
@@ -265,22 +270,29 @@ export const clearCart = async (req: Request, res: Response): Promise<Response> 
   try {
     const { userId } = req.params;
 
-    const cart = await CartModel.findOne({ userId });
+    let cart = await CartModel.findOne({ userId });
+
     if (!cart) {
-      return res.status(404).json({ success: false, message: "Cart not found" });
+      cart = await CartModel.create({
+        userId,
+        products: [],
+        subTotalAmt: 0,
+        totalAmt: 0,
+      });
+    } else {
+      cart.products = [];
+      cart.subTotalAmt = 0;
+      cart.totalAmt = 0;
+      await cart.save();
     }
 
-    // Remove the cart reference from the user's shopping_cart
-    await UserModel.findByIdAndUpdate(userId, {
-      $pull: { shopping_cart: cart._id },
+    return res.status(200).json({
+      success: true,
+      message: "Cart cleared successfully",
+      data: cart,
     });
-
-    // then delete the cart itself
-    await CartModel.findByIdAndDelete(cart._id);
-
-
-    return res.status(200).json({ success: true, message: "Cart cleared successfully" });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
+

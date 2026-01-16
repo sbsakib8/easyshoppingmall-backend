@@ -22,7 +22,7 @@ router.post("/google-auth", googleAuth);
 router.get("/userprofile", isAuth, getUserProfile);
 router.get("/getallusers", isAuth, isAdmin, getAllUsers);
 router.delete("/userdelete/:id", isAuth, isAdmin, deleteUser);
-router.put("/userupdate/:id", isAuth, updateUserProfile);
+router.put("/userupdate/:id", isAuth, isAdmin, updateUserProfile);
 router.put("/user-image/:id", isAuth, upload.single("image"), userImage);
 
 
