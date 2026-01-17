@@ -40,6 +40,7 @@ app.use((0, cors_1.default)({
 }));
 (0, db_connect_1.default)();
 //  route
+const analytics_routs_1 = __importDefault(require("./models/analytics/analytics.routs"));
 app.use("/api/users", user_routs_1.default);
 app.use("/api/products", product_routs_1.default);
 app.use("/api/address", address_routs_1.default);
@@ -58,6 +59,7 @@ app.use("/api/orders", order_routs_1.default);
 app.use("/api/wishlist", wishlist_routs_1.default);
 app.use("/api/payment", payment_route_1.default);
 app.use('/api/review', review_routs_1.default);
+app.use("/api/analytics", analytics_routs_1.default);
 app.use("/api/admin", admin_route_1.default);
 app.get("/", (req, res) => {
     res.send("APi  is running...");

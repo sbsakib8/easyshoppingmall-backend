@@ -42,6 +42,8 @@ app.use(cors(
 
 connectDB()
 //  route
+import analyticsRoutes from "./models/analytics/analytics.routs";
+
 app.use("/api/users", userRoutes);
 app.use("/api/products", productRouter);
 app.use("/api/address", addressRouter);
@@ -60,6 +62,8 @@ app.use("/api/orders", orderRoute)
 app.use("/api/wishlist", wishlistRouter)
 app.use("/api/payment", paymentRouter)
 app.use('/api/review', reviewRouter)
+
+app.use("/api/analytics", analyticsRoutes);
 
 app.use("/api/admin", adminRoutes)
 
