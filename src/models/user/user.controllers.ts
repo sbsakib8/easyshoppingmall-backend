@@ -434,6 +434,8 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       status,
       verify_email,
       role,
+      date_of_birth,
+      gender,
     } = req.body;
 
     const user = await User.findById(userId);
@@ -450,6 +452,13 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     if (status !== undefined) user.status = status;
     if (verify_email !== undefined) user.verify_email = verify_email;
     if (role !== undefined) user.role = role;
+    if (date_of_birth !== undefined) {
+      // Assuming date_of_birth comes in "MM/DD/YYYY" format
+      const [month, day, year] = date_of_birth.split('/').map(Number);
+      // Create a UTC date to avoid timezone issues
+      user.date_of_birth = new Date(Date.UTC(year, month - 1, day)); // month is 0-indexed
+    }
+    if (gender !== undefined) user.gender = gender;
 
     await user.save();
 

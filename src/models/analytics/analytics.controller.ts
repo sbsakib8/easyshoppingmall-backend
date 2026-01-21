@@ -10,30 +10,44 @@ import AddressModel from "../address/address.model";
 // =======================
 export const getCustomerAnalytics = async (req: Request, res: Response) => {
     try {
+
+        const { startDate, endDate } = req.query;
+
+        let dateFilter: any = {};
+        if (startDate && endDate) {
+            dateFilter.createdAt = {
+                $gte: new Date(startDate as string),
+                $lte: new Date(endDate as string),
+            };
+        } else {
+            const now = new Date();
+            const thirtyDaysAgo = new Date(new Date().setDate(now.getDate() - 30));
+            dateFilter.createdAt = {
+                $gte: thirtyDaysAgo,
+                $lte: now,
+            };
+        }
+
         // 1. Core Metrics
         const totalCustomers = await UserModel.countDocuments({ role: "USER" });
 
-        // New Customers (this month)
-        const now = new Date();
-        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const newCustomers = await UserModel.countDocuments({
             role: "USER",
-            createdAt: { $gte: firstDayOfMonth },
+            ...dateFilter,
         });
 
-        // Returning Customers (More than 1 order)
         const returningCustomerStats = await OrderModel.aggregate([
+            { $match: dateFilter },
             { $group: { _id: "$userId", orderCount: { $sum: 1 } } },
             { $match: { orderCount: { $gt: 1 } } },
             { $count: "count" }
         ]);
-        const returningCustomers = returningCustomerStats.length > 0 ? returningCustomerStats[0].count : 0;
+        const returningCustomers = returningCustomerStats[0]?.count || 0;
 
-        // Retention Rate
         const customerRetentionRate = totalCustomers > 0 ? Number(((returningCustomers / totalCustomers) * 100).toFixed(1)) : 0;
 
-        // Financial Metrics (LTV, AOV)
         const financialStats = await OrderModel.aggregate([
+            { $match: dateFilter },
             {
                 $group: {
                     _id: null,
@@ -47,122 +61,64 @@ export const getCustomerAnalytics = async (req: Request, res: Response) => {
         let averageLifetimeValue = 0;
         let averageOrderValue = 0;
 
-        if (financialStats.length > 0) {
-            const stats = financialStats[0];
-            const totalRevenue = stats.totalRevenue || 0;
-            const totalOrders = stats.totalOrders || 0;
-            const uniqueCustomerCount = stats.uniqueCustomers.length || 1;
+        const stats = financialStats[0] || { totalRevenue: 0, totalOrders: 0, uniqueCustomers: [] };
+        const totalRevenue = stats.totalRevenue;
+        const totalOrders = stats.totalOrders;
+        const uniqueCustomerCount = stats.uniqueCustomers.length;
 
-            averageLifetimeValue = Math.round(totalRevenue / uniqueCustomerCount);
-            averageOrderValue = Math.round(totalRevenue / totalOrders);
-        }
+        averageLifetimeValue = uniqueCustomerCount > 0 ? Math.round(totalRevenue / uniqueCustomerCount) : 0;
+        averageOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
 
-        // 2. Customer Growth (Last 6 Months)
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-        const growthStats = await UserModel.aggregate([
-            {
-                $match: {
-                    role: "USER",
-                    createdAt: { $gte: sixMonthsAgo }
-                }
-            },
+        const customerGrowth = await OrderModel.aggregate([
+            { $match: dateFilter },
             {
                 $group: {
-                    _id: {
-                        month: { $month: "$createdAt" },
-                        year: { $year: "$createdAt" }
-                    },
-                    new: { $sum: 1 }
-                }
-            },
-            { $sort: { "_id.year": 1, "_id.month": 1 } }
-        ]);
-
-        // Returning Growth (Active returning users per month)
-        const returningGrowthStats = await OrderModel.aggregate([
-            {
-                $match: {
-                    createdAt: { $gte: sixMonthsAgo }
+                    _id: "$userId",
+                    firstOrderDate: { $min: "$createdAt" }
                 }
             },
             {
                 $lookup: {
                     from: "users",
-                    localField: "userId",
-                    foreignField: "_id",
-                    as: "user"
-                }
-            },
-            { $unwind: "$user" },
-            {
-                $group: {
-                    _id: {
-                        month: { $month: "$createdAt" },
-                        year: { $year: "$createdAt" },
-                        userId: "$userId"
-                    },
-                    orderCount: { $sum: 1 }
-                }
-            },
-            {
-                $lookup: {
-                    from: "users",
-                    localField: "_id.userId",
+                    localField: "_id",
                     foreignField: "_id",
                     as: "userInfo"
                 }
             },
             { $unwind: "$userInfo" },
             {
-                $addFields: {
-                    regMonth: { $month: "$userInfo.createdAt" },
-                    regYear: { $year: "$userInfo.createdAt" },
-                    currentMonth: "$_id.month",
-                    currentYear: "$_id.year"
-                }
-            },
-            {
-                // Filter for users who registered BEFORE the current order month
-                $match: {
-                    $expr: {
-                        $or: [
-                            { $lt: ["$regYear", "$currentYear"] },
-                            { $and: [{ $eq: ["$regYear", "$currentYear"] }, { $lt: ["$regMonth", "$currentMonth"] }] }
+                $project: {
+                    year: { $year: "$firstOrderDate" },
+                    month: { $month: "$firstOrderDate" },
+                    isNew: {
+                        $eq: [
+                            { $year: "$userInfo.createdAt" },
+                            { $year: "$firstOrderDate" }
                         ]
                     }
                 }
             },
             {
                 $group: {
-                    _id: { month: "$currentMonth", year: "$currentYear" },
-                    count: { $sum: 1 }
+                    _id: { year: "$year", month: "$month" },
+                    newCustomers: { $sum: { $cond: ["$isNew", 1, 0] } },
+                    returningCustomers: { $sum: { $cond: ["$isNew", 0, 1] } }
                 }
-            }
+            },
+            { $sort: { "_id.year": 1, "_id.month": 1 } }
         ]);
 
         const monthsLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-        // Combine for Chart
-        const combinedGrowth = [];
-        for (let i = 5; i >= 0; i--) {
-            const d = new Date();
-            d.setMonth(d.getMonth() - i);
-            const m = d.getMonth() + 1;
-            const y = d.getFullYear();
-
-            const newStat = growthStats.find(s => s._id.month === m && s._id.year === y);
-            const retStat = returningGrowthStats.find(s => s._id.month === m && s._id.year === y);
-
-            combinedGrowth.push({
-                month: monthsLabels[m - 1],
-                new: newStat ? newStat.new : 0,
-                returning: retStat ? retStat.count : 0,
-                total: (newStat ? newStat.new : 0) + (retStat ? retStat.count : 0)
-            });
-        }
-
+        const combinedGrowth = customerGrowth.map(stat => {
+            const { year, month } = stat._id;
+            return {
+                month: monthsLabels[month - 1],
+                new: stat.newCustomers,
+                returning: stat.returningCustomers,
+                total: stat.newCustomers + stat.returningCustomers
+            };
+        });
 
         // 3. Demographics
         const ageGroups = await UserModel.aggregate([
@@ -205,7 +161,6 @@ export const getCustomerAnalytics = async (req: Request, res: Response) => {
             }
         });
 
-        // Locations (from Address)
         const locationStats = await AddressModel.aggregate([
             { $match: { country: { $ne: "" } } },
             { $group: { _id: "$country", count: { $sum: 1 } } },
@@ -219,9 +174,9 @@ export const getCustomerAnalytics = async (req: Request, res: Response) => {
             percentage: totalAddresses > 0 ? Math.round((l.count / totalAddresses) * 100) : 0
         }));
 
-
         // 4. Top Customers
         const topCustomersRaw = await OrderModel.aggregate([
+            { $match: dateFilter },
             {
                 $group: {
                     _id: "$userId",
@@ -264,13 +219,7 @@ export const getCustomerAnalytics = async (req: Request, res: Response) => {
                     ageGroups: formattedAgeGroups,
                     locations: formattedLocations
                 },
-                topCustomers,
-                behaviorMetrics: {
-                    averageSessionDuration: "4m 32s", // Mocked
-                    bounceRate: 24.5, // Mocked
-                    pagesPerSession: 3.8, // Mocked
-                    conversionRate: 3.2 // Mocked
-                }
+                topCustomers
             }
         });
 
@@ -286,8 +235,26 @@ export const getCustomerAnalytics = async (req: Request, res: Response) => {
 // =======================
 export const getProductAnalytics = async (req: Request, res: Response) => {
     try {
+        const { startDate, endDate } = req.query;
+
+        let dateFilter: any = {};
+        if (startDate && endDate) {
+            dateFilter.createdAt = {
+                $gte: new Date(startDate as string),
+                $lte: new Date(endDate as string),
+            };
+        } else {
+            const now = new Date();
+            const thirtyDaysAgo = new Date(new Date().setDate(now.getDate() - 30));
+            dateFilter.createdAt = {
+                $gte: thirtyDaysAgo,
+                $lte: now,
+            };
+        }
+
         // 1. Overview
         const totalStats = await OrderModel.aggregate([
+            { $match: dateFilter },
             {
                 $group: {
                     _id: null,
@@ -299,16 +266,12 @@ export const getProductAnalytics = async (req: Request, res: Response) => {
         const stats = totalStats[0] || { totalRevenue: 0, totalOrders: 0 };
         const avgOrderValue = stats.totalOrders > 0 ? Math.round(stats.totalRevenue / stats.totalOrders) : 0;
 
-        // Conversion Rate (Total Orders / Total Users approximation)
         const totalUsers = await UserModel.countDocuments({ role: "USER" });
         const conversionRate = totalUsers > 0 ? ((stats.totalOrders / totalUsers) * 100).toFixed(1) : 0;
 
-        // 2. Sales Trend (Last 7 days)
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
+        // 2. Sales Trend
         const salesTrend = await OrderModel.aggregate([
-            { $match: { createdAt: { $gte: sevenDaysAgo } } },
+            { $match: dateFilter },
             {
                 $group: {
                     _id: {
@@ -332,6 +295,7 @@ export const getProductAnalytics = async (req: Request, res: Response) => {
 
         // 3. Top Products
         const topProducts = await OrderModel.aggregate([
+            { $match: dateFilter },
             { $unwind: "$products" },
             {
                 $group: {
@@ -348,7 +312,7 @@ export const getProductAnalytics = async (req: Request, res: Response) => {
                     name: 1,
                     sales: 1,
                     revenue: 1,
-                    growth: { $literal: 12.5 } // Mocked growth for UI
+                    growth: { $literal: 0 } // Growth calculation not implemented
                 }
             }
         ]);
@@ -356,6 +320,7 @@ export const getProductAnalytics = async (req: Request, res: Response) => {
 
         // 4. Category Distribution
         const categoryStats = await OrderModel.aggregate([
+            { $match: dateFilter },
             { $unwind: "$products" },
             {
                 $lookup: {
@@ -417,63 +382,25 @@ export const getProductAnalytics = async (req: Request, res: Response) => {
 // =======================
 export const getTrafficAnalytics = async (req: Request, res: Response) => {
     try {
-        // Since we don't have a real visitor tracking yet, we mock based on user/order data or just returns reasonable mocks
-        const totalUsers = await UserModel.countDocuments({ role: "USER" });
-        const totalOrders = await OrderModel.countDocuments();
-
-        // Mocking traffic data to match frontend requirements
-        const trafficData = {
-            totalVisitors: totalUsers * 15, // Rough estimation
-            pageViews: totalUsers * 50,
-            bounceRate: 34.2,
-            avgSessionDuration: 245,
-            conversionRate: totalUsers > 0 ? ((totalOrders / totalUsers) * 100).toFixed(1) : 0,
-            revenue: await OrderModel.aggregate([{ $group: { _id: null, total: { $sum: "$totalAmt" } } }]).then(res => res[0]?.total || 0),
+        // Real traffic analytics are not implemented yet. Returning a zeroed-out response.
+        const zeroedTrafficData = {
+            totalVisitors: 0,
+            pageViews: 0,
+            bounceRate: 0,
+            avgSessionDuration: 0,
+            conversionRate: 0,
+            revenue: 0,
         };
-
-        const chartData = [];
-        const now = new Date();
-        for (let i = 6; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(now.getDate() - i);
-            const dateStr = d.toISOString().split('T')[0];
-            chartData.push({
-                date: dateStr,
-                visitors: Math.floor(Math.random() * 500) + 1000,
-                pageViews: Math.floor(Math.random() * 2000) + 3000,
-                revenue: Math.floor(Math.random() * 1000) + 2000
-            });
-        }
-
-        const topPages = [
-            { page: "/products", views: 15420, percentage: 32.4 },
-            { page: "/home", views: 12340, percentage: 26.1 },
-            { page: "/categories", views: 8760, percentage: 18.5 },
-            { page: "/checkout", views: 5430, percentage: 11.4 },
-            { page: "/about", views: 3210, percentage: 6.8 },
-        ];
-
-        const trafficSources = [
-            { source: "Organic Search", visitors: 12340, percentage: 45.2 },
-            { source: "Direct", visitors: 8760, percentage: 32.1 },
-            { source: "Social Media", visitors: 4320, percentage: 15.8 },
-            { source: "Email", visitors: 1890, percentage: 6.9 },
-        ];
-
-        const deviceStats = [
-            { device: "Desktop", users: 14567, percentage: 59.3 },
-            { device: "Mobile", users: 8901, percentage: 36.2 },
-            { device: "Tablet", users: 1099, percentage: 4.5 },
-        ];
 
         res.status(200).json({
             success: true,
+            message: "Traffic analytics not implemented. Returning placeholder data.",
             data: {
-                analyticsData: trafficData,
-                chartData,
-                topPages,
-                trafficSources,
-                deviceStats
+                analyticsData: zeroedTrafficData,
+                chartData: [],
+                topPages: [],
+                trafficSources: [],
+                deviceStats: []
             }
         });
 

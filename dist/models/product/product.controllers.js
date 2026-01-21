@@ -9,7 +9,7 @@ const product_model_1 = __importDefault(require("./product.model"));
 // Create Product
 const createProductController = async (req, res) => {
     try {
-        const { productName, description, category, subCategory, featured, brand, productWeight, productSize, color, price, productStock, productRank, discount, ratings, tags, more_details, publish, } = req.body;
+        const { productName, description, category, subCategory, featured, brand, productWeight, productSize, color, price, productStock, productRank, discount, ratings, tags, more_details, publish, video_link, } = req.body;
         // Validation
         if (!productName) {
             res.status(400).json({
@@ -19,14 +19,23 @@ const createProductController = async (req, res) => {
             });
             return;
         }
-        // ✅ Multiple image upload
+        // ✅ Multiple image & video upload
         const files = req.files;
         let imageUrls = [];
-        if (files && files.length > 0) {
-            for (const file of files) {
-                if (file.buffer) { // safe check
+        let videoUrls = [];
+        if (files && files.images && files.images.length > 0) {
+            for (const file of files.images) {
+                if (file.buffer) {
                     const uploadedUrl = await (0, cloudinary_1.default)(file.buffer);
                     imageUrls.push(uploadedUrl);
+                }
+            }
+        }
+        if (files && files.video && files.video.length > 0) {
+            for (const file of files.video) {
+                if (file.buffer) {
+                    const uploadedUrl = await (0, cloudinary_1.default)(file.buffer);
+                    videoUrls.push(uploadedUrl);
                 }
             }
         }
@@ -50,6 +59,8 @@ const createProductController = async (req, res) => {
             ratings,
             tags,
             images: imageUrls,
+            video: videoUrls,
+            video_link: video_link,
             more_details,
             publish,
             sku,

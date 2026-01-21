@@ -41,6 +41,7 @@ export const createProductController = async (
       tags,
       more_details,
       publish,
+      video_link,
     } = req.body;
 
     // Validation
@@ -55,15 +56,25 @@ export const createProductController = async (
       return;
     }
 
-    // ✅ Multiple image upload
-    const files = req.files as Express.Multer.File[];
+    // ✅ Multiple image & video upload
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     let imageUrls: string[] = [];
+    let videoUrls: string[] = [];
 
-    if (files && files.length > 0) {
-      for (const file of files) {
-        if (file.buffer) { // safe check
+    if (files && files.images && files.images.length > 0) {
+      for (const file of files.images) {
+        if (file.buffer) {
           const uploadedUrl = await uploadClouinary(file.buffer);
           imageUrls.push(uploadedUrl);
+        }
+      }
+    }
+
+    if (files && files.video && files.video.length > 0) {
+      for (const file of files.video) {
+        if (file.buffer) {
+          const uploadedUrl = await uploadClouinary(file.buffer);
+          videoUrls.push(uploadedUrl);
         }
       }
     }
@@ -89,6 +100,8 @@ export const createProductController = async (
       ratings,
       tags,
       images: imageUrls,
+      video: videoUrls,
+      video_link: video_link,
       more_details,
       publish,
       sku,

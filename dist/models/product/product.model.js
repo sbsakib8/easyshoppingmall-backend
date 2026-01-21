@@ -97,12 +97,23 @@ const productSchema = new mongoose_1.default.Schema({
         default: 5,
     },
     tags: {
-        type: [String],
+        type: [{
+                type: String,
+                enum: ['hot', 'cold']
+            }],
         default: [],
     },
     images: {
         type: [String],
         default: [],
+    },
+    video: {
+        type: [String],
+        default: [],
+    },
+    video_link: {
+        type: String,
+        default: null,
     },
     more_details: {
         type: Object,
