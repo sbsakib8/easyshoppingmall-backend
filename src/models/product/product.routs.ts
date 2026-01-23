@@ -6,7 +6,10 @@ import { createProductController, deleteProductDetails, getProductByCategory, ge
 
 const productRouter = Router()
 
-productRouter.post("/create", isAuth, isAdmin, upload.array("images", 4), createProductController)
+productRouter.post("/create", isAuth, isAdmin, upload.fields([
+    { name: 'images', maxCount: 4 },
+    { name: 'video', maxCount: 1 }
+]), createProductController)
 productRouter.post('/get', getProductController)
 productRouter.post("/get-product-by-category", getProductByCategory)
 productRouter.post('/get-pruduct-by-category-and-subcategory', getProductByCategoryAndSubCategory)

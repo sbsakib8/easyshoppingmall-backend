@@ -8,7 +8,8 @@ import {
 
 const router = express.Router();
 
-// Defined to match the frontend's expected data structure retrieval
+// All analytics endpoints can accept `startDate` and `endDate` query parameters.
+// Example: /customer/summary?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
 router.get("/customer/summary", getCustomerAnalytics);
 router.get("/product/summary", getProductAnalytics);
 router.get("/traffic/summary", getTrafficAnalytics);

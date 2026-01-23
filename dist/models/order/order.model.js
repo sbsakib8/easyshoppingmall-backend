@@ -127,6 +127,8 @@ const orderSchema = new mongoose_1.Schema({
         default: "pending",
     },
 }, { timestamps: true });
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ userId: 1, createdAt: -1 });
 // FIX PRE-HOOK TYPES
 orderSchema.pre("save", function (next) {
     let subTotal = 0;

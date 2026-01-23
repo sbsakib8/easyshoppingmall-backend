@@ -93,6 +93,8 @@ const userSchema = new mongoose_1.default.Schema({
         default: null,
     }
 }, { timestamps: true });
+userSchema.index({ role: 1, createdAt: -1 });
+userSchema.index({ role: 1, date_of_birth: 1 });
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password"))
         return next();
