@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.confirmManualPayment = exports.getOrdersByStatus = exports.getAllOrders = exports.createManualOrder = exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
+exports.deleteOrder = exports.confirmManualPayment = exports.getOrdersByStatus = exports.getAllOrders = exports.createManualOrder = exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const cart_utils_1 = require("../../utils/cart.utils");
 const cart_model_1 = require("../cart/cart.model");
@@ -498,3 +498,39 @@ const confirmManualPayment = async (req, res) => {
     }
 };
 exports.confirmManualPayment = confirmManualPayment;
+/**
+ * @desc Delete an order by ID (Admin only)
+ * @route DELETE /api/orders/:id
+ * @access Private (Admin)
+ */
+const deleteOrder = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
+            res.status(400).json({ success: false, message: "Invalid order ID" });
+            return;
+        }
+        const order = await order_model_1.default.findById(id);
+        if (!order) {
+            res.status(404).json({ success: false, message: "Order not found" });
+            return;
+        }
+        // Find the user and pull the order from their orderHistory
+        await user_model_1.default.findByIdAndUpdate(order.userId, {
+            $pull: { orderHistory: order._id },
+        });
+        // Delete the order
+        await order_model_1.default.findByIdAndDelete(id);
+        res.json({
+            success: true,
+            message: "Order deleted successfully",
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message || "Internal Server Error",
+        });
+    }
+};
+exports.deleteOrder = deleteOrder;

@@ -1,5 +1,8 @@
 import { Request, Response } from "express";
 import uploadClouinary from "../../utils/cloudinary";
+import { CartModel } from "../cart/cart.model";
+import { Review } from "../review/review.model";
+import { WishlistModel } from "../wishlist/wishlist.model";
 import productModel from "./product.model";
 
 interface PaginationRequest extends Request {
@@ -322,7 +325,7 @@ export const updateProductDetails = async (
   }
 };
 
-// Delete Product
+
 export const deleteProductDetails = async (
   req: PaginationRequest,
   res: Response
@@ -338,6 +341,21 @@ export const deleteProductDetails = async (
       });
       return;
     }
+
+    // Remove the product from all carts
+    await CartModel.updateMany(
+      { "products.productId": _id },
+      { $pull: { products: { productId: _id } } }
+    );
+
+    // Remove the product from all wishlists
+    await WishlistModel.updateMany(
+      { "products.productId": _id },
+      { $pull: { products: { productId: _id } } }
+    );
+
+    // Delete all reviews associated with the product
+    await Review.deleteMany({ productId: _id });
 
     const deleteProduct = await productModel.deleteOne({ _id });
 
