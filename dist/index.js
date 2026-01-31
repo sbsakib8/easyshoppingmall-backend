@@ -26,6 +26,7 @@ const review_routs_1 = __importDefault(require("./models/review/review.routs"));
 const subcategory_routs_1 = __importDefault(require("./models/subcategory/subcategory.routs"));
 const user_routs_1 = __importDefault(require("./models/user/user.routs"));
 const wishlist_routs_1 = __importDefault(require("./models/wishlist/wishlist.routs"));
+const errorHandler_1 = __importDefault(require("./middlewares/errorHandler")); // Import the error handler
 // middleware
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
@@ -64,4 +65,6 @@ app.use("/api/admin", admin_route_1.default);
 app.get("/", (req, res) => {
     res.send("APi  is running...");
 });
+// Centralized error handling middleware (must be last)
+app.use(errorHandler_1.default);
 exports.default = app;

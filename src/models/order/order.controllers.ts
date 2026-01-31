@@ -568,3 +568,45 @@ export const confirmManualPayment = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+/**
+ * @desc Delete an order by ID (Admin only)
+ * @route DELETE /api/orders/:id
+ * @access Private (Admin)
+ */
+export const deleteOrder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: "Invalid order ID" });
+      return;
+    }
+
+    const order = await OrderModel.findById(id);
+
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    // Find the user and pull the order from their orderHistory
+    await UserModel.findByIdAndUpdate(order.userId, {
+      $pull: { orderHistory: order._id },
+    });
+
+    // Delete the order
+    await OrderModel.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: "Order deleted successfully",
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+

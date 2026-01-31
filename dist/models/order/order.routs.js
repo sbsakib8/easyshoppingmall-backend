@@ -51,4 +51,10 @@ router.put("/:id/status", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_
  * @access  Private (Admin)
  */
 router.put("/admin/orders/:id/verify", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.confirmManualPayment);
+/**
+ * @route   DELETE /api/orders/:id
+ * @desc    Delete an order by ID (Admin only)
+ * @access  Private (Admin)
+ */
+router.delete("/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.deleteOrder);
 exports.default = router;

@@ -4,10 +4,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.getAllUsers = exports.getUserProfile = exports.googleAuth = exports.resetpassword = exports.verifyotp = exports.sendotp = exports.signOut = exports.signIn = exports.signUp = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 const genaretetoken_1 = __importDefault(require("../../utils/genaretetoken"));
 const nodemailer_1 = require("../../utils/nodemailer");
+const address_model_1 = __importDefault(require("../address/address.model"));
+const cart_model_1 = require("../cart/cart.model");
+const order_model_1 = __importDefault(require("../order/order.model"));
+const review_model_1 = require("../review/review.model");
 const user_model_1 = __importDefault(require("../user/user.model"));
+const wishlist_model_1 = require("../wishlist/wishlist.model");
 // Cookie 
 const cookieOptions = {
     httpOnly: true,
@@ -440,19 +446,35 @@ const updateUserProfile = async (req, res) => {
 exports.updateUserProfile = updateUserProfile;
 // delete user
 const deleteUser = async (req, res) => {
+    const session = await mongoose_1.default.startSession();
+    session.startTransaction();
     try {
         const userId = req.params.id;
-        const user = await user_model_1.default.findByIdAndDelete(userId);
+        const user = await user_model_1.default.findById(userId).session(session);
         if (!user) {
+            await session.abortTransaction();
+            session.endSession();
             res.status(404).json({ success: false, message: "User not found" });
             return;
         }
+        // Delete associated data
+        await address_model_1.default.deleteMany({ userId: user._id }).session(session);
+        await cart_model_1.CartModel.deleteMany({ userId: user._id }).session(session);
+        await order_model_1.default.deleteMany({ userId: user._id }).session(session);
+        await wishlist_model_1.WishlistModel.deleteMany({ userId: user._id }).session(session);
+        await review_model_1.Review.deleteMany({ userId: user._id }).session(session);
+        // Delete the user
+        await user_model_1.default.findByIdAndDelete(userId, { session });
+        await session.commitTransaction();
+        session.endSession();
         res.status(200).json({ success: true, message: "User deleted successfully" });
     }
     catch (error) {
+        await session.abortTransaction();
+        session.endSession();
         res.status(500).json({
             success: false,
-            message: error.message,
+            message: error.message || "Internal Server Error",
         });
     }
 };

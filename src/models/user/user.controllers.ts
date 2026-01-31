@@ -1,10 +1,16 @@
+import mongoose from "mongoose";
 import type { CookieOptions, Request, Response } from "express";
 import { AuthRequest } from "../../middlewares/isAuth";
 import uploadClouinary from "../../utils/cloudinary";
 import generateToken from "../../utils/genaretetoken";
 import { sendEmail } from "../../utils/nodemailer";
+import AddressModel from "../address/address.model";
+import { CartModel } from "../cart/cart.model";
+import OrderModel from "../order/order.model";
+import { Review } from "../review/review.model";
 import type { IUser } from "../user/user.model";
 import User from "../user/user.model";
+import { WishlistModel } from "../wishlist/wishlist.model";
 
 // Cookie 
 const cookieOptions: CookieOptions = {
@@ -476,20 +482,44 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
 };
 
 
+
 // delete user
 export const deleteUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const userId = req.params.id;
-    const user = await User.findByIdAndDelete(userId);
+    const user = await User.findById(userId).session(session);
     if (!user) {
+      await session.abortTransaction();
+      session.endSession();
       res.status(404).json({ success: false, message: "User not found" });
       return;
     }
+
+    // Delete associated data
+    await AddressModel.deleteMany({ userId: user._id }).session(session);
+    await CartModel.deleteMany({ userId: user._id }).session(session);
+    await OrderModel.deleteMany({ userId: user._id }).session(session);
+    await WishlistModel.deleteMany({ userId: user._id }).session(session);
+    await Review.deleteMany({ userId: user._id }).session(session);
+
+    // Delete the user
+    await User.findByIdAndDelete(userId, { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
     res.status(200).json({ success: true, message: "User deleted successfully" });
   } catch (error: any) {
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({
       success: false,
-      message: (error as Error).message,
+      message: error.message || "Internal Server Error",
     });
   }
 };
+
+
