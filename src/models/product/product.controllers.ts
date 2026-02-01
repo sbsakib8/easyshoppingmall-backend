@@ -1,5 +1,8 @@
 import { Request, Response } from "express";
 import uploadClouinary from "../../utils/cloudinary";
+import { CartModel } from "../cart/cart.model";
+import { Review } from "../review/review.model";
+import { WishlistModel } from "../wishlist/wishlist.model";
 import productModel from "./product.model";
 
 interface PaginationRequest extends Request {
@@ -41,6 +44,7 @@ export const createProductController = async (
       tags,
       more_details,
       publish,
+      video_link,
     } = req.body;
 
     // Validation
@@ -55,15 +59,25 @@ export const createProductController = async (
       return;
     }
 
-    // ✅ Multiple image upload
-    const files = req.files as Express.Multer.File[];
+    // ✅ Multiple image & video upload
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     let imageUrls: string[] = [];
+    let videoUrls: string[] = [];
 
-    if (files && files.length > 0) {
-      for (const file of files) {
-        if (file.buffer) { // safe check
+    if (files && files.images && files.images.length > 0) {
+      for (const file of files.images) {
+        if (file.buffer) {
           const uploadedUrl = await uploadClouinary(file.buffer);
           imageUrls.push(uploadedUrl);
+        }
+      }
+    }
+
+    if (files && files.video && files.video.length > 0) {
+      for (const file of files.video) {
+        if (file.buffer) {
+          const uploadedUrl = await uploadClouinary(file.buffer);
+          videoUrls.push(uploadedUrl);
         }
       }
     }
@@ -89,6 +103,8 @@ export const createProductController = async (
       ratings,
       tags,
       images: imageUrls,
+      video: videoUrls,
+      video_link: video_link,
       more_details,
       publish,
       sku,
@@ -309,7 +325,7 @@ export const updateProductDetails = async (
   }
 };
 
-// Delete Product
+
 export const deleteProductDetails = async (
   req: PaginationRequest,
   res: Response
@@ -325,6 +341,21 @@ export const deleteProductDetails = async (
       });
       return;
     }
+
+    // Remove the product from all carts
+    await CartModel.updateMany(
+      { "products.productId": _id },
+      { $pull: { products: { productId: _id } } }
+    );
+
+    // Remove the product from all wishlists
+    await WishlistModel.updateMany(
+      { "products.productId": _id },
+      { $pull: { products: { productId: _id } } }
+    );
+
+    // Delete all reviews associated with the product
+    await Review.deleteMany({ productId: _id });
 
     const deleteProduct = await productModel.deleteOne({ _id });
 

@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteCategory = exports.updateCategory = exports.getCategoryById = exports.getCategories = exports.createCategory = void 0;
+const product_model_1 = __importDefault(require("../product/product.model"));
 const category_model_1 = __importDefault(require("./category.model"));
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 // ✅ Create Category
@@ -101,6 +102,8 @@ exports.updateCategory = updateCategory;
 const deleteCategory = async (req, res) => {
     try {
         const { id } = req.params;
+        // Remove the category from all products that reference it
+        await product_model_1.default.updateMany({ category: id }, { $pull: { category: id } });
         const deletedCategory = await category_model_1.default.findByIdAndDelete(id);
         if (!deletedCategory) {
             res.status(404).json({ success: false, message: "Category not found" });

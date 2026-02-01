@@ -23,6 +23,7 @@ import reviewRouter from './models/review/review.routs';
 import subcategoriesRoutes from "./models/subcategory/subcategory.routs";
 import userRoutes from "./models/user/user.routs";
 import wishlistRouter from './models/wishlist/wishlist.routs';
+import errorHandler from "./middlewares/errorHandler"; // Import the error handler
 
 // middleware
 const app: Application = express();
@@ -71,5 +72,8 @@ app.use("/api/admin", adminRoutes)
 app.get("/", (req: Request, res: Response) => {
   res.send("APi  is running...");
 });
+
+// Centralized error handling middleware (must be last)
+app.use(errorHandler);
 
 export default app;

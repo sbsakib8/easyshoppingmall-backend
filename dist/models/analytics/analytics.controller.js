@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getProductAnalytics = exports.getCustomerAnalytics = void 0;
+exports.getTrafficAnalytics = exports.getProductAnalytics = exports.getCustomerAnalytics = void 0;
 const order_model_1 = __importDefault(require("../order/order.model"));
 const user_model_1 = __importDefault(require("../user/user.model"));
 const address_model_1 = __importDefault(require("../address/address.model"));
@@ -12,26 +12,38 @@ const address_model_1 = __importDefault(require("../address/address.model"));
 // =======================
 const getCustomerAnalytics = async (req, res) => {
     try {
+        const { startDate, endDate } = req.query;
+        let dateFilter = {};
+        if (startDate && endDate) {
+            dateFilter.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate),
+            };
+        }
+        else {
+            const now = new Date();
+            const thirtyDaysAgo = new Date(new Date().setDate(now.getDate() - 30));
+            dateFilter.createdAt = {
+                $gte: thirtyDaysAgo,
+                $lte: now,
+            };
+        }
         // 1. Core Metrics
         const totalCustomers = await user_model_1.default.countDocuments({ role: "USER" });
-        // New Customers (this month)
-        const now = new Date();
-        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const newCustomers = await user_model_1.default.countDocuments({
             role: "USER",
-            createdAt: { $gte: firstDayOfMonth },
+            ...dateFilter,
         });
-        // Returning Customers (More than 1 order)
         const returningCustomerStats = await order_model_1.default.aggregate([
+            { $match: dateFilter },
             { $group: { _id: "$userId", orderCount: { $sum: 1 } } },
             { $match: { orderCount: { $gt: 1 } } },
             { $count: "count" }
         ]);
-        const returningCustomers = returningCustomerStats.length > 0 ? returningCustomerStats[0].count : 0;
-        // Retention Rate
-        const customerRetentionRate = totalCustomers > 0 ? ((returningCustomers / totalCustomers) * 100).toFixed(1) : 0;
-        // Financial Metrics (LTV, AOV)
+        const returningCustomers = returningCustomerStats[0]?.count || 0;
+        const customerRetentionRate = totalCustomers > 0 ? Number(((returningCustomers / totalCustomers) * 100).toFixed(1)) : 0;
         const financialStats = await order_model_1.default.aggregate([
+            { $match: dateFilter },
             {
                 $group: {
                     _id: null,
@@ -43,131 +55,61 @@ const getCustomerAnalytics = async (req, res) => {
         ]);
         let averageLifetimeValue = 0;
         let averageOrderValue = 0;
-        if (financialStats.length > 0) {
-            const stats = financialStats[0];
-            const totalRevenue = stats.totalRevenue || 0;
-            const totalOrders = stats.totalOrders || 0;
-            const uniqueCustomerCount = stats.uniqueCustomers.length || 1;
-            averageLifetimeValue = Math.round(totalRevenue / uniqueCustomerCount);
-            averageOrderValue = Math.round(totalRevenue / totalOrders);
-        }
-        // 2. Customer Growth (Last 6 Months)
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-        const growthStats = await user_model_1.default.aggregate([
-            {
-                $match: {
-                    role: "USER",
-                    createdAt: { $gte: sixMonthsAgo }
-                }
-            },
+        const stats = financialStats[0] || { totalRevenue: 0, totalOrders: 0, uniqueCustomers: [] };
+        const totalRevenue = stats.totalRevenue;
+        const totalOrders = stats.totalOrders;
+        const uniqueCustomerCount = stats.uniqueCustomers.length;
+        averageLifetimeValue = uniqueCustomerCount > 0 ? Math.round(totalRevenue / uniqueCustomerCount) : 0;
+        averageOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+        const customerGrowth = await order_model_1.default.aggregate([
+            { $match: dateFilter },
             {
                 $group: {
-                    _id: {
-                        month: { $month: "$createdAt" },
-                        year: { $year: "$createdAt" }
-                    },
-                    new: { $sum: 1 }
-                }
-            },
-            { $sort: { "_id.year": 1, "_id.month": 1 } }
-        ]);
-        // Returning Growth (Active returning users per month)
-        const returningGrowthStats = await order_model_1.default.aggregate([
-            {
-                $match: {
-                    createdAt: { $gte: sixMonthsAgo }
+                    _id: "$userId",
+                    firstOrderDate: { $min: "$createdAt" }
                 }
             },
             {
                 $lookup: {
                     from: "users",
-                    localField: "userId",
-                    foreignField: "_id",
-                    as: "user"
-                }
-            },
-            { $unwind: "$user" },
-            {
-                $addFields: {
-                    // If order is created after the user's creation month, they are returning? 
-                    // Simplification: Any order by a user who existed before the order month is "returning" behavior
-                    // But strictly, returning means >1 order.
-                    // Let's stick to the previous logic: Users who placed an order in Month X, and their first order was < Month X.
-                    // For simplicity in this aggregation:
-                    userCreatedAt: "$user.createdAt"
-                }
-            },
-            {
-                $group: {
-                    _id: {
-                        month: { $month: "$createdAt" },
-                        year: { $year: "$createdAt" },
-                        userId: "$userId"
-                    },
-                    orderCount: { $sum: 1 }
-                }
-            },
-            // This gives active users per month. To distinguish "new" vs "returning" in that month requires checking purchase history.
-            // We will simplify: The `growthStats` (User registration) is "New".
-            // "Returning" in the chart usually means Active Users - New Users. Or simply Repeat Buyers.
-            // Let's use: Returning = Active Users in Month (from Orders) who registered in a previous month.
-            {
-                $lookup: {
-                    from: "users",
-                    localField: "_id.userId",
+                    localField: "_id",
                     foreignField: "_id",
                     as: "userInfo"
                 }
             },
             { $unwind: "$userInfo" },
             {
-                $addFields: {
-                    regMonth: { $month: "$userInfo.createdAt" },
-                    regYear: { $year: "$userInfo.createdAt" },
-                    currentMonth: "$_id.month",
-                    currentYear: "$_id.year"
-                }
-            },
-            {
-                // Filter for users who registered BEFORE the current order month
-                $match: {
-                    $expr: {
-                        $or: [
-                            { $lt: ["$regYear", "$currentYear"] },
-                            { $and: [{ $eq: ["$regYear", "$currentYear"] }, { $lt: ["$regMonth", "$currentMonth"] }] }
+                $project: {
+                    year: { $year: "$firstOrderDate" },
+                    month: { $month: "$firstOrderDate" },
+                    isNew: {
+                        $eq: [
+                            { $year: "$userInfo.createdAt" },
+                            { $year: "$firstOrderDate" }
                         ]
                     }
                 }
             },
             {
                 $group: {
-                    _id: { month: "$currentMonth", year: "$currentYear" },
-                    count: { $sum: 1 }
+                    _id: { year: "$year", month: "$month" },
+                    newCustomers: { $sum: { $cond: ["$isNew", 1, 0] } },
+                    returningCustomers: { $sum: { $cond: ["$isNew", 0, 1] } }
                 }
-            }
+            },
+            { $sort: { "_id.year": 1, "_id.month": 1 } }
         ]);
-        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        // Combine for Chart
-        // We want last 6 months filled even if empty
-        const combinedGrowth = [];
-        for (let i = 5; i >= 0; i--) {
-            const d = new Date();
-            d.setMonth(d.getMonth() - i);
-            const m = d.getMonth() + 1;
-            const y = d.getFullYear();
-            const newStat = growthStats.find(s => s._id.month === m && s._id.year === y);
-            const retStat = returningGrowthStats.find(s => s._id.month === m && s._id.year === y);
-            combinedGrowth.push({
-                month: months[m - 1],
-                new: newStat ? newStat.new : 0,
-                returning: retStat ? retStat.count : 0,
-                total: (newStat ? newStat.new : 0) + (retStat ? retStat.count : 0)
-            });
-        }
+        const monthsLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const combinedGrowth = customerGrowth.map(stat => {
+            const { year, month } = stat._id;
+            return {
+                month: monthsLabels[month - 1],
+                new: stat.newCustomers,
+                returning: stat.returningCustomers,
+                total: stat.newCustomers + stat.returningCustomers
+            };
+        });
         // 3. Demographics
-        // Age Groups (requires date_of_birth)
-        // We can aggregate on DOB.
         const ageGroups = await user_model_1.default.aggregate([
             { $match: { role: "USER", date_of_birth: { $ne: null } } },
             {
@@ -191,7 +133,6 @@ const getCustomerAnalytics = async (req, res) => {
                 }
             }
         ]);
-        // Map buckets to frontend labels: "18-24", "25-34", etc.
         const totalWithAge = ageGroups.reduce((a, b) => a + b.count, 0);
         const formattedAgeGroups = ageGroups.map((g) => {
             let label = "Others";
@@ -211,7 +152,6 @@ const getCustomerAnalytics = async (req, res) => {
                 percentage: totalWithAge > 0 ? Math.round((g.count / totalWithAge) * 100) : 0
             };
         });
-        // Locations (from Address)
         const locationStats = await address_model_1.default.aggregate([
             { $match: { country: { $ne: "" } } },
             { $group: { _id: "$country", count: { $sum: 1 } } },
@@ -226,6 +166,7 @@ const getCustomerAnalytics = async (req, res) => {
         }));
         // 4. Top Customers
         const topCustomersRaw = await order_model_1.default.aggregate([
+            { $match: dateFilter },
             {
                 $group: {
                     _id: "$userId",
@@ -249,7 +190,7 @@ const getCustomerAnalytics = async (req, res) => {
             name: c.user.name,
             orders: c.orders,
             spent: c.spent,
-            status: c.user.customerstatus === "NewCustomer" ? "Regular" : "Premium" // Map backend status to frontend expectations
+            status: c.user.customerstatus === "VIPCustomer" ? "VIP" : c.user.customerstatus === "TopCustomer" ? "Premium" : "Regular"
         }));
         res.status(200).json({
             success: true,
@@ -265,14 +206,7 @@ const getCustomerAnalytics = async (req, res) => {
                     ageGroups: formattedAgeGroups,
                     locations: formattedLocations
                 },
-                topCustomers,
-                // Mock behavior metrics as we don't track session/bounce yet
-                behaviorMetrics: {
-                    averageSessionDuration: "0m 0s",
-                    bounceRate: 0,
-                    pagesPerSession: 0,
-                    conversionRate: 0 // We can calculate this if we had visitor count
-                }
+                topCustomers
             }
         });
     }
@@ -287,8 +221,25 @@ exports.getCustomerAnalytics = getCustomerAnalytics;
 // =======================
 const getProductAnalytics = async (req, res) => {
     try {
+        const { startDate, endDate } = req.query;
+        let dateFilter = {};
+        if (startDate && endDate) {
+            dateFilter.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate),
+            };
+        }
+        else {
+            const now = new Date();
+            const thirtyDaysAgo = new Date(new Date().setDate(now.getDate() - 30));
+            dateFilter.createdAt = {
+                $gte: thirtyDaysAgo,
+                $lte: now,
+            };
+        }
         // 1. Overview
         const totalStats = await order_model_1.default.aggregate([
+            { $match: dateFilter },
             {
                 $group: {
                     _id: null,
@@ -299,42 +250,32 @@ const getProductAnalytics = async (req, res) => {
         ]);
         const stats = totalStats[0] || { totalRevenue: 0, totalOrders: 0 };
         const avgOrderValue = stats.totalOrders > 0 ? Math.round(stats.totalRevenue / stats.totalOrders) : 0;
-        // Conversion Rate (Total Orders / Total Users approximation)
         const totalUsers = await user_model_1.default.countDocuments({ role: "USER" });
         const conversionRate = totalUsers > 0 ? ((stats.totalOrders / totalUsers) * 100).toFixed(1) : 0;
-        // 2. Sales Trend (Last 7 days)
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        // 2. Sales Trend
         const salesTrend = await order_model_1.default.aggregate([
-            { $match: { createdAt: { $gte: sevenDaysAgo } } },
+            { $match: dateFilter },
             {
                 $group: {
                     _id: {
-                        day: { $dayOfMonth: "$createdAt" },
-                        month: { $month: "$createdAt" },
-                        year: { $year: "$createdAt" },
                         dateStr: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
                     },
-                    sales: { $sum: "$totalAmt" }, // Revenue
+                    sales: { $sum: "$totalAmt" },
                     orders: { $sum: 1 },
-                    revenue: { $sum: "$totalAmt" } // Redundant but matches frontend key expectation potentially
+                    revenue: { $sum: "$totalAmt" }
                 }
             },
-            { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } }
+            { $sort: { "_id.dateStr": 1 } }
         ]);
         const formattedSalesTrend = salesTrend.map(s => ({
             date: s._id.dateStr,
-            sales: s.orders, // Frontend might stick 'sales' as unit count or revenue, code says 'sales: 4500' which looks like volume? But mock data had revenue separate. 
-            // Mock: { date: '2024-08-26', sales: 4500, orders: 45, revenue: 67500 } -> sales probably means simple sum or volume? 
-            // Let's assume sales = sum of quantity.
-            // We need to unwind products to get total quantity for correct 'sales' unit count.
-            // For efficiency, let's just use orders count for now or rough estimate.
-            // Actually, let's fix the aggregation for 'sales' = quantity sum if possible, or just leave as is.
+            sales: s.sales,
             orders: s.orders,
             revenue: s.revenue
         }));
         // 3. Top Products
         const topProducts = await order_model_1.default.aggregate([
+            { $match: dateFilter },
             { $unwind: "$products" },
             {
                 $group: {
@@ -351,12 +292,13 @@ const getProductAnalytics = async (req, res) => {
                     name: 1,
                     sales: 1,
                     revenue: 1,
-                    growth: { $literal: 0 }
+                    growth: { $literal: 0 } // Growth calculation not implemented
                 }
             }
         ]);
         // 4. Category Distribution
         const categoryStats = await order_model_1.default.aggregate([
+            { $match: dateFilter },
             { $unwind: "$products" },
             {
                 $lookup: {
@@ -367,7 +309,6 @@ const getProductAnalytics = async (req, res) => {
                 }
             },
             { $unwind: "$productDetails" },
-            { $unwind: "$productDetails.category" },
             {
                 $lookup: {
                     from: "categories",
@@ -376,7 +317,7 @@ const getProductAnalytics = async (req, res) => {
                     as: "categoryInfo"
                 }
             },
-            { $unwind: "$categoryInfo" },
+            { $unwind: { path: "$categoryInfo", preserveNullAndEmptyArrays: true } },
             {
                 $group: {
                     _id: "$categoryInfo.name",
@@ -388,7 +329,7 @@ const getProductAnalytics = async (req, res) => {
         ]);
         const totalCategorySales = categoryStats.reduce((acc, curr) => acc + curr.sales, 0);
         const categoryDistribution = categoryStats.map(stat => ({
-            name: stat._id,
+            name: stat._id || "Uncategorized",
             sales: stat.sales,
             value: totalCategorySales > 0 ? Math.round((stat.sales / totalCategorySales) * 100) : 0
         }));
@@ -411,3 +352,35 @@ const getProductAnalytics = async (req, res) => {
     }
 };
 exports.getProductAnalytics = getProductAnalytics;
+// =======================
+// TRAFFIC ANALYTICS
+// =======================
+const getTrafficAnalytics = async (req, res) => {
+    try {
+        // Real traffic analytics are not implemented yet. Returning a zeroed-out response.
+        const zeroedTrafficData = {
+            totalVisitors: 0,
+            pageViews: 0,
+            bounceRate: 0,
+            avgSessionDuration: 0,
+            conversionRate: 0,
+            revenue: 0,
+        };
+        res.status(200).json({
+            success: true,
+            message: "Traffic analytics not implemented. Returning placeholder data.",
+            data: {
+                analyticsData: zeroedTrafficData,
+                chartData: [],
+                topPages: [],
+                trafficSources: [],
+                deviceStats: []
+            }
+        });
+    }
+    catch (error) {
+        console.error("Error in getTrafficAnalytics:", error);
+        res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+exports.getTrafficAnalytics = getTrafficAnalytics;

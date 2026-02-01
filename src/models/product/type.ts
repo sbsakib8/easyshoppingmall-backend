@@ -15,8 +15,10 @@ export interface IProduct extends Document {
   productRank: number;
   discount: number | null;
   ratings: number;
-  tags: string[];
+  tags: ('hot' | 'cold')[];
   images: string[];
+  video: string[];
+  video_link?: string | null;
   more_details?: Record<string, any>;
   publish?: boolean;
   sku?: string | null;

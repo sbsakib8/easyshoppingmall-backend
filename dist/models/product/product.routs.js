@@ -6,7 +6,10 @@ const isAuth_1 = require("../../middlewares/isAuth");
 const multer_1 = require("../../middlewares/multer");
 const product_controllers_1 = require("./product.controllers");
 const productRouter = (0, express_1.Router)();
-productRouter.post("/create", isAuth_1.isAuth, isAdmin_1.isAdmin, multer_1.upload.array("images", 4), product_controllers_1.createProductController);
+productRouter.post("/create", isAuth_1.isAuth, isAdmin_1.isAdmin, multer_1.upload.fields([
+    { name: 'images', maxCount: 4 },
+    { name: 'video', maxCount: 1 }
+]), product_controllers_1.createProductController);
 productRouter.post('/get', product_controllers_1.getProductController);
 productRouter.post("/get-product-by-category", product_controllers_1.getProductByCategory);
 productRouter.post('/get-pruduct-by-category-and-subcategory', product_controllers_1.getProductByCategoryAndSubCategory);

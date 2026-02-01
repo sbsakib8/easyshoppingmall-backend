@@ -44,6 +44,8 @@ const addressSchema = new Schema<IAddress>(
   }
 );
 
+addressSchema.index({ country: 1 });
+
 // 3. Model type
 const AddressModel: Model<IAddress> = mongoose.model<IAddress>(
   "Address",

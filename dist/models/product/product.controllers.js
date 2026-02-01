@@ -5,11 +5,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.searchProduct = exports.deleteProductDetails = exports.updateProductDetails = exports.getProductDetails = exports.getProductByCategoryAndSubCategory = exports.getProductByCategory = exports.getProductController = exports.createProductController = void 0;
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
+const cart_model_1 = require("../cart/cart.model");
+const review_model_1 = require("../review/review.model");
+const wishlist_model_1 = require("../wishlist/wishlist.model");
 const product_model_1 = __importDefault(require("./product.model"));
 // Create Product
 const createProductController = async (req, res) => {
     try {
-        const { productName, description, category, subCategory, featured, brand, productWeight, productSize, color, price, productStock, productRank, discount, ratings, tags, more_details, publish, } = req.body;
+        const { productName, description, category, subCategory, featured, brand, productWeight, productSize, color, price, productStock, productRank, discount, ratings, tags, more_details, publish, video_link, } = req.body;
         // Validation
         if (!productName) {
             res.status(400).json({
@@ -19,14 +22,23 @@ const createProductController = async (req, res) => {
             });
             return;
         }
-        // ✅ Multiple image upload
+        // ✅ Multiple image & video upload
         const files = req.files;
         let imageUrls = [];
-        if (files && files.length > 0) {
-            for (const file of files) {
-                if (file.buffer) { // safe check
+        let videoUrls = [];
+        if (files && files.images && files.images.length > 0) {
+            for (const file of files.images) {
+                if (file.buffer) {
                     const uploadedUrl = await (0, cloudinary_1.default)(file.buffer);
                     imageUrls.push(uploadedUrl);
+                }
+            }
+        }
+        if (files && files.video && files.video.length > 0) {
+            for (const file of files.video) {
+                if (file.buffer) {
+                    const uploadedUrl = await (0, cloudinary_1.default)(file.buffer);
+                    videoUrls.push(uploadedUrl);
                 }
             }
         }
@@ -50,6 +62,8 @@ const createProductController = async (req, res) => {
             ratings,
             tags,
             images: imageUrls,
+            video: videoUrls,
+            video_link: video_link,
             more_details,
             publish,
             sku,
@@ -241,7 +255,6 @@ const updateProductDetails = async (req, res) => {
     }
 };
 exports.updateProductDetails = updateProductDetails;
-// Delete Product
 const deleteProductDetails = async (req, res) => {
     try {
         const { _id } = req.body;
@@ -253,6 +266,12 @@ const deleteProductDetails = async (req, res) => {
             });
             return;
         }
+        // Remove the product from all carts
+        await cart_model_1.CartModel.updateMany({ "products.productId": _id }, { $pull: { products: { productId: _id } } });
+        // Remove the product from all wishlists
+        await wishlist_model_1.WishlistModel.updateMany({ "products.productId": _id }, { $pull: { products: { productId: _id } } });
+        // Delete all reviews associated with the product
+        await review_model_1.Review.deleteMany({ productId: _id });
         const deleteProduct = await product_model_1.default.deleteOne({ _id });
         res.json({
             message: "Delete successfully",

@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import ProductModel from "../product/product.model";
 import CategoryModel from "./category.model";
 import uploadClouinary from "../../utils/cloudinary";
 
@@ -103,11 +104,17 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
   }
 };
 
-
 //  Delete Category
 export const deleteCategory = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+
+    // Remove the category from all products that reference it
+    await ProductModel.updateMany(
+      { category: id },
+      { $pull: { category: id } }
+    );
+
     const deletedCategory = await CategoryModel.findByIdAndDelete(id);
 
     if (!deletedCategory) {

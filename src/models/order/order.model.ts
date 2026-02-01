@@ -104,6 +104,9 @@ const orderSchema = new Schema<IOrder>(
   { timestamps: true }
 );
 
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ userId: 1, createdAt: -1 });
+
 // FIX PRE-HOOK TYPES
 orderSchema.pre<IOrder & Document>("save", function (next) {
   let subTotal = 0;
