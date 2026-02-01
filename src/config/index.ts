@@ -10,7 +10,7 @@ interface data {
     cloudapikey: string;
     cloudapisecret: string;
     sslcommerzstoreid: string;
-    sslcommerzstorepassword: string
+    sslcommerzstorepassword: string;
 }
 const processdata: data = {
     jwtsecret: process.env.JWT_SECRET || "sjdtkfyg7t87tvyg97yuhu98",

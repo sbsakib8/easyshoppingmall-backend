@@ -36,7 +36,13 @@ const createOrder = async (req, res) => {
                 message: `Missing required address fields: ${missingAddressFields.join(", ")}`,
             });
         }
-        const cart = await cart_model_1.CartModel.findOne({ userId }).populate("products.productId");
+        const cart = await cart_model_1.CartModel.findOne({ userId }).populate({
+            path: "products.productId",
+            populate: [
+                { path: "category", model: "Category" },
+                { path: "subCategory", model: "SubCategory" }
+            ]
+        });
         if (!cart || cart.products.length === 0) {
             return res.status(404).json({ success: false, message: "Cart is empty" });
         }
@@ -56,6 +62,8 @@ const createOrder = async (req, res) => {
                 price: productPrice,
                 totalPrice: quantity * productPrice,
                 size: item.size,
+                color: item.color,
+                weight: item.weight,
             };
         });
         // Create order
@@ -98,11 +106,6 @@ const createOrder = async (req, res) => {
     }
 };
 exports.createOrder = createOrder;
-/**
- * @desc Get all orders for logged-in user
- * @route GET /api/orders/my-orders
- * @access Private (User)
- */
 const getMyOrders = async (req, res) => {
     try {
         const userId = req.userId;
@@ -290,7 +293,13 @@ const createManualOrder = async (req, res) => {
             });
         }
         // ✅ 3. Validate cart
-        const cart = await cart_model_1.CartModel.findOne({ userId }).populate("products.productId");
+        const cart = await cart_model_1.CartModel.findOne({ userId }).populate({
+            path: "products.productId",
+            populate: [
+                { path: "category", model: "Category" },
+                { path: "subCategory", model: "SubCategory" }
+            ]
+        });
         if (!cart || cart.products.length === 0) {
             return res.status(404).json({ success: false, message: "Cart is empty" });
         }
