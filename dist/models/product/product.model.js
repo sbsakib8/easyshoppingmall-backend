@@ -123,6 +123,10 @@ const productSchema = new mongoose_1.default.Schema({
         type: Boolean,
         default: true,
     },
+    gender: {
+        type: String,
+        default: "unisex",
+    },
     sku: {
         type: String,
         unique: true,

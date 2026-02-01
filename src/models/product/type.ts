@@ -20,6 +20,7 @@ export interface IProduct extends Document {
   video: string[];
   video_link?: string | null;
   more_details?: Record<string, any>;
+  gender?: string;
   publish?: boolean;
   sku?: string | null;
   createdAt?: Date;

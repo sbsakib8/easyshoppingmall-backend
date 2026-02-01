@@ -45,7 +45,13 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
     }
 
 
-    const cart = await CartModel.findOne({ userId }).populate("products.productId");
+    const cart = await CartModel.findOne({ userId }).populate({
+      path: "products.productId",
+      populate: [
+        { path: "category", model: "Category" },
+        { path: "subCategory", model: "SubCategory" }
+      ]
+    });
 
     if (!cart || cart.products.length === 0) {
       return res.status(404).json({ success: false, message: "Cart is empty" });
@@ -71,6 +77,8 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
         price: productPrice,
         totalPrice: quantity * productPrice,
         size: item.size,
+        color: item.color,
+        weight: item.weight,
       };
     });
 
@@ -116,11 +124,6 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
   }
 };
 
-/**
- * @desc Get all orders for logged-in user
- * @route GET /api/orders/my-orders
- * @access Private (User)
- */
 export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
@@ -336,7 +339,13 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
     }
 
     // ✅ 3. Validate cart
-    const cart = await CartModel.findOne({ userId }).populate("products.productId");
+    const cart = await CartModel.findOne({ userId }).populate({
+      path: "products.productId",
+      populate: [
+        { path: "category", model: "Category" },
+        { path: "subCategory", model: "SubCategory" }
+      ]
+    });
     if (!cart || cart.products.length === 0) {
       return res.status(404).json({ success: false, message: "Cart is empty" });
     }
