@@ -65,6 +65,10 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
       default: 5,
     },
     tags: {
+      type: [String],
+      default: [],
+    },
+    productStatus: {
       type: [{
         type: String,
         enum: ['hot', 'cold']
