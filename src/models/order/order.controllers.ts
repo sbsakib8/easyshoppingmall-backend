@@ -133,7 +133,13 @@ export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void
     }
 
     const orders = await OrderModel.find({ userId })
-      .populate("products.productId")
+      .populate({
+        path: "products.productId",
+        populate: [
+          { path: "category", model: "Category" },
+          { path: "subCategory", model: "SubCategory" }
+        ]
+      })
       .sort({ createdAt: -1 });
 
     res.json({
@@ -182,7 +188,7 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       id,
       { order_status: status },
       { new: true }
-    );
+    ).populate("userId", "name email");
 
     if (!order) {
       res.status(404).json({ success: false, message: "Order not found" });
@@ -461,7 +467,13 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
 export const getAllOrders = async (req: Request, res: Response): Promise<void> => {
   try {
     const orders = await OrderModel.find()
-      .populate("products.productId")
+      .populate({
+        path: "products.productId",
+        populate: [
+          { path: "category", model: "Category" },
+          { path: "subCategory", model: "SubCategory" }
+        ]
+      })
       .populate("userId", "name email") // Populate user details
       .sort({ createdAt: -1 });
 
@@ -493,7 +505,13 @@ export const getOrdersByStatus = async (req: Request, res: Response): Promise<vo
     }
 
     const orders = await OrderModel.find({ order_status: status })
-      .populate("products.productId")
+      .populate({
+        path: "products.productId",
+        populate: [
+          { path: "category", model: "Category" },
+          { path: "subCategory", model: "SubCategory" }
+        ]
+      })
       .populate("userId", "name email") // Populate user details
       .sort({ createdAt: -1 });
 
@@ -571,7 +589,7 @@ export const confirmManualPayment = async (req: Request, res: Response) => {
     res.json({
       success: true,
       message: "Manual payment confirmed successfully",
-      data: order,
+      data: updatedOrder.populate("userId", "name email"),
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

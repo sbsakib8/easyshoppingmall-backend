@@ -10,7 +10,7 @@ const router = express_1.default.Router();
 // 🛒 Cart
 router.post("/add", isAuth_1.isAuth, cartController_1.addToCart);
 router.get("/:userId", isAuth_1.isAuth, cartController_1.getCart);
-router.put("/update", cartController_1.updateCartItem);
-router.delete("/remove/:userId/:productId", cartController_1.removeFromCart);
-router.delete("/clear/:userId", cartController_1.clearCart);
+router.put("/update", isAuth_1.isAuth, cartController_1.updateCartItem);
+router.delete("/remove/:userId/:productId", isAuth_1.isAuth, cartController_1.removeFromCart);
+router.delete("/clear/:userId", isAuth_1.isAuth, cartController_1.clearCart);
 exports.default = router;

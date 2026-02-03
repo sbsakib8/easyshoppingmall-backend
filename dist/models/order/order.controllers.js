@@ -114,7 +114,13 @@ const getMyOrders = async (req, res) => {
             return;
         }
         const orders = await order_model_1.default.find({ userId })
-            .populate("products.productId")
+            .populate({
+            path: "products.productId",
+            populate: [
+                { path: "category", model: "Category" },
+                { path: "subCategory", model: "SubCategory" }
+            ]
+        })
             .sort({ createdAt: -1 });
         res.json({
             success: true,
@@ -155,7 +161,7 @@ const updateOrderStatus = async (req, res) => {
             });
             return;
         }
-        const order = await order_model_1.default.findByIdAndUpdate(id, { order_status: status }, { new: true });
+        const order = await order_model_1.default.findByIdAndUpdate(id, { order_status: status }, { new: true }).populate("userId", "name email");
         if (!order) {
             res.status(404).json({ success: false, message: "Order not found" });
             return;
@@ -401,7 +407,13 @@ exports.createManualOrder = createManualOrder;
 const getAllOrders = async (req, res) => {
     try {
         const orders = await order_model_1.default.find()
-            .populate("products.productId")
+            .populate({
+            path: "products.productId",
+            populate: [
+                { path: "category", model: "Category" },
+                { path: "subCategory", model: "SubCategory" }
+            ]
+        })
             .populate("userId", "name email") // Populate user details
             .sort({ createdAt: -1 });
         res.json({
@@ -431,7 +443,13 @@ const getOrdersByStatus = async (req, res) => {
             return;
         }
         const orders = await order_model_1.default.find({ order_status: status })
-            .populate("products.productId")
+            .populate({
+            path: "products.productId",
+            populate: [
+                { path: "category", model: "Category" },
+                { path: "subCategory", model: "SubCategory" }
+            ]
+        })
             .populate("userId", "name email") // Populate user details
             .sort({ createdAt: -1 });
         res.json({
@@ -499,7 +517,7 @@ const confirmManualPayment = async (req, res) => {
         res.json({
             success: true,
             message: "Manual payment confirmed successfully",
-            data: order,
+            data: updatedOrder.populate("userId", "name email"),
         });
     }
     catch (error) {
