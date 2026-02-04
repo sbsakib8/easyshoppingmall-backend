@@ -20,7 +20,6 @@ const createOrder = async (req, res) => {
         const { delivery_address, payment_method, payment_details, payment_type } = req.body; // Renamed paymentMethod to payment_method, paymentDetails to payment_details
         const userId = req.userId; // Get userId from AuthRequest
         const subtotalFromReq = Number(req.body.subtotal) || 0; // Not used in this version after product price calculation
-        const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0;
         if (!userId || !delivery_address) {
             return res.status(400).json({
                 success: false,
@@ -67,25 +66,38 @@ const createOrder = async (req, res) => {
             };
         });
         // Create order
-        const order = new order_model_1.default({
-            userId,
-            cart: cart._id, // Assign cart ID
-            orderId: uuidv4(),
-            products: orderProducts,
-            address: delivery_address, // Changed to address
-            payment_method: payment_method, // payment_method must be explicit
-            payment_status: "pending",
-            payment_details: payment_details || null, // Expect payment_details for non-manual
-            payment_type: payment_type || "full",
-            order_status: "pending",
-            deliveryCharge: deliveryChargeFromReq,
-        });
         if (!payment_method) {
             return res.status(400).json({
                 success: false,
                 message: "Payment method is required for this endpoint.",
             });
         }
+        // Verify Delivery Charge on Server
+        const dhakaDistricts = [
+            "Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel",
+            "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"
+        ];
+        let calculatedDeliveryCharge = 130;
+        if (delivery_address?.district) {
+            const district = delivery_address.district;
+            if (dhakaDistricts.some(d => district.includes(d))) {
+                calculatedDeliveryCharge = 80;
+            }
+        }
+        // Create order
+        const order = new order_model_1.default({
+            userId,
+            cart: cart._id,
+            orderId: uuidv4(),
+            products: orderProducts,
+            address: delivery_address,
+            payment_method: payment_method,
+            payment_status: "pending",
+            payment_details: payment_details || null,
+            payment_type: payment_type || "full",
+            order_status: "pending",
+            deliveryCharge: calculatedDeliveryCharge,
+        });
         await order.save();
         // Cart will be cleared after payment is confirmed (in paymentSuccess, confirmManualPayment, paymentIpn)
         await user_model_1.default.findByIdAndUpdate(userId, {
@@ -353,6 +365,18 @@ const createManualOrder = async (req, res) => {
                 });
             }
         }
+        // Verify Delivery Charge on Server
+        const dhakaDistricts = [
+            "Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel",
+            "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"
+        ];
+        let calculatedDeliveryCharge = 130;
+        if (delivery_address?.district) {
+            const district = delivery_address.district;
+            if (dhakaDistricts.some(d => district.includes(d))) {
+                calculatedDeliveryCharge = 80;
+            }
+        }
         // ✅ 5. Create order
         order = new order_model_1.default({
             userId,
@@ -364,7 +388,7 @@ const createManualOrder = async (req, res) => {
             payment_type,
             payment_details: payment_details || {},
             order_status: "pending",
-            deliveryCharge: Number(req.body.deliveryCharge) || 0,
+            deliveryCharge: calculatedDeliveryCharge,
         });
         await order.save();
         // ✅ 6. Update user's order history
