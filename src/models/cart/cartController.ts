@@ -153,7 +153,11 @@ export const getCart = async (req: RequestWithUser, res: Response): Promise<Resp
 
 
     if (!cart) {
-      return res.status(404).json({ success: false, message: "Cart not found" });
+      return res.status(200).json({
+        success: true,
+        message: "Cart is empty",
+        data: { userId, products: [], subTotalAmt: 0, totalAmt: 0 }
+      });
     }
 
     return res.status(200).json({ success: true, message: "Cart fetched successfully", data: cart });
@@ -177,7 +181,11 @@ export const updateCartItem = async (req: Request, res: Response): Promise<Respo
 
     const cart = await CartModel.findOne({ userId });
     if (!cart) {
-      return res.status(404).json({ success: false, message: "Cart not found" });
+      return res.status(200).json({
+        success: true,
+        message: "Cart is empty",
+        data: { userId, products: [], subTotalAmt: 0, totalAmt: 0 }
+      });
     }
 
     const product = cart.products.find((item: ICartProduct) =>
@@ -222,7 +230,11 @@ export const removeFromCart = async (req: Request, res: Response) => {
 
     const cart = await CartModel.findOne({ userId });
     if (!cart) {
-      return res.status(404).json({ success: false, message: "Cart not found" });
+      return res.status(200).json({
+        success: true,
+        message: "Cart is empty",
+        data: { userId, products: [], subTotalAmt: 0, totalAmt: 0 }
+      });
     }
 
     cart.products = cart.products.filter((item: ICartProduct) =>

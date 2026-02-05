@@ -124,7 +124,11 @@ const getCart = async (req, res) => {
             },
         });
         if (!cart) {
-            return res.status(404).json({ success: false, message: "Cart not found" });
+            return res.status(200).json({
+                success: true,
+                message: "Cart is empty",
+                data: { userId, products: [], subTotalAmt: 0, totalAmt: 0 }
+            });
         }
         return res.status(200).json({ success: true, message: "Cart fetched successfully", data: cart });
     }
@@ -146,7 +150,11 @@ const updateCartItem = async (req, res) => {
         }
         const cart = await cart_model_1.CartModel.findOne({ userId });
         if (!cart) {
-            return res.status(404).json({ success: false, message: "Cart not found" });
+            return res.status(200).json({
+                success: true,
+                message: "Cart is empty",
+                data: { userId, products: [], subTotalAmt: 0, totalAmt: 0 }
+            });
         }
         const product = cart.products.find((item) => isSameVariant(item, productId, color ?? undefined, size ?? undefined, weight ?? undefined));
         if (!product) {
@@ -175,7 +183,11 @@ const removeFromCart = async (req, res) => {
         const { color, size, weight } = req.query;
         const cart = await cart_model_1.CartModel.findOne({ userId });
         if (!cart) {
-            return res.status(404).json({ success: false, message: "Cart not found" });
+            return res.status(200).json({
+                success: true,
+                message: "Cart is empty",
+                data: { userId, products: [], subTotalAmt: 0, totalAmt: 0 }
+            });
         }
         cart.products = cart.products.filter((item) => !isSameVariant(item, productId, color ? String(color) : undefined, size ? String(size) : undefined, weight ? String(weight) : undefined));
         if (cart.products.length === 0) {

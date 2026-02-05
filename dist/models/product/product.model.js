@@ -97,6 +97,10 @@ const productSchema = new mongoose_1.default.Schema({
         default: 5,
     },
     tags: {
+        type: [String],
+        default: [],
+    },
+    productStatus: {
         type: [{
                 type: String,
                 enum: ['hot', 'cold']
@@ -122,6 +126,10 @@ const productSchema = new mongoose_1.default.Schema({
     publish: {
         type: Boolean,
         default: true,
+    },
+    gender: {
+        type: String,
+        default: "unisex",
     },
     sku: {
         type: String,

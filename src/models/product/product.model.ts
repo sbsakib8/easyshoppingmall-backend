@@ -33,7 +33,7 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
       default: "",
     },
     productWeight: {
-     type: [String],
+      type: [String],
       default: [],
     },
     productSize: {
@@ -65,6 +65,10 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
       default: 5,
     },
     tags: {
+      type: [String],
+      default: [],
+    },
+    productStatus: {
       type: [{
         type: String,
         enum: ['hot', 'cold']
@@ -90,6 +94,10 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
     publish: {
       type: Boolean,
       default: true,
+    },
+    gender: {
+      type: String,
+      default: "unisex",
     },
     sku: {
       type: String,
