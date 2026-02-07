@@ -25,7 +25,6 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
     const { delivery_address, payment_method, payment_details, payment_type } = req.body; // Renamed paymentMethod to payment_method, paymentDetails to payment_details
     const userId = req.userId; // Get userId from AuthRequest
     const subtotalFromReq = Number(req.body.subtotal) || 0; // Not used in this version after product price calculation
-    const deliveryChargeFromReq = Number(req.body.deliveryCharge) || 0;
 
     if (!userId || !delivery_address) {
       return res.status(400).json({
@@ -45,7 +44,13 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
     }
 
 
-    const cart = await CartModel.findOne({ userId }).populate("products.productId");
+    const cart = await CartModel.findOne({ userId }).populate({
+      path: "products.productId",
+      populate: [
+        { path: "category", model: "Category" },
+        { path: "subCategory", model: "SubCategory" }
+      ]
+    });
 
     if (!cart || cart.products.length === 0) {
       return res.status(404).json({ success: false, message: "Cart is empty" });
@@ -71,30 +76,47 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
         price: productPrice,
         totalPrice: quantity * productPrice,
         size: item.size,
+        color: item.color,
+        weight: item.weight,
       };
     });
 
     // Create order
-    const order = new OrderModel({
-      userId,
-      cart: cart._id, // Assign cart ID
-      orderId: uuidv4(),
-      products: orderProducts,
-      address: delivery_address, // Changed to address
-      payment_method: payment_method, // payment_method must be explicit
-      payment_status: "pending",
-      payment_details: payment_details || null, // Expect payment_details for non-manual
-      payment_type: payment_type || "full",
-      order_status: "pending",
-      deliveryCharge: deliveryChargeFromReq,
-    });
-
     if (!payment_method) {
       return res.status(400).json({
         success: false,
         message: "Payment method is required for this endpoint.",
       });
     }
+
+    // Verify Delivery Charge on Server
+    const dhakaDistricts = [
+      "Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel",
+      "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"
+    ];
+    let calculatedDeliveryCharge = 130;
+
+    if (delivery_address?.district) {
+      const district = delivery_address.district;
+      if (dhakaDistricts.some(d => district.includes(d))) {
+        calculatedDeliveryCharge = 80;
+      }
+    }
+
+    // Create order
+    const order = new OrderModel({
+      userId,
+      cart: cart._id,
+      orderId: uuidv4(),
+      products: orderProducts,
+      address: delivery_address,
+      payment_method: payment_method,
+      payment_status: "pending",
+      payment_details: payment_details || null,
+      payment_type: payment_type || "full",
+      order_status: "pending",
+      deliveryCharge: calculatedDeliveryCharge,
+    });
 
     await order.save();
     // Cart will be cleared after payment is confirmed (in paymentSuccess, confirmManualPayment, paymentIpn)
@@ -116,11 +138,6 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
   }
 };
 
-/**
- * @desc Get all orders for logged-in user
- * @route GET /api/orders/my-orders
- * @access Private (User)
- */
 export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
@@ -130,7 +147,13 @@ export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void
     }
 
     const orders = await OrderModel.find({ userId })
-      .populate("products.productId")
+      .populate({
+        path: "products.productId",
+        populate: [
+          { path: "category", model: "Category" },
+          { path: "subCategory", model: "SubCategory" }
+        ]
+      })
       .sort({ createdAt: -1 });
 
     res.json({
@@ -179,7 +202,7 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       id,
       { order_status: status },
       { new: true }
-    );
+    ).populate("userId", "name email");
 
     if (!order) {
       res.status(404).json({ success: false, message: "Order not found" });
@@ -336,7 +359,13 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
     }
 
     // ✅ 3. Validate cart
-    const cart = await CartModel.findOne({ userId }).populate("products.productId");
+    const cart = await CartModel.findOne({ userId }).populate({
+      path: "products.productId",
+      populate: [
+        { path: "category", model: "Category" },
+        { path: "subCategory", model: "SubCategory" }
+      ]
+    });
     if (!cart || cart.products.length === 0) {
       return res.status(404).json({ success: false, message: "Cart is empty" });
     }
@@ -391,6 +420,20 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Verify Delivery Charge on Server
+    const dhakaDistricts = [
+      "Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel",
+      "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"
+    ];
+    let calculatedDeliveryCharge = 130;
+
+    if (delivery_address?.district) {
+      const district = delivery_address.district;
+      if (dhakaDistricts.some(d => district.includes(d))) {
+        calculatedDeliveryCharge = 80;
+      }
+    }
+
     // ✅ 5. Create order
     order = new OrderModel({
       userId,
@@ -402,7 +445,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       payment_type,
       payment_details: payment_details || {},
       order_status: "pending",
-      deliveryCharge: Number(req.body.deliveryCharge) || 0,
+      deliveryCharge: calculatedDeliveryCharge,
     });
 
     await order.save();
@@ -452,7 +495,13 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
 export const getAllOrders = async (req: Request, res: Response): Promise<void> => {
   try {
     const orders = await OrderModel.find()
-      .populate("products.productId")
+      .populate({
+        path: "products.productId",
+        populate: [
+          { path: "category", model: "Category" },
+          { path: "subCategory", model: "SubCategory" }
+        ]
+      })
       .populate("userId", "name email") // Populate user details
       .sort({ createdAt: -1 });
 
@@ -484,7 +533,13 @@ export const getOrdersByStatus = async (req: Request, res: Response): Promise<vo
     }
 
     const orders = await OrderModel.find({ order_status: status })
-      .populate("products.productId")
+      .populate({
+        path: "products.productId",
+        populate: [
+          { path: "category", model: "Category" },
+          { path: "subCategory", model: "SubCategory" }
+        ]
+      })
       .populate("userId", "name email") // Populate user details
       .sort({ createdAt: -1 });
 
@@ -562,9 +617,51 @@ export const confirmManualPayment = async (req: Request, res: Response) => {
     res.json({
       success: true,
       message: "Manual payment confirmed successfully",
-      data: order,
+      data: updatedOrder.populate("userId", "name email"),
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+/**
+ * @desc Delete an order by ID (Admin only)
+ * @route DELETE /api/orders/:id
+ * @access Private (Admin)
+ */
+export const deleteOrder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: "Invalid order ID" });
+      return;
+    }
+
+    const order = await OrderModel.findById(id);
+
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    // Find the user and pull the order from their orderHistory
+    await UserModel.findByIdAndUpdate(order.userId, {
+      $pull: { orderHistory: order._id },
+    });
+
+    // Delete the order
+    await OrderModel.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: "Order deleted successfully",
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+

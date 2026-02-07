@@ -100,9 +100,24 @@ const productSchema = new mongoose_1.default.Schema({
         type: [String],
         default: [],
     },
+    productStatus: {
+        type: [{
+                type: String,
+                enum: ['hot', 'cold']
+            }],
+        default: [],
+    },
     images: {
         type: [String],
         default: [],
+    },
+    video: {
+        type: [String],
+        default: [],
+    },
+    video_link: {
+        type: String,
+        default: null,
     },
     more_details: {
         type: Object,
@@ -111,6 +126,10 @@ const productSchema = new mongoose_1.default.Schema({
     publish: {
         type: Boolean,
         default: true,
+    },
+    gender: {
+        type: String,
+        default: "unisex",
     },
     sku: {
         type: String,

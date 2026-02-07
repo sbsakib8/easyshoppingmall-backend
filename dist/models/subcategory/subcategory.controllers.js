@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteSubCategory = exports.updateSubCategory = exports.getSubCategoryById = exports.getSubCategories = exports.createSubCategory = void 0;
+const product_model_1 = __importDefault(require("../product/product.model"));
 const subcategory_model_1 = __importDefault(require("./subcategory.model"));
 const category_model_1 = __importDefault(require("../category/category.model"));
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
@@ -113,10 +114,11 @@ const updateSubCategory = async (req, res) => {
     }
 };
 exports.updateSubCategory = updateSubCategory;
-// ✅ Delete SubCategory
 const deleteSubCategory = async (req, res) => {
     try {
         const { id } = req.params;
+        // Remove the subcategory from all products that reference it
+        await product_model_1.default.updateMany({ subCategory: id }, { $pull: { subCategory: id } });
         const deletedSubCategory = await subcategory_model_1.default.findByIdAndDelete(id);
         if (!deletedSubCategory) {
             res.status(404).json({ success: false, message: "SubCategory not found" });

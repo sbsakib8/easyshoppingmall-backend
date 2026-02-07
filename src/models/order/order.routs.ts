@@ -2,9 +2,10 @@ import express from "express";
 import { isAdmin } from "../../middlewares/isAdmin";
 import { isAuth } from "../../middlewares/isAuth";
 import {
-  confirmManualPayment, // Re-added createOrder
+  confirmManualPayment,
   createManualOrder,
   createOrder,
+  deleteOrder,
   getAllOrders,
   getMyOrders,
   getOrdersByStatus,
@@ -64,5 +65,12 @@ router.put("/:id/status", isAuth, isAdmin, updateOrderStatus);
  * @access  Private (Admin)
  */
 router.put("/admin/orders/:id/verify", isAuth, isAdmin, confirmManualPayment);
+
+/**
+ * @route   DELETE /api/orders/:id
+ * @desc    Delete an order by ID (Admin only)
+ * @access  Private (Admin)
+ */
+router.delete("/:id", isAuth, isAdmin, deleteOrder);
 
 export default router;
