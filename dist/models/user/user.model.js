@@ -80,7 +80,7 @@ const userSchema = new mongoose_1.default.Schema({
     },
     role: {
         type: String,
-        enum: ['ADMIN', "USER"],
+        enum: ['ADMIN', "USER", "Investment", "Seller program", "Box leader", "Drop shipping"],
         default: "USER"
     },
     date_of_birth: {
