@@ -2,7 +2,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import type { Application, Request, Response } from "express";
 import express from "express";
-import connectDB from "./config/db.connect";
+
 import addressRouter from "./models/address/address.routs";
 import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routs";
 import homeBannerRoutes from "./models/banners/homeBanner/homeBanner.routs";
@@ -41,7 +41,7 @@ app.use(cors(
   }
 ));
 
-connectDB()
+
 //  route
 import analyticsRoutes from "./models/analytics/analytics.routs";
 
