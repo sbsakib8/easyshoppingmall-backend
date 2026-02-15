@@ -56,9 +56,11 @@ exports.createSubCategory = createSubCategory;
 // ✅ Get All SubCategories
 const getSubCategories = async (req, res) => {
     try {
-        const subCategories = await subcategory_model_1.default.find()
+        const subCategories = await subcategory_model_1.default.find({ isActive: true })
+            .select("name image slug icon isActive category")
             .populate("category", "name slug")
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
         res.status(200).json({ success: true, data: subCategories });
     }
     catch (error) {
@@ -70,7 +72,9 @@ exports.getSubCategories = getSubCategories;
 const getSubCategoryById = async (req, res) => {
     try {
         const { id } = req.params;
-        const subCategory = await subcategory_model_1.default.findById(id).populate("category", "name slug");
+        const subCategory = await subcategory_model_1.default.findById(id)
+            .populate("category", "name slug")
+            .lean();
         if (!subCategory) {
             res.status(404).json({ success: false, message: "SubCategory not found" });
             return;
