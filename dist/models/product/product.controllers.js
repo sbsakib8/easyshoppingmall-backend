@@ -126,14 +126,8 @@ const buildProductQuery = (body) => {
         query.publish = publish;
     }
     if (search) {
-        // Escape special regex characters
-        const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        query.$or = [
-            { productName: { $regex: escapedSearch, $options: "i" } },
-            { description: { $regex: escapedSearch, $options: "i" } },
-            { brand: { $regex: escapedSearch, $options: "i" } },
-            { tags: { $regex: escapedSearch, $options: "i" } }
-        ];
+        // Use MongoDB Text Index for much faster full-text search
+        query.$text = { $search: search };
     }
     if (categoryId && categoryId !== "all") {
         query.category = { $in: [categoryId] };
@@ -212,13 +206,18 @@ const getProductController = async (req, res) => {
         const query = buildProductQuery(req.body);
         const sort = getSortOption(sortBy);
         const skip = (page - 1) * limit;
+        // Use estimatedDocumentCount for the root "/" or "/shop" page with no filters
+        // to avoid a full collection scan which can take >300ms on large datasets.
+        const isQueryEmpty = Object.keys(query).length === 1 && query.publish === true;
         const [data, totalCount] = await Promise.all([
             product_model_1.default.find(query)
+                .select("productName description brand price productStock productRank discount ratings images publish createdAt gender sku category subCategory")
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
-                .populate("category subCategory"),
-            product_model_1.default.countDocuments(query),
+                .populate("category subCategory", "name slug")
+                .lean(),
+            isQueryEmpty ? product_model_1.default.estimatedDocumentCount() : product_model_1.default.countDocuments(query),
         ]);
         res.json({
             message: "Product data retrieved successfully",
@@ -255,7 +254,10 @@ const getProductByCategory = async (req, res) => {
                 finalId = category._id.toString();
         }
         const data = await product_model_1.default.find({ category: { $in: [finalId] }, publish: true })
-            .limit(15).populate("category subCategory");
+            .select("productName description brand price productStock productRank discount ratings images")
+            .limit(15)
+            .populate("category subCategory", "name slug")
+            .lean();
         res.json({ message: "Category product list", data, error: false, success: true });
     }
     catch (error) {
@@ -288,7 +290,13 @@ const getProductByCategoryAndSubCategory = async (req, res) => {
         const query = { category: { $in: [finalCatId] }, subCategory: { $in: [finalSubId] }, publish: true };
         const skip = (page - 1) * limit;
         const [data, totalCount] = await Promise.all([
-            product_model_1.default.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).populate("category subCategory"),
+            product_model_1.default.find(query)
+                .select("productName description brand price productStock productRank discount ratings images")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .populate("category subCategory", "name slug")
+                .lean(),
             product_model_1.default.countDocuments(query),
         ]);
         res.json({
@@ -307,11 +315,12 @@ const getProductByCategoryAndSubCategory = async (req, res) => {
     }
 };
 exports.getProductByCategoryAndSubCategory = getProductByCategoryAndSubCategory;
-// Get Product Details
 const getProductDetails = async (req, res) => {
     try {
         const { productId } = req.params;
-        const product = await product_model_1.default.findOne({ _id: productId }).populate("category subCategory");
+        const product = await product_model_1.default.findOne({ _id: productId })
+            .populate("category subCategory", "name slug")
+            .lean();
         res.json({ message: "Product details", data: product, error: false, success: true });
     }
     catch (error) {

@@ -68,6 +68,9 @@ const categorySchema = new mongoose_1.Schema({
 }, {
     timestamps: true,
 });
+// Performance indexes
+categorySchema.index({ isActive: 1 });
+categorySchema.index({ createdAt: -1 });
 categorySchema.pre("save", function (next) {
     if (this.isModified("name")) {
         this.slug = this.name.toLowerCase().replace(/ /g, "-");

@@ -187,14 +187,8 @@ const buildProductQuery = (body: any) => {
   }
 
   if (search) {
-    // Escape special regex characters
-    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    query.$or = [
-      { productName: { $regex: escapedSearch, $options: "i" } },
-      { description: { $regex: escapedSearch, $options: "i" } },
-      { brand: { $regex: escapedSearch, $options: "i" } },
-      { tags: { $regex: escapedSearch, $options: "i" } }
-    ];
+    // Use MongoDB Text Index for much faster full-text search
+    query.$text = { $search: search };
   }
 
   if (categoryId && categoryId !== "all") {
@@ -287,13 +281,19 @@ export const getProductController = async (
     const sort = getSortOption(sortBy);
     const skip = (page - 1) * limit;
 
+    // Use estimatedDocumentCount for the root "/" or "/shop" page with no filters
+    // to avoid a full collection scan which can take >300ms on large datasets.
+    const isQueryEmpty = Object.keys(query).length === 1 && query.publish === true;
+
     const [data, totalCount] = await Promise.all([
       productModel.find(query)
+        .select("productName description brand price productStock productRank discount ratings images publish createdAt gender sku category subCategory")
         .sort(sort as any)
         .skip(skip)
         .limit(limit)
-        .populate("category subCategory"),
-      productModel.countDocuments(query),
+        .populate("category subCategory", "name slug")
+        .lean(),
+      isQueryEmpty ? productModel.estimatedDocumentCount() : productModel.countDocuments(query),
     ]);
 
     res.json({
@@ -334,7 +334,10 @@ export const getProductByCategory = async (
     }
 
     const data = await productModel.find({ category: { $in: [finalId] }, publish: true })
-      .limit(15).populate("category subCategory");
+      .select("productName description brand price productStock productRank discount ratings images")
+      .limit(15)
+      .populate("category subCategory", "name slug")
+      .lean();
 
     res.json({ message: "Category product list", data, error: false, success: true });
   } catch (error: any) {
@@ -372,7 +375,13 @@ export const getProductByCategoryAndSubCategory = async (
     const skip = (page - 1) * limit;
 
     const [data, totalCount] = await Promise.all([
-      productModel.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).populate("category subCategory"),
+      productModel.find(query)
+        .select("productName description brand price productStock productRank discount ratings images")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("category subCategory", "name slug")
+        .lean(),
       productModel.countDocuments(query),
     ]);
 
@@ -391,11 +400,12 @@ export const getProductByCategoryAndSubCategory = async (
   }
 };
 
-// Get Product Details
 export const getProductDetails = async (req: Request, res: Response) => {
   try {
     const { productId } = req.params;
-    const product = await productModel.findOne({ _id: productId }).populate("category subCategory");
+    const product = await productModel.findOne({ _id: productId })
+      .populate("category subCategory", "name slug")
+      .lean();
     res.json({ message: "Product details", data: product, error: false, success: true });
   } catch (error: any) {
     res.status(500).json({ message: error.message || error, error: true, success: false });

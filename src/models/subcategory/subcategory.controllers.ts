@@ -30,11 +30,11 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    
+
 
     const subCategory = new SubCategoryModel({
       name,
-      image:imageUrl,
+      image: imageUrl,
       icon,
       isActive,
       metaDescription,
@@ -57,9 +57,11 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
 // ✅ Get All SubCategories
 export const getSubCategories = async (req: Request, res: Response): Promise<void> => {
   try {
-    const subCategories = await SubCategoryModel.find()
+    const subCategories = await SubCategoryModel.find({ isActive: true })
+      .select("name image slug icon isActive category")
       .populate("category", "name slug")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
     res.status(200).json({ success: true, data: subCategories });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -70,7 +72,9 @@ export const getSubCategories = async (req: Request, res: Response): Promise<voi
 export const getSubCategoryById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const subCategory = await SubCategoryModel.findById(id).populate("category", "name slug");
+    const subCategory = await SubCategoryModel.findById(id)
+      .populate("category", "name slug")
+      .lean();
 
     if (!subCategory) {
       res.status(404).json({ success: false, message: "SubCategory not found" });
@@ -93,7 +97,7 @@ export const updateSubCategory = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    
+
 
     const { _id, slug, ...updateData } = req.body;
 
