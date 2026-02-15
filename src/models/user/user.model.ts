@@ -19,7 +19,7 @@ export interface IUser extends Document {
     forgot_password_otp?: string | null;
     forgot_password_expiry?: Date | null;
     isotpverified?: boolean;
-    role: "ADMIN" | "USER";
+    role: "ADMIN" | "USER" | "INVESTMENT" | "SELLERPROGRAM" | "BOXLEADER" | "DROPSHIPPING";
     date_of_birth?: Date | null;
     gender?: "Male" | "Female" | "Other" | null;
     createdAt?: Date;
@@ -103,7 +103,7 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ['ADMIN', "USER"],
+            enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING"],
             default: "USER"
         },
         date_of_birth: {
