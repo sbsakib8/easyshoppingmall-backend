@@ -72,7 +72,7 @@ app.use("/api/admin", adminRoutes)
 app.get("/", (req: Request, res: Response) => {
   res.send("APi  is running...");
 });
-
+// hhs
 // Centralized error handling middleware (must be last)
 app.use(errorHandler);
 
