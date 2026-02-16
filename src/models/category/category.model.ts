@@ -7,7 +7,7 @@ const categorySchema = new Schema<ICategory>(
     name: {
       type: String,
       required: true,
-      unique: true, 
+      unique: true,
       trim: true,
     },
     image: {
@@ -20,24 +20,28 @@ const categorySchema = new Schema<ICategory>(
       unique: true,
       trim: true,
     },
-    icon:{
-    type:String
+    icon: {
+      type: String
     },
-    isActive:{
-      type:Boolean,
-      default:true
+    isActive: {
+      type: Boolean,
+      default: true
     },
-    metaDescription:{
-      type:String
+    metaDescription: {
+      type: String
     },
-    metaTitle:{
-      type:String
+    metaTitle: {
+      type: String
     }
   },
   {
     timestamps: true,
   }
 );
+
+// Performance indexes
+categorySchema.index({ isActive: 1 });
+categorySchema.index({ createdAt: -1 });
 
 categorySchema.pre("save", function (next) {
   if (this.isModified("name")) {

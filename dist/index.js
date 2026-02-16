@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
+const compression_1 = __importDefault(require("compression"));
 const cors_1 = __importDefault(require("cors"));
 const express_1 = __importDefault(require("express"));
 const address_routs_1 = __importDefault(require("./models/address/address.routs"));
@@ -28,6 +29,7 @@ const wishlist_routs_1 = __importDefault(require("./models/wishlist/wishlist.rou
 const errorHandler_1 = __importDefault(require("./middlewares/errorHandler")); // Import the error handler
 // middleware
 const app = (0, express_1.default)();
+app.use((0, compression_1.default)()); // Compress all responses
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use((0, cookie_parser_1.default)());

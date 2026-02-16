@@ -1,4 +1,5 @@
 import cookieParser from "cookie-parser";
+import compression from "compression";
 import cors from "cors";
 import type { Application, Request, Response } from "express";
 import express from "express";
@@ -27,6 +28,7 @@ import errorHandler from "./middlewares/errorHandler"; // Import the error handl
 
 // middleware
 const app: Application = express();
+app.use(compression()); // Compress all responses
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
