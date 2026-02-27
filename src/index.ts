@@ -1,5 +1,5 @@
-import cookieParser from "cookie-parser";
 import compression from "compression";
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import type { Application, Request, Response } from "express";
 import express from "express";
@@ -18,17 +18,17 @@ import notifications from "./models/notification/notification.routs";
 import orderRoute from './models/order/order.routs';
 import paymentRouter from './models/payment/payment.route';
 
+import errorHandler from "./middlewares/errorHandler";
 import adminRoutes from './models/admin/admin.route';
 import productRouter from "./models/product/product.routs";
 import reviewRouter from './models/review/review.routs';
 import subcategoriesRoutes from "./models/subcategory/subcategory.routs";
 import userRoutes from "./models/user/user.routs";
 import wishlistRouter from './models/wishlist/wishlist.routs';
-import errorHandler from "./middlewares/errorHandler"; // Import the error handler
 
 // middleware
 const app: Application = express();
-app.use(compression()); // Compress all responses
+app.use(compression());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
