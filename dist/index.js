@@ -3,8 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const compression_1 = __importDefault(require("compression"));
+const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const cors_1 = __importDefault(require("cors"));
 const express_1 = __importDefault(require("express"));
 const address_routs_1 = __importDefault(require("./models/address/address.routs"));
@@ -20,13 +20,13 @@ const websiteinfo_routs_1 = __importDefault(require("./models/content/websiteInf
 const notification_routs_1 = __importDefault(require("./models/notification/notification.routs"));
 const order_routs_1 = __importDefault(require("./models/order/order.routs"));
 const payment_route_1 = __importDefault(require("./models/payment/payment.route"));
+const errorHandler_1 = __importDefault(require("./middlewares/errorHandler"));
 const admin_route_1 = __importDefault(require("./models/admin/admin.route"));
 const product_routs_1 = __importDefault(require("./models/product/product.routs"));
 const review_routs_1 = __importDefault(require("./models/review/review.routs"));
 const subcategory_routs_1 = __importDefault(require("./models/subcategory/subcategory.routs"));
 const user_routs_1 = __importDefault(require("./models/user/user.routs"));
 const wishlist_routs_1 = __importDefault(require("./models/wishlist/wishlist.routs"));
-const errorHandler_1 = __importDefault(require("./middlewares/errorHandler")); // Import the error handler
 // middleware
 const app = (0, express_1.default)();
 app.use((0, compression_1.default)()); // Compress all responses
