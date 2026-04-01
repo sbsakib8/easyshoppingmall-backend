@@ -6,6 +6,7 @@ import { CartModel } from "../cart/cart.model";
 import UserModel from "../user/user.model";
 import { AuthUser } from "./interface";
 import OrderModel from "./order.model";
+import CouponModel from "../coupon/coupon.model";
 const { v4: uuidv4 } = require('uuid');
 
 /**
@@ -22,7 +23,7 @@ interface RequestWithUser extends Request {
  */
 export const createOrder = async (req: AuthRequest, res: Response) => { // Changed Request to AuthRequest
   try {
-    const { delivery_address, payment_method, payment_details, payment_type } = req.body; // Renamed paymentMethod to payment_method, paymentDetails to payment_details
+    const { delivery_address, payment_method, payment_details, payment_type, appliedCoupon } = req.body; // Renamed paymentMethod to payment_method, paymentDetails to payment_details
     const userId = req.userId; // Get userId from AuthRequest
     const subtotalFromReq = Number(req.body.subtotal) || 0; // Not used in this version after product price calculation
 
@@ -103,6 +104,42 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
       }
     }
 
+    // Handle Coupon applying
+    let couponDiscount = 0;
+    if (appliedCoupon) {
+      const coupon = await CouponModel.findOne({ code: appliedCoupon.toUpperCase(), isActive: true });
+      if (coupon) {
+        let subTotalCalc = orderProducts.reduce((acc: number, p: any) => acc + p.totalPrice, 0);
+
+        // Optional checks (same as applyCoupon logic):
+        const now = new Date();
+        const validTime = now >= coupon.validFrom && now <= coupon.validUntil;
+        const withinLimits = (coupon.usageLimit === 0 || coupon.usedCount < coupon.usageLimit);
+        const meetsMinimum = subTotalCalc >= coupon.minOrderAmount;
+
+        if (validTime && withinLimits && meetsMinimum) {
+          if (coupon.discountType === "flat") {
+            couponDiscount = coupon.discountAmount;
+          } else if (coupon.discountType === "percentage") {
+            couponDiscount = subTotalCalc * (coupon.discountAmount / 100);
+            if (coupon.maxDiscountAmount > 0 && couponDiscount > coupon.maxDiscountAmount) {
+              couponDiscount = coupon.maxDiscountAmount;
+            }
+          }
+
+          if (couponDiscount > subTotalCalc) couponDiscount = subTotalCalc;
+
+          // Increment usage
+          coupon.usedCount += 1;
+          await coupon.save();
+        } else {
+          // You might reject the order if coupon is invalid, or just proceed without discount
+          // For now, proceeding with 0 discount if it fails validation at last second
+          console.warn(`Coupon ${appliedCoupon} failed final checkout validation`);
+        }
+      }
+    }
+
     // Create order
     const order = new OrderModel({
       userId,
@@ -116,6 +153,8 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
       payment_type: payment_type || "full",
       order_status: "pending",
       deliveryCharge: calculatedDeliveryCharge,
+      appliedCoupon: appliedCoupon || null,
+      couponDiscount: couponDiscount || 0,
     });
 
     await order.save();
@@ -330,7 +369,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
   let order: any = null;
 
   try {
-    const { delivery_address, payment_details, payment_type, payment_method } = req.body;
+    const { delivery_address, payment_details, payment_type, payment_method, appliedCoupon } = req.body;
     const userId = req.userId;
 
     // ✅ 1. Basic validation
@@ -434,6 +473,40 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Handle Coupon applying
+    let couponDiscount = 0;
+    if (appliedCoupon) {
+      const coupon = await CouponModel.findOne({ code: appliedCoupon.toUpperCase(), isActive: true });
+      if (coupon) {
+        let subTotalCalc = orderProducts.reduce((acc: number, p: any) => acc + p.totalPrice, 0);
+
+        // Optional checks (same as applyCoupon logic):
+        const now = new Date();
+        const validTime = now >= coupon.validFrom && now <= coupon.validUntil;
+        const withinLimits = (coupon.usageLimit === 0 || coupon.usedCount < coupon.usageLimit);
+        const meetsMinimum = subTotalCalc >= coupon.minOrderAmount;
+
+        if (validTime && withinLimits && meetsMinimum) {
+          if (coupon.discountType === "flat") {
+            couponDiscount = coupon.discountAmount;
+          } else if (coupon.discountType === "percentage") {
+            couponDiscount = subTotalCalc * (coupon.discountAmount / 100);
+            if (coupon.maxDiscountAmount > 0 && couponDiscount > coupon.maxDiscountAmount) {
+              couponDiscount = coupon.maxDiscountAmount;
+            }
+          }
+
+          if (couponDiscount > subTotalCalc) couponDiscount = subTotalCalc;
+
+          // Increment usage
+          coupon.usedCount += 1;
+          await coupon.save();
+        } else {
+          console.warn(`Coupon ${appliedCoupon} failed final checkout validation`);
+        }
+      }
+    }
+
     // ✅ 5. Create order
     order = new OrderModel({
       userId,
@@ -446,6 +519,8 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       payment_details: payment_details || {},
       order_status: "pending",
       deliveryCharge: calculatedDeliveryCharge,
+      appliedCoupon: appliedCoupon || null,
+      couponDiscount: couponDiscount || 0,
     });
 
     await order.save();

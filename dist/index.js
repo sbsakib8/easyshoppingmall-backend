@@ -27,6 +27,7 @@ const review_routs_1 = __importDefault(require("./models/review/review.routs"));
 const subcategory_routs_1 = __importDefault(require("./models/subcategory/subcategory.routs"));
 const user_routs_1 = __importDefault(require("./models/user/user.routs"));
 const wishlist_routs_1 = __importDefault(require("./models/wishlist/wishlist.routs"));
+const coupon_routs_1 = __importDefault(require("./models/coupon/coupon.routs"));
 // middleware
 const app = (0, express_1.default)();
 app.use((0, compression_1.default)()); // Compress all responses
@@ -60,6 +61,7 @@ app.use("/api/orders", order_routs_1.default);
 app.use("/api/wishlist", wishlist_routs_1.default);
 app.use("/api/payment", payment_route_1.default);
 app.use('/api/review', review_routs_1.default);
+app.use("/api/coupon", coupon_routs_1.default);
 app.use("/api/analytics", analytics_routs_1.default);
 app.use("/api/admin", admin_route_1.default);
 app.get("/", (req, res) => {

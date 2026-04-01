@@ -422,8 +422,24 @@ const updateUserProfile = async (req, res) => {
             user.status = status;
         if (verify_email !== undefined)
             user.verify_email = verify_email;
-        if (role !== undefined)
+        if (role !== undefined) {
+            // Generate referral code for DROPSHIPPING role if not exists
+            if (role === "DROPSHIPPING" && user.role !== "DROPSHIPPING" && !user.referralCode) {
+                const generateReferralCode = async () => {
+                    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                    let result = '';
+                    for (let i = 0; i < 8; i++) {
+                        result += characters.charAt(Math.floor(Math.random() * characters.length));
+                    }
+                    const exists = await user_model_1.default.findOne({ referralCode: result });
+                    if (exists)
+                        return generateReferralCode();
+                    return result;
+                };
+                user.referralCode = await generateReferralCode();
+            }
             user.role = role;
+        }
         if (date_of_birth !== undefined) {
             // Handle both "MM/DD/YYYY" and "YYYY-MM-DD" formats
             let parsedDate;

@@ -22,6 +22,7 @@ export interface IUser extends Document {
     role: "ADMIN" | "USER" | "INVESTMENT" | "SELLERPROGRAM" | "BOXLEADER" | "DROPSHIPPING";
     date_of_birth?: Date | null;
     gender?: "Male" | "Female" | "Other" | null;
+    referralCode?: string | null;
     createdAt?: Date;
     updatedAt?: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -114,6 +115,12 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
             type: String,
             enum: ["Male", "Female", "Other"],
             default: null,
+        },
+        referralCode: {
+            type: String,
+            unique: true,
+            sparse: true,
+            default: null
         }
     },
     { timestamps: true }

@@ -91,6 +91,12 @@ const userSchema = new mongoose_1.default.Schema({
         type: String,
         enum: ["Male", "Female", "Other"],
         default: null,
+    },
+    referralCode: {
+        type: String,
+        unique: true,
+        sparse: true,
+        default: null
     }
 }, { timestamps: true });
 userSchema.index({ role: 1, createdAt: -1 });

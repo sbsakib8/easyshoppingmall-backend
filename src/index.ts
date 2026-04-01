@@ -25,6 +25,7 @@ import reviewRouter from './models/review/review.routs';
 import subcategoriesRoutes from "./models/subcategory/subcategory.routs";
 import userRoutes from "./models/user/user.routs";
 import wishlistRouter from './models/wishlist/wishlist.routs';
+import couponRouter from './models/coupon/coupon.routs';
 
 // middleware
 const app: Application = express();
@@ -65,6 +66,7 @@ app.use("/api/orders", orderRoute)
 app.use("/api/wishlist", wishlistRouter)
 app.use("/api/payment", paymentRouter)
 app.use('/api/review', reviewRouter)
+app.use("/api/coupon", couponRouter)
 
 app.use("/api/analytics", analyticsRoutes);
 

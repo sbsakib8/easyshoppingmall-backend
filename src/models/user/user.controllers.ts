@@ -460,7 +460,23 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     if (image !== undefined) user.image = image;
     if (status !== undefined) user.status = status;
     if (verify_email !== undefined) user.verify_email = verify_email;
-    if (role !== undefined) user.role = role;
+    if (role !== undefined) {
+      // Generate referral code for DROPSHIPPING role if not exists
+      if (role === "DROPSHIPPING" && user.role !== "DROPSHIPPING" && !user.referralCode) {
+        const generateReferralCode = async (): Promise<string> => {
+          const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+          let result = '';
+          for (let i = 0; i < 8; i++) {
+            result += characters.charAt(Math.floor(Math.random() * characters.length));
+          }
+          const exists = await User.findOne({ referralCode: result });
+          if (exists) return generateReferralCode();
+          return result;
+        };
+        user.referralCode = await generateReferralCode();
+      }
+      user.role = role;
+    }
     if (date_of_birth !== undefined) {
       // Handle both "MM/DD/YYYY" and "YYYY-MM-DD" formats
       let parsedDate: Date;
