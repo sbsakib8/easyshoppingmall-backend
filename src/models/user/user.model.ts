@@ -23,6 +23,8 @@ export interface IUser extends Document {
     date_of_birth?: Date | null;
     gender?: "Male" | "Female" | "Other" | null;
     referralCode?: string | null;
+    referredBy?: Types.ObjectId | null;
+    referralCount?: number;
     createdAt?: Date;
     updatedAt?: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -121,6 +123,15 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
             unique: true,
             sparse: true,
             default: null
+        },
+        referredBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        },
+        referralCount: {
+            type: Number,
+            default: 0
         }
     },
     { timestamps: true }
