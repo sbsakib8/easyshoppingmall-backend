@@ -5,9 +5,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.io = void 0;
 const index_1 = __importDefault(require("./index"));
-const PORT = process.env.PORT || 5001;
 const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
+const db_connect_1 = __importDefault(require("./config/db.connect"));
+const PORT = process.env.PORT || 5003;
 const server = http_1.default.createServer(index_1.default);
 const io = new socket_io_1.Server(server, {
     cors: {
@@ -30,8 +31,19 @@ io.on("connection", (socket) => {
         socket.join(room);
     });
 });
-//  Server start
-server.listen(PORT, () => {
-    // mongodb 
-    console.log(`✅ Server running at http://localhost:${PORT}`);
-});
+//  Database connection and Server start
+async function startServer() {
+    try {
+        // 1. First, wait for database to be ready
+        await (0, db_connect_1.default)();
+        // 2. Then, start the server
+        server.listen(PORT, () => {
+            console.log(`✅ Server running at http://localhost:${PORT}`);
+        });
+    }
+    catch (error) {
+        console.error("❌ Failed to start server:", error);
+        process.exit(1);
+    }
+}
+startServer();

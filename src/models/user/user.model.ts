@@ -19,9 +19,12 @@ export interface IUser extends Document {
     forgot_password_otp?: string | null;
     forgot_password_expiry?: Date | null;
     isotpverified?: boolean;
-    role: "ADMIN" | "USER" | "Investment" | "Seller program" | "Box leader" | "Drop shipping";
+    role: "ADMIN" | "USER" | "INVESTMENT" | "SELLERPROGRAM" | "BOXLEADER" | "DROPSHIPPING";
     date_of_birth?: Date | null;
     gender?: "Male" | "Female" | "Other" | null;
+    referralCode?: string | null;
+    referredBy?: Types.ObjectId | null;
+    referralCount?: number;
     createdAt?: Date;
     updatedAt?: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -103,7 +106,7 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ['ADMIN', "USER", "Investment", "Seller program", "Box leader", "Drop shipping"],
+            enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING"],
             default: "USER"
         },
         date_of_birth: {
@@ -114,6 +117,21 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
             type: String,
             enum: ["Male", "Female", "Other"],
             default: null,
+        },
+        referralCode: {
+            type: String,
+            unique: true,
+            sparse: true,
+            default: null
+        },
+        referredBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        },
+        referralCount: {
+            type: Number,
+            default: 0
         }
     },
     { timestamps: true }

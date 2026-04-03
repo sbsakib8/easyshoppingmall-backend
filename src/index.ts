@@ -1,8 +1,9 @@
+import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import type { Application, Request, Response } from "express";
 import express from "express";
-import connectDB from "./config/db.connect";
+
 import addressRouter from "./models/address/address.routs";
 import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routs";
 import homeBannerRoutes from "./models/banners/homeBanner/homeBanner.routs";
@@ -17,16 +18,18 @@ import notifications from "./models/notification/notification.routs";
 import orderRoute from './models/order/order.routs';
 import paymentRouter from './models/payment/payment.route';
 
+import errorHandler from "./middlewares/errorHandler";
 import adminRoutes from './models/admin/admin.route';
 import productRouter from "./models/product/product.routs";
 import reviewRouter from './models/review/review.routs';
 import subcategoriesRoutes from "./models/subcategory/subcategory.routs";
 import userRoutes from "./models/user/user.routs";
 import wishlistRouter from './models/wishlist/wishlist.routs';
-import errorHandler from "./middlewares/errorHandler"; // Import the error handler
+import couponRouter from './models/coupon/coupon.routs';
 
 // middleware
 const app: Application = express();
+app.use(compression()); // Compress all responses
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -41,7 +44,7 @@ app.use(cors(
   }
 ));
 
-connectDB()
+
 //  route
 import analyticsRoutes from "./models/analytics/analytics.routs";
 
@@ -63,6 +66,7 @@ app.use("/api/orders", orderRoute)
 app.use("/api/wishlist", wishlistRouter)
 app.use("/api/payment", paymentRouter)
 app.use('/api/review', reviewRouter)
+app.use("/api/coupon", couponRouter)
 
 app.use("/api/analytics", analyticsRoutes);
 

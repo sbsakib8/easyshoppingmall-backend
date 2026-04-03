@@ -74,6 +74,11 @@ const subCategorySchema = new mongoose_1.Schema({
 }, {
     timestamps: true,
 });
+// Performance indexes
+subCategorySchema.index({ category: 1 });
+subCategorySchema.index({ isActive: 1 });
+subCategorySchema.index({ createdAt: -1 });
+subCategorySchema.index({ category: 1, isActive: 1 }); // Compound index for filtering active subs by category
 // Generate slug automatically
 subCategorySchema.pre("save", function (next) {
     if (this.isModified("name")) {

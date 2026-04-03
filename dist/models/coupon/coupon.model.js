@@ -34,48 +34,75 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-// 2. Schema
-const categorySchema = new mongoose_1.Schema({
-    name: {
+const couponSchema = new mongoose_1.Schema({
+    code: {
         type: String,
         required: true,
         unique: true,
         trim: true,
+        uppercase: true,
     },
-    image: {
+    description: {
         type: String,
         default: "",
     },
-    slug: {
+    discountType: {
         type: String,
-        lowercase: true,
-        unique: true,
-        trim: true,
+        enum: ["percentage", "flat"],
+        required: true,
     },
-    icon: {
-        type: String
+    discountAmount: {
+        type: Number,
+        required: true,
+    },
+    maxDiscountAmount: {
+        type: Number,
+        default: 0, // 0 means no limit for percentage, or unused for flat
+    },
+    minOrderAmount: {
+        type: Number,
+        required: true,
+        default: 0,
+    },
+    validFrom: {
+        type: Date,
+        default: Date.now,
+    },
+    validUntil: {
+        type: Date,
+        required: true,
+    },
+    usageLimit: {
+        type: Number,
+        default: 0, // 0 means unlimited
+    },
+    usedCount: {
+        type: Number,
+        default: 0,
     },
     isActive: {
         type: Boolean,
-        default: true
+        default: true,
     },
-    metaDescription: {
-        type: String
+    applicableCategory: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Category",
+        default: null,
     },
-    metaTitle: {
-        type: String
-    }
-}, {
-    timestamps: true,
-});
-// Performance indexes
-categorySchema.index({ isActive: 1 });
-categorySchema.index({ createdAt: -1 });
-categorySchema.pre("save", function (next) {
-    if (this.isModified("name")) {
-        this.slug = this.name.toLowerCase().replace(/ /g, "-");
-    }
-    next();
-});
-const CategoryModel = mongoose_1.default.model("Category", categorySchema);
-exports.default = CategoryModel;
+    applicableSubCategory: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "SubCategory",
+        default: null,
+    },
+    applicableProduct: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Product", // Assuming the product model is "Product"
+        default: null,
+    },
+    isForNewUserOnly: {
+        type: Boolean,
+        default: false,
+    },
+}, { timestamps: true });
+const CouponModel = mongoose_1.default.model("Coupon", couponSchema);
+exports.default = CouponModel;

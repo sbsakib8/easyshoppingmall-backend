@@ -80,7 +80,7 @@ const userSchema = new mongoose_1.default.Schema({
     },
     role: {
         type: String,
-        enum: ['ADMIN', "USER", "Investment", "Seller program", "Box leader", "Drop shipping"],
+        enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING"],
         default: "USER"
     },
     date_of_birth: {
@@ -91,6 +91,21 @@ const userSchema = new mongoose_1.default.Schema({
         type: String,
         enum: ["Male", "Female", "Other"],
         default: null,
+    },
+    referralCode: {
+        type: String,
+        unique: true,
+        sparse: true,
+        default: null
+    },
+    referredBy: {
+        type: mongoose_1.default.Schema.Types.ObjectId,
+        ref: "User",
+        default: null
+    },
+    referralCount: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true });
 userSchema.index({ role: 1, createdAt: -1 });

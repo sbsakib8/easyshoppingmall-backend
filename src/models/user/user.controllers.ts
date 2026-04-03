@@ -15,15 +15,27 @@ import { WishlistModel } from "../wishlist/wishlist.model";
 // Cookie 
 const cookieOptions: CookieOptions = {
   httpOnly: true,
-  secure: true,
-  sameSite: "none",
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
   maxAge: 30 * 24 * 60 * 60 * 1000,
+};
+
+// Generate unique referral code
+const generateReferralCode = async (): Promise<string> => {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  const exists = await User.findOne({ referralCode: result });
+  if (exists) return generateReferralCode();
+  return result;
 };
 
 // Register User
 export const signUp = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, referralCode } = req.body;
 
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -31,15 +43,34 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const user: IUser = await User.create({ name, email, password, role });
+    let referredBy = null;
+    if (referralCode) {
+      const referrer = await User.findOne({ referralCode });
+      if (referrer) {
+        referredBy = referrer._id;
+      }
+    }
+
+    // Generate own referral code
+    const ownReferralCode = await generateReferralCode();
+
+    const user: IUser = await User.create({
+      name,
+      email,
+      password,
+      role,
+      referralCode: ownReferralCode,
+      referredBy
+    });
+
+    // Increment referrer's count after successful user creation
+    if (referredBy) {
+      await User.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
+    }
+
     const token = generateToken(user._id.toString());
     //  cookie
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });;
+    res.cookie("token", token, cookieOptions);
 
 
     res.status(201).json({
@@ -113,12 +144,7 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
     }
     const token = generateToken(user._id.toString());
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });;
+    res.cookie("token", token, cookieOptions);
 
     res.json({
       success: true,
@@ -135,9 +161,7 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
 export const signOut = async (req: Request, res: Response): Promise<void> => {
   try {
     res.clearCookie("token", {
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
+      ...cookieOptions,
       path: "/",
     });
 
@@ -248,11 +272,32 @@ export const resetpassword = async (req: Request, res: Response): Promise<void> 
 // google login
 export const googleAuth = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, mobile, image } = req.body;
+    const { name, email, mobile, image, referralCode } = req.body;
     let user = await User.findOne({ email });
     if (!user) {
-      user = new User({ name, email, mobile, image });
+      let referredBy = null;
+      if (referralCode) {
+        const referrer = await User.findOne({ referralCode });
+        if (referrer) {
+          referredBy = referrer._id;
+        }
+      }
+
+      const ownReferralCode = await generateReferralCode();
+      user = new User({
+        name,
+        email,
+        mobile,
+        image,
+        referralCode: ownReferralCode,
+        referredBy
+      });
       await user.save();
+
+      // Increment referrer's count
+      if (referredBy) {
+        await User.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
+      }
     }
     const token = generateToken(user._id.toString());
     res.cookie("token", token, cookieOptions);
@@ -289,47 +334,17 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
 
     const user = await User.findById(userId)
       .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
-      .populate("address_details")
-      .populate({
-        path: "shopping_cart",
-        populate: {
-          path: "products.productId",
-          model: "Product",
-          populate: {
-            path: "category",
-            select: "name"
-          }
-        },
-      })
-      .populate({
-        path: "orderHistory",
-        populate: [
-          {
-            path: "products.productId",
-            model: "Product",
-            populate: {
-              path: "category",
-              select: "name"
-            }
-          },
-          {
-            path: "cart",
-            model: "Cart",
-            populate: {
-              path: "products.productId",
-              model: "Product",
-              populate: {
-                path: "category",
-                select: "name"
-              }
-            }
-          },
-        ],
-      });
+      .populate("address_details");
 
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Auto-generate missing referral code if not present
+    if (!user.referralCode) {
+      user.referralCode = await generateReferralCode();
+      await user.save();
     }
 
     res.status(200).json({ success: true, user });
@@ -442,6 +457,8 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       role,
       date_of_birth,
       gender,
+      address_data, // New: address information (object)
+      address_details, // Alternative: address information (array)
     } = req.body;
 
     const user = await User.findById(userId);
@@ -450,6 +467,7 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
+    // Update user profile fields
     if (name !== undefined) user.name = name;
     if (email !== undefined) user.email = email;
     if (mobile !== undefined) user.mobile = mobile;
@@ -457,21 +475,141 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     if (image !== undefined) user.image = image;
     if (status !== undefined) user.status = status;
     if (verify_email !== undefined) user.verify_email = verify_email;
-    if (role !== undefined) user.role = role;
+    if (role !== undefined) {
+      user.role = role;
+    }
+
+    // Ensure user has a referral code (especially if becoming DROPSHIPPING)
+    if (!user.referralCode) {
+      user.referralCode = await generateReferralCode();
+    }
     if (date_of_birth !== undefined) {
-      // Assuming date_of_birth comes in "MM/DD/YYYY" format
-      const [month, day, year] = date_of_birth.split('/').map(Number);
-      // Create a UTC date to avoid timezone issues
-      user.date_of_birth = new Date(Date.UTC(year, month - 1, day)); // month is 0-indexed
+      // Handle both "MM/DD/YYYY" and "YYYY-MM-DD" formats
+      let parsedDate: Date;
+
+      if (date_of_birth.includes('/')) {
+        // Format: "MM/DD/YYYY"
+        const [month, day, year] = date_of_birth.split('/').map(Number);
+        parsedDate = new Date(Date.UTC(year, month - 1, day));
+      } else if (date_of_birth.includes('-')) {
+        // Format: "YYYY-MM-DD"
+        const [year, month, day] = date_of_birth.split('-').map(Number);
+        parsedDate = new Date(Date.UTC(year, month - 1, day));
+      } else {
+        // Try to parse as-is
+        parsedDate = new Date(date_of_birth);
+      }
+
+      // Only set if valid date
+      if (!isNaN(parsedDate.getTime())) {
+        user.date_of_birth = parsedDate;
+      }
     }
     if (gender !== undefined) user.gender = gender;
 
     await user.save();
 
+    // Handle address creation/update if address_data or address_details is provided
+    // Support both formats: address_data (object) or address_details (array)
+    let addressToProcess = address_data;
+
+    // If address_details array is provided, use the first item
+    if (!addressToProcess && address_details && Array.isArray(address_details) && address_details.length > 0) {
+      addressToProcess = address_details[0];
+    }
+
+    if (addressToProcess) {
+      const {
+        _id: addressId,
+        address_line,
+        district,
+        division,
+        upazila_thana,
+        country,
+        pincode,
+        mobile: addressMobile,
+      } = addressToProcess;
+
+      let savedAddress;
+
+      // Determine the address ID to update
+      // 1. Use provided ID if available
+      // 2. OR fallback to the user's first existing address (prevent duplicates)
+      let targetAddressId = addressId;
+
+      if (!targetAddressId && user.address_details && user.address_details.length > 0) {
+        targetAddressId = user.address_details[0];
+      }
+
+      if (targetAddressId) {
+        // Try to update existing address
+        savedAddress = await AddressModel.findOneAndUpdate(
+          { _id: targetAddressId, userId: user._id },
+          {
+            address_line: address_line || "",
+            district: district || "",
+            division: division || "",
+            upazila_thana: upazila_thana || "",
+            country: country || "Bangladesh",
+            pincode: pincode || "",
+            mobile: addressMobile || mobile || null,
+          },
+          { new: true }
+        );
+
+        // If address not found (wrong ID or belongs to different user), create new one
+        if (!savedAddress) {
+          const newAddress = new AddressModel({
+            address_line: address_line || "",
+            district: district || "",
+            division: division || "",
+            upazila_thana: upazila_thana || "",
+            country: country || "Bangladesh",
+            pincode: pincode || "",
+            mobile: addressMobile || mobile || null,
+            userId: user._id,
+          });
+
+          savedAddress = await newAddress.save();
+
+          // Add address reference to user's address_details array
+          if (!user.address_details.includes(savedAddress._id)) {
+            user.address_details.push(savedAddress._id);
+            await user.save();
+          }
+        }
+      } else {
+        // Create new address
+        const newAddress = new AddressModel({
+          address_line: address_line || "",
+          district: district || "",
+          division: division || "",
+          upazila_thana: upazila_thana || "",
+          country: country || "Bangladesh",
+          pincode: pincode || "",
+          mobile: addressMobile || mobile || null,
+          userId: user._id,
+        });
+
+        savedAddress = await newAddress.save();
+
+        // Add address reference to user's address_details array if not already present
+        if (!user.address_details.includes(savedAddress._id)) {
+          user.address_details.push(savedAddress._id);
+          await user.save();
+        }
+      }
+    }
+
+    // Populate user data before sending response
+    const populatedUser = await User.findById(userId)
+      .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+      .populate("address_details");
+
     res.status(200).json({
       success: true,
       message: "Profile updated successfully",
-      user,
+      user: populatedUser,
     });
   } catch (error) {
     res.status(500).json({

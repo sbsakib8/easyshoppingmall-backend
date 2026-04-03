@@ -139,11 +139,22 @@ const productSchema = new mongoose_1.default.Schema({
 }, {
     timestamps: true,
 });
-// ✅ ADD THIS
+// Text index for search
 productSchema.index({
     productName: "text",
     description: "text",
     brand: "text",
     tags: "text",
 });
+// Primary compound indexes for high-performance filtering + sorting
+// These allow MongoDB to find, filter and sort within a single index scan
+productSchema.index({ publish: 1, category: 1, createdAt: -1 });
+productSchema.index({ publish: 1, category: 1, price: 1 });
+productSchema.index({ publish: 1, subCategory: 1, createdAt: -1 });
+productSchema.index({ publish: 1, subCategory: 1, price: 1 });
+productSchema.index({ publish: 1, gender: 1, createdAt: -1 });
+// Supporting indexes
+productSchema.index({ price: 1 });
+productSchema.index({ productRank: -1 });
+productSchema.index({ ratings: -1 });
 exports.default = (0, mongoose_1.model)("Product", productSchema);

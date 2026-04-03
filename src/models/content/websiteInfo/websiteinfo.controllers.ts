@@ -28,6 +28,20 @@ export const createWebsiteInfo = async (req: Request, res: Response) => {
         countdownMinutes: countdown.minutes,
         countdownSeconds: countdown.seconds,
       });
+    } else if (data.countdownDays !== undefined || data.countdownHours !== undefined) {
+      const now = new Date();
+      const days = Number(data.countdownDays) || 0;
+      const hours = Number(data.countdownHours) || 0;
+      const minutes = Number(data.countdownMinutes) || 0;
+      const seconds = Number(data.countdownSeconds) || 0;
+
+      const newTarget = new Date(now.getTime() +
+        (days * 24 * 60 * 60 * 1000) +
+        (hours * 60 * 60 * 1000) +
+        (minutes * 60 * 1000) +
+        (seconds * 1000)
+      );
+      data.countdownTargetDate = newTarget;
     }
 
     const newInfo = new WebsiteInfo(data);
@@ -43,8 +57,24 @@ export const createWebsiteInfo = async (req: Request, res: Response) => {
 //  Get All
 export const getAllWebsiteInfo = async (_req: Request, res: Response) => {
   try {
-    const info = await WebsiteInfo.find();
-    res.status(200).json({ success: true, data: info });
+    let info = await WebsiteInfo.find();
+
+    // Dynamically recalculate countdown for each record to ensure it's not stale
+    const updatedInfo = info.map(item => {
+      const plainItem = item.toObject();
+      if (plainItem.countdownTargetDate) {
+        const countdown = calculateCountdown(plainItem.countdownTargetDate);
+        Object.assign(plainItem, {
+          countdownDays: countdown.days,
+          countdownHours: countdown.hours,
+          countdownMinutes: countdown.minutes,
+          countdownSeconds: countdown.seconds,
+        });
+      }
+      return plainItem;
+    });
+
+    res.status(200).json({ success: true, data: updatedInfo });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -65,6 +95,21 @@ export const updateWebsiteInfo = async (req: Request, res: Response) => {
         countdownMinutes: countdown.minutes,
         countdownSeconds: countdown.seconds,
       });
+    } else if (data.countdownDays !== undefined || data.countdownHours !== undefined) {
+      // If user provided days/hours manualy, calculate a new target date from NOW
+      const now = new Date();
+      const days = Number(data.countdownDays) || 0;
+      const hours = Number(data.countdownHours) || 0;
+      const minutes = Number(data.countdownMinutes) || 0;
+      const seconds = Number(data.countdownSeconds) || 0;
+
+      const newTarget = new Date(now.getTime() +
+        (days * 24 * 60 * 60 * 1000) +
+        (hours * 60 * 60 * 1000) +
+        (minutes * 60 * 1000) +
+        (seconds * 1000)
+      );
+      data.countdownTargetDate = newTarget;
     }
 
     const updated = await WebsiteInfo.findByIdAndUpdate(id, data, { new: true });
