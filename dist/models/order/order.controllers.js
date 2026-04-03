@@ -9,6 +9,7 @@ const cart_utils_1 = require("../../utils/cart.utils");
 const cart_model_1 = require("../cart/cart.model");
 const user_model_1 = __importDefault(require("../user/user.model"));
 const order_model_1 = __importDefault(require("./order.model"));
+const coupon_model_1 = __importDefault(require("../coupon/coupon.model"));
 const { v4: uuidv4 } = require('uuid');
 /**
  * @desc Create a new order from user's cart
@@ -17,7 +18,7 @@ const { v4: uuidv4 } = require('uuid');
  */
 const createOrder = async (req, res) => {
     try {
-        const { delivery_address, payment_method, payment_details, payment_type } = req.body; // Renamed paymentMethod to payment_method, paymentDetails to payment_details
+        const { delivery_address, payment_method, payment_details, payment_type, appliedCoupon } = req.body; // Renamed paymentMethod to payment_method, paymentDetails to payment_details
         const userId = req.userId; // Get userId from AuthRequest
         const subtotalFromReq = Number(req.body.subtotal) || 0; // Not used in this version after product price calculation
         if (!userId || !delivery_address) {
@@ -84,6 +85,40 @@ const createOrder = async (req, res) => {
                 calculatedDeliveryCharge = 80;
             }
         }
+        // Handle Coupon applying
+        let couponDiscount = 0;
+        if (appliedCoupon) {
+            const coupon = await coupon_model_1.default.findOne({ code: appliedCoupon.toUpperCase(), isActive: true });
+            if (coupon) {
+                let subTotalCalc = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
+                // Optional checks (same as applyCoupon logic):
+                const now = new Date();
+                const validTime = now >= coupon.validFrom && now <= coupon.validUntil;
+                const withinLimits = (coupon.usageLimit === 0 || coupon.usedCount < coupon.usageLimit);
+                const meetsMinimum = subTotalCalc >= coupon.minOrderAmount;
+                if (validTime && withinLimits && meetsMinimum) {
+                    if (coupon.discountType === "flat") {
+                        couponDiscount = coupon.discountAmount;
+                    }
+                    else if (coupon.discountType === "percentage") {
+                        couponDiscount = subTotalCalc * (coupon.discountAmount / 100);
+                        if (coupon.maxDiscountAmount > 0 && couponDiscount > coupon.maxDiscountAmount) {
+                            couponDiscount = coupon.maxDiscountAmount;
+                        }
+                    }
+                    if (couponDiscount > subTotalCalc)
+                        couponDiscount = subTotalCalc;
+                    // Increment usage
+                    coupon.usedCount += 1;
+                    await coupon.save();
+                }
+                else {
+                    // You might reject the order if coupon is invalid, or just proceed without discount
+                    // For now, proceeding with 0 discount if it fails validation at last second
+                    console.warn(`Coupon ${appliedCoupon} failed final checkout validation`);
+                }
+            }
+        }
         // Create order
         const order = new order_model_1.default({
             userId,
@@ -97,6 +132,8 @@ const createOrder = async (req, res) => {
             payment_type: payment_type || "full",
             order_status: "pending",
             deliveryCharge: calculatedDeliveryCharge,
+            appliedCoupon: appliedCoupon || null,
+            couponDiscount: couponDiscount || 0,
         });
         await order.save();
         // Cart will be cleared after payment is confirmed (in paymentSuccess, confirmManualPayment, paymentIpn)
@@ -285,7 +322,7 @@ exports.ManualPayment = ManualPayment;
 const createManualOrder = async (req, res) => {
     let order = null;
     try {
-        const { delivery_address, payment_details, payment_type, payment_method } = req.body;
+        const { delivery_address, payment_details, payment_type, payment_method, appliedCoupon } = req.body;
         const userId = req.userId;
         // ✅ 1. Basic validation
         if (!userId || !delivery_address) {
@@ -377,6 +414,38 @@ const createManualOrder = async (req, res) => {
                 calculatedDeliveryCharge = 80;
             }
         }
+        // Handle Coupon applying
+        let couponDiscount = 0;
+        if (appliedCoupon) {
+            const coupon = await coupon_model_1.default.findOne({ code: appliedCoupon.toUpperCase(), isActive: true });
+            if (coupon) {
+                let subTotalCalc = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
+                // Optional checks (same as applyCoupon logic):
+                const now = new Date();
+                const validTime = now >= coupon.validFrom && now <= coupon.validUntil;
+                const withinLimits = (coupon.usageLimit === 0 || coupon.usedCount < coupon.usageLimit);
+                const meetsMinimum = subTotalCalc >= coupon.minOrderAmount;
+                if (validTime && withinLimits && meetsMinimum) {
+                    if (coupon.discountType === "flat") {
+                        couponDiscount = coupon.discountAmount;
+                    }
+                    else if (coupon.discountType === "percentage") {
+                        couponDiscount = subTotalCalc * (coupon.discountAmount / 100);
+                        if (coupon.maxDiscountAmount > 0 && couponDiscount > coupon.maxDiscountAmount) {
+                            couponDiscount = coupon.maxDiscountAmount;
+                        }
+                    }
+                    if (couponDiscount > subTotalCalc)
+                        couponDiscount = subTotalCalc;
+                    // Increment usage
+                    coupon.usedCount += 1;
+                    await coupon.save();
+                }
+                else {
+                    console.warn(`Coupon ${appliedCoupon} failed final checkout validation`);
+                }
+            }
+        }
         // ✅ 5. Create order
         order = new order_model_1.default({
             userId,
@@ -389,6 +458,8 @@ const createManualOrder = async (req, res) => {
             payment_details: payment_details || {},
             order_status: "pending",
             deliveryCharge: calculatedDeliveryCharge,
+            appliedCoupon: appliedCoupon || null,
+            couponDiscount: couponDiscount || 0,
         });
         await order.save();
         // ✅ 6. Update user's order history

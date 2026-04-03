@@ -62,6 +62,8 @@ export interface IOrder {
     country: string;
     mobile: number;
   };
+  appliedCoupon?: string;
+  couponDiscount?: number;
   order_status: string;
   createdAt: Date;
   updatedAt: Date;

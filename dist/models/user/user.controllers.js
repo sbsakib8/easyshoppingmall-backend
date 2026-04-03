@@ -17,29 +17,55 @@ const wishlist_model_1 = require("../wishlist/wishlist.model");
 // Cookie 
 const cookieOptions = {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     maxAge: 30 * 24 * 60 * 60 * 1000,
+};
+// Generate unique referral code
+const generateReferralCode = async () => {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    const exists = await user_model_1.default.findOne({ referralCode: result });
+    if (exists)
+        return generateReferralCode();
+    return result;
 };
 // Register User
 const signUp = async (req, res) => {
     try {
-        const { name, email, password, role } = req.body;
+        const { name, email, password, role, referralCode } = req.body;
         const userExists = await user_model_1.default.findOne({ email });
         if (userExists) {
             res.status(400).json({ message: "User already exists", success: false });
             return;
         }
-        const user = await user_model_1.default.create({ name, email, password, role });
+        let referredBy = null;
+        if (referralCode) {
+            const referrer = await user_model_1.default.findOne({ referralCode });
+            if (referrer) {
+                referredBy = referrer._id;
+            }
+        }
+        // Generate own referral code
+        const ownReferralCode = await generateReferralCode();
+        const user = await user_model_1.default.create({
+            name,
+            email,
+            password,
+            role,
+            referralCode: ownReferralCode,
+            referredBy
+        });
+        // Increment referrer's count after successful user creation
+        if (referredBy) {
+            await user_model_1.default.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
+        }
         const token = (0, genaretetoken_1.default)(user._id.toString());
         //  cookie
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 30 * 24 * 60 * 60 * 1000,
-        });
-        ;
+        res.cookie("token", token, cookieOptions);
         res.status(201).json({
             success: true,
             message: "User registered successfully",
@@ -108,13 +134,7 @@ const signIn = async (req, res) => {
             return;
         }
         const token = (0, genaretetoken_1.default)(user._id.toString());
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 30 * 24 * 60 * 60 * 1000,
-        });
-        ;
+        res.cookie("token", token, cookieOptions);
         res.json({
             success: true,
             message: "User Signin successfully",
@@ -130,9 +150,7 @@ exports.signIn = signIn;
 const signOut = async (req, res) => {
     try {
         res.clearCookie("token", {
-            httpOnly: true,
-            secure: true,
-            sameSite: "strict",
+            ...cookieOptions,
             path: "/",
         });
         res.status(200).json({
@@ -235,11 +253,30 @@ exports.resetpassword = resetpassword;
 // google login
 const googleAuth = async (req, res) => {
     try {
-        const { name, email, mobile, image } = req.body;
+        const { name, email, mobile, image, referralCode } = req.body;
         let user = await user_model_1.default.findOne({ email });
         if (!user) {
-            user = new user_model_1.default({ name, email, mobile, image });
+            let referredBy = null;
+            if (referralCode) {
+                const referrer = await user_model_1.default.findOne({ referralCode });
+                if (referrer) {
+                    referredBy = referrer._id;
+                }
+            }
+            const ownReferralCode = await generateReferralCode();
+            user = new user_model_1.default({
+                name,
+                email,
+                mobile,
+                image,
+                referralCode: ownReferralCode,
+                referredBy
+            });
             await user.save();
+            // Increment referrer's count
+            if (referredBy) {
+                await user_model_1.default.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
+            }
         }
         const token = (0, genaretetoken_1.default)(user._id.toString());
         res.cookie("token", token, cookieOptions);
@@ -271,45 +308,14 @@ const getUserProfile = async (req, res) => {
         }
         const user = await user_model_1.default.findById(userId)
             .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
-            .populate("address_details")
-            .populate({
-            path: "shopping_cart",
-            populate: {
-                path: "products.productId",
-                model: "Product",
-                populate: {
-                    path: "category",
-                    select: "name"
-                }
-            },
-        })
-            .populate({
-            path: "orderHistory",
-            populate: [
-                {
-                    path: "products.productId",
-                    model: "Product",
-                    populate: {
-                        path: "category",
-                        select: "name"
-                    }
-                },
-                {
-                    path: "cart",
-                    model: "Cart",
-                    populate: {
-                        path: "products.productId",
-                        model: "Product",
-                        populate: {
-                            path: "category",
-                            select: "name"
-                        }
-                    }
-                },
-            ],
-        });
+            .populate("address_details");
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found" });
+        }
+        // Auto-generate missing referral code if not present
+        if (!user.referralCode) {
+            user.referralCode = await generateReferralCode();
+            await user.save();
         }
         res.status(200).json({ success: true, user });
     }
@@ -422,8 +428,13 @@ const updateUserProfile = async (req, res) => {
             user.status = status;
         if (verify_email !== undefined)
             user.verify_email = verify_email;
-        if (role !== undefined)
+        if (role !== undefined) {
             user.role = role;
+        }
+        // Ensure user has a referral code (especially if becoming DROPSHIPPING)
+        if (!user.referralCode) {
+            user.referralCode = await generateReferralCode();
+        }
         if (date_of_birth !== undefined) {
             // Handle both "MM/DD/YYYY" and "YYYY-MM-DD" formats
             let parsedDate;
@@ -520,43 +531,7 @@ const updateUserProfile = async (req, res) => {
         // Populate user data before sending response
         const populatedUser = await user_model_1.default.findById(userId)
             .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
-            .populate("address_details")
-            .populate({
-            path: "shopping_cart",
-            populate: {
-                path: "products.productId",
-                model: "Product",
-                populate: {
-                    path: "category",
-                    select: "name"
-                }
-            },
-        })
-            .populate({
-            path: "orderHistory",
-            populate: [
-                {
-                    path: "products.productId",
-                    model: "Product",
-                    populate: {
-                        path: "category",
-                        select: "name"
-                    }
-                },
-                {
-                    path: "cart",
-                    model: "Cart",
-                    populate: {
-                        path: "products.productId",
-                        model: "Product",
-                        populate: {
-                            path: "category",
-                            select: "name"
-                        }
-                    }
-                },
-            ],
-        });
+            .populate("address_details");
         res.status(200).json({
             success: true,
             message: "Profile updated successfully",

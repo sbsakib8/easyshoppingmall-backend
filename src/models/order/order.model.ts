@@ -94,6 +94,9 @@ const orderSchema = new Schema<IOrder>(
     tran_id: { type: String, index: true, unique: true },
     invoice_receipt: { type: String, default: "" },
 
+    appliedCoupon: { type: String, default: null },
+    couponDiscount: { type: Number, default: 0 },
+
     // Order Status
     order_status: {
       type: String,
@@ -119,7 +122,9 @@ orderSchema.pre<IOrder & Document>("save", function (next) {
   });
 
   this.subTotalAmt = subTotal;
-  this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0);
+  this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0) - (Number(this.couponDiscount) || 0);
+  if (this.totalAmt < 0) this.totalAmt = 0;
+
   // Payment amount calculation
   if (this.payment_method === "manual") {
     if (this.payment_type === "full") {
