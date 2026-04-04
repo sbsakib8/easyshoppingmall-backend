@@ -3,7 +3,7 @@ import http from "http";
 import { Server } from "socket.io";
 import connectDB from "./config/db.connect";
 
-const PORT = process.env.PORT || 5003;
+// const PORT = process.env.PORT || 5003;
 
 const server = http.createServer(app);
 
@@ -39,9 +39,10 @@ async function startServer() {
     await connectDB();
 
     // 2. Then, start the server
-    server.listen(PORT, () => {
-      console.log(`✅ Server running at http://localhost:${PORT}`);
-    });
+    // server.listen(PORT, () => {
+    //   console.log(`✅ Server running at http://localhost:${PORT}`);
+    // });
+
   } catch (error) {
     console.error("❌ Failed to start server:", error);
     process.exit(1);
