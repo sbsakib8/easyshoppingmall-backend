@@ -6,6 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importDefault(require("mongoose"));
 const index_1 = __importDefault(require("./index"));
 const connectDB = async () => {
+    if (mongoose_1.default.connection.readyState >= 1) {
+        return;
+    }
     try {
         await mongoose_1.default.connect(index_1.default.mongodburl);
         console.log("MongoDB connected successfully");
@@ -17,7 +20,7 @@ const connectDB = async () => {
         else {
             console.error("MongoDB connection failed: unknown error");
         }
-        process.exit(1);
+        // process.exit(1) should not be used in serverless context like Vercel
     }
 };
 exports.default = connectDB;

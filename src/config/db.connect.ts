@@ -3,6 +3,10 @@ import processdata from "./index";
 
 
 const connectDB = async (): Promise<void> => {
+  if (mongoose.connection.readyState >= 1) {
+    return;
+  }
+
   try {
     await mongoose.connect(processdata.mongodburl);
     console.log("MongoDB connected successfully");
@@ -12,7 +16,7 @@ const connectDB = async (): Promise<void> => {
     } else {
       console.error("MongoDB connection failed: unknown error");
     }
-    process.exit(1); 
+    // process.exit(1) should not be used in serverless context like Vercel
   }
 };
 

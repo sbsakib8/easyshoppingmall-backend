@@ -8,7 +8,7 @@ const index_1 = __importDefault(require("./index"));
 const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
 const db_connect_1 = __importDefault(require("./config/db.connect"));
-const PORT = process.env.PORT || 5003;
+// const PORT = process.env.PORT || 5003;
 const server = http_1.default.createServer(index_1.default);
 const io = new socket_io_1.Server(server, {
     cors: {
@@ -37,9 +37,9 @@ async function startServer() {
         // 1. First, wait for database to be ready
         await (0, db_connect_1.default)();
         // 2. Then, start the server
-        server.listen(PORT, () => {
-            console.log(`✅ Server running at http://localhost:${PORT}`);
-        });
+        // server.listen(PORT, () => {
+        //   console.log(`✅ Server running at http://localhost:${PORT}`);
+        // });
     }
     catch (error) {
         console.error("❌ Failed to start server:", error);

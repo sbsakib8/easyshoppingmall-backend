@@ -8,6 +8,7 @@ const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const cors_1 = __importDefault(require("cors"));
 const express_1 = __importDefault(require("express"));
 const address_routs_1 = __importDefault(require("./models/address/address.routs"));
+const db_connect_1 = __importDefault(require("./config/db.connect"));
 const centerBanner_routs_1 = __importDefault(require("./models/banners/centerBanner/centerBanner.routs"));
 const homeBanner_routs_1 = __importDefault(require("./models/banners/homeBanner/homeBanner.routs"));
 const leftBanner_routs_1 = __importDefault(require("./models/banners/leftBanner/leftBanner.routs"));
@@ -30,6 +31,8 @@ const wishlist_routs_1 = __importDefault(require("./models/wishlist/wishlist.rou
 const coupon_routs_1 = __importDefault(require("./models/coupon/coupon.routs"));
 // middleware
 const app = (0, express_1.default)();
+// Initialize Database Connection for Vercel Serverless environment
+(0, db_connect_1.default)();
 app.use((0, compression_1.default)()); // Compress all responses
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));

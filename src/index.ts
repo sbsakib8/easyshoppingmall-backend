@@ -5,6 +5,7 @@ import type { Application, Request, Response } from "express";
 import express from "express";
 
 import addressRouter from "./models/address/address.routs";
+import connectDB from "./config/db.connect";
 import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routs";
 import homeBannerRoutes from "./models/banners/homeBanner/homeBanner.routs";
 import leftBannerRoutes from "./models/banners/leftBanner/leftBanner.routs";
@@ -29,6 +30,10 @@ import couponRouter from './models/coupon/coupon.routs';
 
 // middleware
 const app: Application = express();
+
+// Initialize Database Connection for Vercel Serverless environment
+connectDB();
+
 app.use(compression()); // Compress all responses
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
