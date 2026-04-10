@@ -25,22 +25,32 @@ export const isAuth = async (req: AuthRequest, res: Response, next: NextFunction
       return;
     }
 
-    const user = await UserModel.findById(decoded.userId); // Find user by ID
+    const user = await UserModel.findById(decoded.userId).maxTimeMS(5000); // 5s timeout
     if (!user) {
       res.status(401).json({ message: "Unauthorized: User not found" });
       return;
     }
 
     req.userId = decoded.userId;
-    req.user = { // Populate req.user
-      _id: user._id.toString(), // Convert ObjectId to string
+    req.user = {
+      _id: user._id.toString(),
       name: user.name,
       email: user.email,
-      role: user.role === "ADMIN" ? "admin" : "user", // Map role
-      mobile: user.mobile || undefined, // Populate mobile
+      role: user.role === "ADMIN" ? "admin" : "user",
+      mobile: user.mobile || undefined,
     };
     next();
-  } catch (error) {
-    res.status(401).json({ message: "Unauthorized: Invalid token" });
+  } catch (error: any) {
+    if (error.name === "TokenExpiredError") {
+      res.status(401).json({ message: "Unauthorized: Token expired" });
+    } else if (error.name === "JsonWebTokenError") {
+      res.status(401).json({ message: "Unauthorized: Invalid token" });
+    } else if (error.name === "MongooseError" || error.name === "MongoTimeoutError") {
+      console.error("Database error in isAuth:", error.message);
+      res.status(500).json({ message: "Internal Server Error: Database timeout" });
+    } else {
+      console.error("Auth error:", error.message);
+      res.status(401).json({ message: "Unauthorized: Authentication failed" });
+    }
   }
 };

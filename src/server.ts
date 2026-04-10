@@ -3,7 +3,7 @@ import http from "http";
 import { Server } from "socket.io";
 import connectDB from "./config/db.connect";
 
-// const PORT = process.env.PORT || 5003;
+const PORT = process.env.PORT || 5004;
 
 const server = http.createServer(app);
 
@@ -11,6 +11,7 @@ const io = new Server(server, {
   cors: {
     origin: ["http://localhost:3000",
       "https://easyshoppingmallbd.com",
+      "https://www.easyshoppingmallbd.com",
       "https://easyshoppingmallbd.vercel.app"],
     methods: ["GET", "POST"],
     credentials: true,
@@ -39,9 +40,9 @@ async function startServer() {
     await connectDB();
 
     // 2. Then, start the server
-    // server.listen(PORT, () => {
-    //   console.log(`✅ Server running at http://localhost:${PORT}`);
-    // });
+    server.listen(PORT, () => {
+      console.log(`✅ Server running at http://localhost:${PORT}`);
+    });
 
   } catch (error) {
     console.error("❌ Failed to start server:", error);
