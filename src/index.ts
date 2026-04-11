@@ -34,6 +34,8 @@ const app: Application = express();
 // Initialize Database Connection for Vercel Serverless environment
 connectDB();
 
+app.set("trust proxy", 1);
+
 app.use(compression()); // Compress all responses
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -42,9 +44,12 @@ app.use(cookieParser());
 // cors
 app.use(cors(
   {
-    origin: ["http://localhost:3000",
+    origin: [
+      "http://localhost:3000",
       "https://easyshoppingmallbd.com",
-      "https://easyshoppingmallbd.vercel.app"],
+      "https://www.easyshoppingmallbd.com",
+      "https://easyshoppingmallbd.vercel.app"
+    ],
     credentials: true,
   }
 ));

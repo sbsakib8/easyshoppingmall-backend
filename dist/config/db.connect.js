@@ -10,17 +10,15 @@ const connectDB = async () => {
         return;
     }
     try {
-        await mongoose_1.default.connect(index_1.default.mongodburl);
+        await mongoose_1.default.connect(index_1.default.mongodburl, {
+            connectTimeoutMS: 10000, // 10s
+            socketTimeoutMS: 45000, // 45s
+            maxPoolSize: 10,
+        });
         console.log("MongoDB connected successfully");
     }
     catch (error) {
-        if (error instanceof Error) {
-            console.error("MongoDB connection failed:", error.message);
-        }
-        else {
-            console.error("MongoDB connection failed: unknown error");
-        }
-        // process.exit(1) should not be used in serverless context like Vercel
+        console.error("MongoDB connection failed:", error.message);
     }
 };
 exports.default = connectDB;

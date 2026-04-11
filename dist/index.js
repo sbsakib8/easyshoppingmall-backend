@@ -33,15 +33,19 @@ const coupon_routs_1 = __importDefault(require("./models/coupon/coupon.routs"));
 const app = (0, express_1.default)();
 // Initialize Database Connection for Vercel Serverless environment
 (0, db_connect_1.default)();
+app.set("trust proxy", 1);
 app.use((0, compression_1.default)()); // Compress all responses
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use((0, cookie_parser_1.default)());
 // cors
 app.use((0, cors_1.default)({
-    origin: ["http://localhost:3000",
+    origin: [
+        "http://localhost:3000",
         "https://easyshoppingmallbd.com",
-        "https://easyshoppingmallbd.vercel.app"],
+        "https://www.easyshoppingmallbd.com",
+        "https://easyshoppingmallbd.vercel.app"
+    ],
     credentials: true,
 }));
 //  route

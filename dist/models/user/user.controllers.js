@@ -20,6 +20,9 @@ const cookieOptions = {
     secure: process.env.NODE_ENV === "production",
     sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     maxAge: 30 * 24 * 60 * 60 * 1000,
+    path: "/",
+    // Only set domain in production for the actual live site
+    ...(process.env.NODE_ENV === "production" && { domain: ".easyshoppingmallbd.com" })
 };
 // Generate unique referral code
 const generateReferralCode = async () => {
