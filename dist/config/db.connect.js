@@ -6,18 +6,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importDefault(require("mongoose"));
 const index_1 = __importDefault(require("./index"));
 const connectDB = async () => {
+    if (mongoose_1.default.connection.readyState >= 1) {
+        return;
+    }
     try {
-        await mongoose_1.default.connect(index_1.default.mongodburl);
+        await mongoose_1.default.connect(index_1.default.mongodburl, {
+            connectTimeoutMS: 10000, // 10s
+            socketTimeoutMS: 45000, // 45s
+            maxPoolSize: 10,
+        });
         console.log("MongoDB connected successfully");
     }
     catch (error) {
-        if (error instanceof Error) {
-            console.error("MongoDB connection failed:", error.message);
-        }
-        else {
-            console.error("MongoDB connection failed: unknown error");
-        }
-        process.exit(1);
+        console.error("MongoDB connection failed:", error.message);
     }
 };
 exports.default = connectDB;
