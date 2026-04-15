@@ -1,21 +1,23 @@
 import mongoose from "mongoose";
 import processdata from "./index";
 
+let isConnected = false;
 
 const connectDB = async (): Promise<void> => {
-  if (mongoose.connection.readyState >= 1) {
-    return;
-  }
+  if (isConnected) return;
 
   try {
-    await mongoose.connect(processdata.mongodburl, {
-      connectTimeoutMS: 10000, // 10s
-      socketTimeoutMS: 45000,  // 45s
+    const db = await mongoose.connect(processdata.mongodburl, {
+      serverSelectionTimeoutMS: 30000,
       maxPoolSize: 10,
     });
-    console.log("MongoDB connected successfully");
+
+    isConnected = db.connections[0].readyState === 1;
+
+    console.log("✅ MongoDB connected");
   } catch (error: any) {
-    console.error("MongoDB connection failed:", error.message);
+    console.error("❌ MongoDB connection failed:", error.message);
+    throw error; // 🔥 important
   }
 };
 
