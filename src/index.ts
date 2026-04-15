@@ -1,8 +1,10 @@
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import type { Application, Request, Response } from "express";
+import type { Application, Request, Response, NextFunction } from "express";
 import express from "express";
+import connectDB from "./config/db.connect";
+
 
 import addressRouter from "./models/address/address.routs";
 import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routs";
@@ -51,6 +53,16 @@ app.use(cors(
   }
 ));
 
+
+// Ensure database is connected before processing any requests (Crucial for Vercel Serverless)
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 //  route
 import analyticsRoutes from "./models/analytics/analytics.routs";

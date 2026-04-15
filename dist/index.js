@@ -7,6 +7,7 @@ const compression_1 = __importDefault(require("compression"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const cors_1 = __importDefault(require("cors"));
 const express_1 = __importDefault(require("express"));
+const db_connect_1 = __importDefault(require("./config/db.connect"));
 const address_routs_1 = __importDefault(require("./models/address/address.routs"));
 const centerBanner_routs_1 = __importDefault(require("./models/banners/centerBanner/centerBanner.routs"));
 const homeBanner_routs_1 = __importDefault(require("./models/banners/homeBanner/homeBanner.routs"));
@@ -45,6 +46,16 @@ app.use((0, cors_1.default)({
     ],
     credentials: true,
 }));
+// Ensure database is connected before processing any requests (Crucial for Vercel Serverless)
+app.use(async (req, res, next) => {
+    try {
+        await (0, db_connect_1.default)();
+        next();
+    }
+    catch (error) {
+        next(error);
+    }
+});
 //  route
 const analytics_routs_1 = __importDefault(require("./models/analytics/analytics.routs"));
 app.use("/api/users", user_routs_1.default);
