@@ -5,21 +5,21 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importDefault(require("mongoose"));
 const index_1 = __importDefault(require("./index"));
-let isConnected = false;
 const connectDB = async () => {
-    if (isConnected)
+    // Use mongoose's built-in connection states
+    // 1 = connected, 2 = connecting
+    if (mongoose_1.default.connection.readyState === 1 || mongoose_1.default.connection.readyState === 2) {
         return;
+    }
     try {
-        const db = await mongoose_1.default.connect(index_1.default.mongodburl, {
-            serverSelectionTimeoutMS: 30000,
+        await mongoose_1.default.connect(index_1.default.mongodburl, {
             maxPoolSize: 10,
         });
-        isConnected = db.connections[0].readyState === 1;
         console.log("✅ MongoDB connected");
     }
     catch (error) {
         console.error("❌ MongoDB connection failed:", error.message);
-        throw error; // 🔥 important
+        throw error;
     }
 };
 exports.default = connectDB;
