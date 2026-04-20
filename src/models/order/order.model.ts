@@ -103,6 +103,10 @@ const orderSchema = new Schema<IOrder>(
       enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed"],
       default: "pending",
     },
+    referralBonusGiven: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

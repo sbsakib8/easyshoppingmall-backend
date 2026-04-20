@@ -25,6 +25,7 @@ export interface IUser extends Document {
     referralCode?: string | null;
     referredBy?: Types.ObjectId | null;
     referralCount?: number;
+    balance?: number;
     createdAt?: Date;
     updatedAt?: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -130,6 +131,10 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
             default: null
         },
         referralCount: {
+            type: Number,
+            default: 0
+        },
+        balance: {
             type: Number,
             default: 0
         }

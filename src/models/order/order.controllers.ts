@@ -241,11 +241,30 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       id,
       { order_status: status },
       { new: true }
-    ).populate("userId", "name email");
+    ).populate("userId");
 
     if (!order) {
       res.status(404).json({ success: false, message: "Order not found" });
       return;
+    }
+
+    // Referral Bonus Logic for DROPSHIPPING
+    if (status === "delivered" && !order.referralBonusGiven) {
+      const user: any = order.userId;
+      if (user && user.referredBy && order.totalAmt >= 500) {
+        const referrer = await UserModel.findById(user.referredBy);
+        if (referrer && referrer.role === "DROPSHIPPING") {
+          const bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+          if (bonusAmount > 0) {
+            referrer.balance = (referrer.balance || 0) + bonusAmount;
+            await referrer.save();
+            
+            // Mark bonus as given to avoid duplicate rewards
+            order.referralBonusGiven = true;
+            await order.save();
+          }
+        }
+      }
     }
 
     res.json({

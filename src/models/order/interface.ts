@@ -65,6 +65,7 @@ export interface IOrder {
   appliedCoupon?: string;
   couponDiscount?: number;
   order_status: string;
+  referralBonusGiven?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
