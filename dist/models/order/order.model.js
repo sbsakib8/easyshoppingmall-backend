@@ -128,6 +128,10 @@ const orderSchema = new mongoose_1.Schema({
         enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed"],
         default: "pending",
     },
+    referralBonusGiven: {
+        type: Boolean,
+        default: false,
+    },
 }, { timestamps: true });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ userId: 1, createdAt: -1 });

@@ -1,8 +1,8 @@
 import mongoose from "mongoose";
 import type { CookieOptions, Request, Response } from "express";
 import { AuthRequest } from "../../middlewares/isAuth";
-import uploadClouinary from "../../utils/cloudinary";
-import generateToken from "../../utils/genaretetoken";
+import uploadCloudinary from "../../utils/cloudinary";
+import generateToken from "../../utils/generatetoken";
 import { sendEmail } from "../../utils/nodemailer";
 import AddressModel from "../address/address.model";
 import { CartModel } from "../cart/cart.model";
@@ -385,7 +385,7 @@ export const userImage = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "No image file provided" });
     }
 
-    const imageUrl = await uploadClouinary(req.file.buffer);
+    const imageUrl = await uploadCloudinary(req.file.buffer);
 
     const user = await User.findByIdAndUpdate(
       req.userId,

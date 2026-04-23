@@ -20,11 +20,13 @@ export interface IUser extends Document {
     forgot_password_expiry?: Date | null;
     isotpverified?: boolean;
     role: "ADMIN" | "USER" | "INVESTMENT" | "SELLERPROGRAM" | "BOXLEADER" | "DROPSHIPPING";
+    roles: ("ADMIN" | "USER" | "INVESTMENT" | "SELLERPROGRAM" | "BOXLEADER" | "DROPSHIPPING")[];
     date_of_birth?: Date | null;
     gender?: "Male" | "Female" | "Other" | null;
     referralCode?: string | null;
     referredBy?: Types.ObjectId | null;
     referralCount?: number;
+    deliveredItemsCount?: number;
     balance?: number;
     createdAt?: Date;
     updatedAt?: Date;
@@ -110,6 +112,11 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
             enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING"],
             default: "USER"
         },
+        roles: {
+            type: [String],
+            enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING"],
+            default: ["USER"]
+        },
         date_of_birth: {
             type: Date,
             default: null,
@@ -134,6 +141,10 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
             type: Number,
             default: 0
         },
+        deliveredItemsCount: {
+            type: Number,
+            default: 0
+        },
         balance: {
             type: Number,
             default: 0
@@ -141,6 +152,14 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+// SYNC role to roles array before save
+userSchema.pre("save", function (next) {
+    if (this.role && !this.roles.includes(this.role)) {
+        this.roles.push(this.role);
+    }
+    next();
+});
 
 userSchema.index({ role: 1, createdAt: -1 });
 userSchema.index({ role: 1, date_of_birth: 1 });

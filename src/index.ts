@@ -6,28 +6,28 @@ import express from "express";
 import connectDB from "./config/db.connect";
 
 
-import addressRouter from "./models/address/address.routs";
-import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routs";
-import homeBannerRoutes from "./models/banners/homeBanner/homeBanner.routs";
-import leftBannerRoutes from "./models/banners/leftBanner/leftBanner.routs";
-import RightBannerRoutes from "./models/banners/rightBanner/rightBanner.routs";
-import cartRouter from './models/cart/cart.routs';
-import categoryRoutes from "./models/category/category.routs";
-import blogRoutes from "./models/content/blogs/blogs.routs";
-import contactRoutes from "./models/content/contact/contact.routs";
-import websiteInfo from "./models/content/websiteInfo/websiteinfo.routs";
-import notifications from "./models/notification/notification.routs";
-import orderRoute from './models/order/order.routs';
+import addressRouter from "./models/address/address.routes";
+import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routes";
+import homeBannerRoutes from "./models/banners/homeBanner/homeBanner.routes";
+import leftBannerRoutes from "./models/banners/leftBanner/leftBanner.routes";
+import RightBannerRoutes from "./models/banners/rightBanner/rightBanner.routes";
+import cartRouter from './models/cart/cart.routes';
+import categoryRoutes from "./models/category/category.routes";
+import blogRoutes from "./models/content/blogs/blogs.routes";
+import contactRoutes from "./models/content/contact/contact.routes";
+import websiteInfo from "./models/content/websiteInfo/websiteinfo.routes";
+import notifications from "./models/notification/notification.routes";
+import orderRoute from './models/order/order.routes';
 import paymentRouter from './models/payment/payment.route';
 
 import errorHandler from "./middlewares/errorHandler";
 import adminRoutes from './models/admin/admin.route';
-import productRouter from "./models/product/product.routs";
-import reviewRouter from './models/review/review.routs';
-import subcategoriesRoutes from "./models/subcategory/subcategory.routs";
-import userRoutes from "./models/user/user.routs";
-import wishlistRouter from './models/wishlist/wishlist.routs';
-import couponRouter from './models/coupon/coupon.routs';
+import productRouter from "./models/product/product.routes";
+import reviewRouter from './models/review/review.routes';
+import subcategoriesRoutes from "./models/subcategory/subcategory.routes";
+import userRoutes from "./models/user/user.routes";
+import wishlistRouter from './models/wishlist/wishlist.routes';
+import couponRouter from './models/coupon/coupon.routes';
 
 // middleware
 const app: Application = express();
@@ -65,7 +65,7 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
 });
 
 //  route
-import analyticsRoutes from "./models/analytics/analytics.routs";
+import analyticsRoutes from "./models/analytics/analytics.routes";
 
 app.use("/api/users", userRoutes);
 app.use("/api/products", productRouter);

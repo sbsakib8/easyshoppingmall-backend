@@ -251,18 +251,30 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
     // Referral Bonus Logic for DROPSHIPPING
     if (status === "delivered" && !order.referralBonusGiven) {
       const user: any = order.userId;
-      if (user && user.referredBy && order.totalAmt >= 500) {
+      if (user && user.referredBy) {
         const referrer = await UserModel.findById(user.referredBy);
-        if (referrer && referrer.role === "DROPSHIPPING") {
-          const bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+        if (referrer && (referrer.roles.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
+          // Calculate volume-based bonus and update tracking
+          const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 0), 0);
+          referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
+
+          let bonusAmount = 0;
+          if (order.totalAmt >= 500) {
+            // Standard rule: 10 Taka per 500 Taka
+            bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+          } else if (referrer.deliveredItemsCount > 10) {
+            // New rule: 10 Taka bonus for small orders if referrer has > 10 cumulative item sales
+            bonusAmount = 10;
+          }
+
           if (bonusAmount > 0) {
             referrer.balance = (referrer.balance || 0) + bonusAmount;
-            await referrer.save();
-            
             // Mark bonus as given to avoid duplicate rewards
             order.referralBonusGiven = true;
-            await order.save();
           }
+
+          await referrer.save();
+          await order.save();
         }
       }
     }

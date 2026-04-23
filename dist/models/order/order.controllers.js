@@ -210,10 +210,38 @@ const updateOrderStatus = async (req, res) => {
             });
             return;
         }
-        const order = await order_model_1.default.findByIdAndUpdate(id, { order_status: status }, { new: true }).populate("userId", "name email");
+        const order = await order_model_1.default.findByIdAndUpdate(id, { order_status: status }, { new: true }).populate("userId");
         if (!order) {
             res.status(404).json({ success: false, message: "Order not found" });
             return;
+        }
+        // Referral Bonus Logic for DROPSHIPPING
+        if (status === "delivered" && !order.referralBonusGiven) {
+            const user = order.userId;
+            if (user && user.referredBy) {
+                const referrer = await user_model_1.default.findById(user.referredBy);
+                if (referrer && (referrer.roles.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
+                    // Calculate volume-based bonus and update tracking
+                    const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 0), 0);
+                    referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
+                    let bonusAmount = 0;
+                    if (order.totalAmt >= 500) {
+                        // Standard rule: 10 Taka per 500 Taka
+                        bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+                    }
+                    else if (referrer.deliveredItemsCount > 10) {
+                        // New rule: 10 Taka bonus for small orders if referrer has > 10 cumulative item sales
+                        bonusAmount = 10;
+                    }
+                    if (bonusAmount > 0) {
+                        referrer.balance = (referrer.balance || 0) + bonusAmount;
+                        // Mark bonus as given to avoid duplicate rewards
+                        order.referralBonusGiven = true;
+                    }
+                    await referrer.save();
+                    await order.save();
+                }
+            }
         }
         res.json({
             success: true,
