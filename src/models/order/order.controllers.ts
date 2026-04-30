@@ -261,47 +261,74 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const order = await OrderModel.findByIdAndUpdate(
-      id,
-      { order_status: status },
-      { new: true }
-    ).populate("userId");
+    const order = await OrderModel.findById(id).populate("userId");
 
     if (!order) {
       res.status(404).json({ success: false, message: "Order not found" });
       return;
     }
 
-    // Referral Bonus Logic for DROPSHIPPING
-    if (status === "delivered" && !order.referralBonusGiven) {
-      const user: any = order.userId;
-      if (user && user.referredBy) {
+    order.order_status = status;
+
+    // Referral/Profit Logic
+    const isFinished = status === "delivered" || status === "completed";
+    const user: any = order.userId;
+
+    console.log(`[Order Update] ID: ${id}, Status: ${status}, IsFinished: ${isFinished}`);
+
+    if (isFinished) {
+      // 1. Referral Bonus Logic for DROPSHIPPING (Referrer)
+      if (!order.referralBonusGiven && user && user.referredBy) {
         const referrer = await UserModel.findById(user.referredBy);
-        if (referrer && (referrer.roles.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
-          // Calculate volume-based bonus and update tracking
+        if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
           const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 0), 0);
           referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
 
           let bonusAmount = 0;
           if (order.totalAmt >= 500) {
-            // Standard rule: 10 Taka per 500 Taka
             bonusAmount = Math.floor(order.totalAmt / 500) * 10;
           } else if (referrer.deliveredItemsCount > 10) {
-            // New rule: 10 Taka bonus for small orders if referrer has > 10 cumulative item sales
             bonusAmount = 10;
           }
 
           if (bonusAmount > 0) {
+            console.log(`[Referral Bonus] Giving ${bonusAmount} to ${referrer._id}`);
             referrer.balance = (referrer.balance || 0) + bonusAmount;
-            // Mark bonus as given to avoid duplicate rewards
             order.referralBonusGiven = true;
+            await referrer.save();
           }
+        }
+      }
 
-          await referrer.save();
-          await order.save();
+      // 2. Profit Logic for DROPSHIPPING (Order Owner)
+      if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
+        const totalProfit = order.products.reduce((sum, p) => {
+          const cost = Number(p.costPrice || p.price) || 0;
+          const selling = Number(p.sellingPrice) || 0;
+          
+          // CRITICAL: If selling price was never set, it might be 0 or equal to cost.
+          // We only give profit if selling > cost.
+          const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
+          
+          console.log(`[Profit Calc] Prod: ${p.name}, Cost: ${cost}, Sell: ${selling}, Qty: ${p.quantity}, ItemProfit: ${itemProfit}`);
+          return sum + itemProfit;
+        }, 0);
+
+        if (totalProfit > 0) {
+          console.log(`[Profit Dist] Crediting ${totalProfit} to ${user._id}`);
+          await UserModel.findByIdAndUpdate(user._id, {
+            $inc: { balance: totalProfit }
+          });
+          
+          order.profitGiven = true;
+          order.profitAmount = totalProfit;
+        } else {
+          console.log(`[Profit Dist] No profit to distribute for order ${order.orderId}`);
         }
       }
     }
+
+    await order.save();
 
     res.json({
       success: true,
@@ -463,6 +490,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
         image: p.image || [],
         quantity: Number(p.quantity) || 1,
         price: Number(p.costPrice || p.price) || 0,
+        costPrice: Number(p.costPrice || p.price) || 0,
         sellingPrice: Number(p.sellingPrice) || Number(p.price) || 0,
         totalPrice: (Number(p.quantity) || 1) * (Number(p.price) || 0),
         size: p.size ?? null,

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteOrder = exports.confirmManualPayment = exports.getOrdersByStatus = exports.getAllOrders = exports.createManualOrder = exports.ManualPayment = exports.updateOrderStatus = exports.getMyOrders = exports.createOrder = void 0;
+exports.deleteOrder = exports.confirmManualPayment = exports.getOrdersByStatus = exports.getAllOrders = exports.createManualOrder = exports.ManualPayment = exports.updateOrderStatus = exports.getOrderDetails = exports.getMyOrders = exports.createOrder = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const cart_utils_1 = require("../../utils/cart.utils");
 const cart_model_1 = require("../cart/cart.model");
@@ -185,6 +185,29 @@ const getMyOrders = async (req, res) => {
     }
 };
 exports.getMyOrders = getMyOrders;
+const getOrderDetails = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const order = await order_model_1.default.findById(id)
+            .populate({
+            path: "products.productId",
+            populate: [
+                { path: "category", model: "Category" },
+                { path: "subCategory", model: "SubCategory" }
+            ]
+        })
+            .populate("userId", "name email mobile");
+        if (!order) {
+            res.status(404).json({ success: false, message: "Order not found" });
+            return;
+        }
+        res.json({ success: true, data: order });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.getOrderDetails = getOrderDetails;
 /**
  * @desc Update order status (Admin only)
  * @route PUT /api/orders/:id/status
@@ -210,39 +233,63 @@ const updateOrderStatus = async (req, res) => {
             });
             return;
         }
-        const order = await order_model_1.default.findByIdAndUpdate(id, { order_status: status }, { new: true }).populate("userId");
+        const order = await order_model_1.default.findById(id).populate("userId");
         if (!order) {
             res.status(404).json({ success: false, message: "Order not found" });
             return;
         }
-        // Referral Bonus Logic for DROPSHIPPING
-        if (status === "delivered" && !order.referralBonusGiven) {
-            const user = order.userId;
-            if (user && user.referredBy) {
+        order.order_status = status;
+        // Referral/Profit Logic
+        const isFinished = status === "delivered" || status === "completed";
+        const user = order.userId;
+        console.log(`[Order Update] ID: ${id}, Status: ${status}, IsFinished: ${isFinished}`);
+        if (isFinished) {
+            // 1. Referral Bonus Logic for DROPSHIPPING (Referrer)
+            if (!order.referralBonusGiven && user && user.referredBy) {
                 const referrer = await user_model_1.default.findById(user.referredBy);
-                if (referrer && (referrer.roles.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
-                    // Calculate volume-based bonus and update tracking
+                if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
                     const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 0), 0);
                     referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
                     let bonusAmount = 0;
                     if (order.totalAmt >= 500) {
-                        // Standard rule: 10 Taka per 500 Taka
                         bonusAmount = Math.floor(order.totalAmt / 500) * 10;
                     }
                     else if (referrer.deliveredItemsCount > 10) {
-                        // New rule: 10 Taka bonus for small orders if referrer has > 10 cumulative item sales
                         bonusAmount = 10;
                     }
                     if (bonusAmount > 0) {
+                        console.log(`[Referral Bonus] Giving ${bonusAmount} to ${referrer._id}`);
                         referrer.balance = (referrer.balance || 0) + bonusAmount;
-                        // Mark bonus as given to avoid duplicate rewards
                         order.referralBonusGiven = true;
+                        await referrer.save();
                     }
-                    await referrer.save();
-                    await order.save();
+                }
+            }
+            // 2. Profit Logic for DROPSHIPPING (Order Owner)
+            if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
+                const totalProfit = order.products.reduce((sum, p) => {
+                    const cost = Number(p.costPrice || p.price) || 0;
+                    const selling = Number(p.sellingPrice) || 0;
+                    // CRITICAL: If selling price was never set, it might be 0 or equal to cost.
+                    // We only give profit if selling > cost.
+                    const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
+                    console.log(`[Profit Calc] Prod: ${p.name}, Cost: ${cost}, Sell: ${selling}, Qty: ${p.quantity}, ItemProfit: ${itemProfit}`);
+                    return sum + itemProfit;
+                }, 0);
+                if (totalProfit > 0) {
+                    console.log(`[Profit Dist] Crediting ${totalProfit} to ${user._id}`);
+                    await user_model_1.default.findByIdAndUpdate(user._id, {
+                        $inc: { balance: totalProfit }
+                    });
+                    order.profitGiven = true;
+                    order.profitAmount = totalProfit;
+                }
+                else {
+                    console.log(`[Profit Dist] No profit to distribute for order ${order.orderId}`);
                 }
             }
         }
+        await order.save();
         res.json({
             success: true,
             message: "Order status updated successfully",
@@ -375,43 +422,62 @@ const createManualOrder = async (req, res) => {
                 message: `Missing required address fields: ${missingFields.join(", ")}`,
             });
         }
-        // ✅ 3. Validate cart
-        const cart = await cart_model_1.CartModel.findOne({ userId }).populate({
-            path: "products.productId",
-            populate: [
-                { path: "category", model: "Category" },
-                { path: "subCategory", model: "SubCategory" }
-            ]
-        });
-        if (!cart || cart.products.length === 0) {
-            return res.status(404).json({ success: false, message: "Cart is empty" });
+        // ✅ 3. Validate products (Priority: req.body.products > database cart)
+        let orderProducts = [];
+        let cartId = null;
+        if (req.body.products && Array.isArray(req.body.products) && req.body.products.length > 0) {
+            orderProducts = req.body.products.map((p) => ({
+                productId: p.productId,
+                name: p.name || "Product",
+                image: p.image || [],
+                quantity: Number(p.quantity) || 1,
+                price: Number(p.costPrice || p.price) || 0,
+                costPrice: Number(p.costPrice || p.price) || 0,
+                sellingPrice: Number(p.sellingPrice) || Number(p.price) || 0,
+                totalPrice: (Number(p.quantity) || 1) * (Number(p.price) || 0),
+                size: p.size ?? null,
+                color: p.color ?? null,
+                weight: p.weight ?? null,
+            }));
         }
-        // Type-safe check for valid products
-        const validProducts = cart.products.filter((item) => {
-            const product = item.productId;
-            // Only keep if product is an object and has _id
-            return product && typeof product === "object" && "_id" in product;
-        });
-        if (validProducts.length === 0) {
-            return res.status(400).json({ success: false, message: "No valid products in cart" });
+        else {
+            const cart = await cart_model_1.CartModel.findOne({ userId }).populate({
+                path: "products.productId",
+                populate: [
+                    { path: "category", model: "Category" },
+                    { path: "subCategory", model: "SubCategory" }
+                ]
+            });
+            if (!cart || cart.products.length === 0) {
+                return res.status(404).json({ success: false, message: "Cart is empty" });
+            }
+            cartId = cart._id;
+            const validProducts = cart.products.filter((item) => {
+                const product = item.productId;
+                return product && typeof product === "object" && "_id" in product;
+            });
+            if (validProducts.length === 0) {
+                return res.status(400).json({ success: false, message: "No valid products in cart" });
+            }
+            orderProducts = validProducts.map((item) => {
+                const product = item.productId;
+                const quantity = Number(item.quantity) || 0;
+                const price = Number(product.price) || 0;
+                return {
+                    productId: product._id,
+                    name: product.productName || "Unnamed Product",
+                    image: product.images || [],
+                    quantity,
+                    price,
+                    sellingPrice: price, // Default for manual/B2C
+                    totalPrice: quantity * price,
+                    size: item.size ?? null,
+                    color: item.color ?? null,
+                    weight: item.weight ?? null,
+                };
+            });
         }
-        const orderProducts = validProducts.map((item) => {
-            const product = item.productId;
-            const quantity = Number(item.quantity) || 0;
-            const price = Number(product.price) || 0;
-            return {
-                productId: product._id,
-                name: product.productName || "Unnamed Product",
-                image: product.images || [],
-                quantity,
-                price,
-                totalPrice: quantity * price,
-                size: item.size ?? null,
-                color: item.color ?? null,
-                weight: item.weight ?? null,
-            };
-        });
-        // ✅ 4. Manual payment validation & duplicate check
+        // ✅ 4. Payment validation
         if (payment_method === "manual") {
             if (!payment_details || !payment_details.transactionId) {
                 return res.status(400).json({
@@ -430,7 +496,27 @@ const createManualOrder = async (req, res) => {
                 });
             }
         }
-        // Verify Delivery Charge on Server
+        else if (payment_method === "balance") {
+            const user = await user_model_1.default.findById(userId);
+            if (!user) {
+                return res.status(404).json({ success: false, message: "User not found" });
+            }
+            // Calculate total with delivery (Backend should recalculate to be safe)
+            const dhakaDistricts = ["Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel", "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"];
+            let calculatedDeliveryCharge = 130;
+            if (delivery_address?.district && dhakaDistricts.some(d => delivery_address.district.includes(d))) {
+                calculatedDeliveryCharge = 80;
+            }
+            const subTotalCalc = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
+            const totalToPay = subTotalCalc + calculatedDeliveryCharge;
+            if ((user.balance || 0) < totalToPay) {
+                return res.status(400).json({ success: false, message: "Insufficient balance" });
+            }
+            // Deduct balance
+            user.balance = (user.balance || 0) - totalToPay;
+            await user.save();
+        }
+        // Verify Delivery Charge on Server (Duplicate but kept for logic consistency)
         const dhakaDistricts = [
             "Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel",
             "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"
@@ -477,14 +563,15 @@ const createManualOrder = async (req, res) => {
         // ✅ 5. Create order
         order = new order_model_1.default({
             userId,
-            cart: cart._id,
+            cart: cartId || null,
             orderId: uuidv4(),
             products: orderProducts,
             address: delivery_address,
             payment_method,
             payment_type,
             payment_details: payment_details || {},
-            order_status: "pending",
+            payment_status: payment_method === "balance" ? "paid" : "pending",
+            order_status: payment_method === "balance" ? "processing" : "pending",
             deliveryCharge: calculatedDeliveryCharge,
             appliedCoupon: appliedCoupon || null,
             couponDiscount: couponDiscount || 0,
@@ -537,7 +624,7 @@ const getAllOrders = async (req, res) => {
                 { path: "subCategory", model: "SubCategory" }
             ]
         })
-            .populate("userId", "name email") // Populate user details
+            .populate("userId", "name email role") // Populate user details including role
             .sort({ createdAt: -1 });
         res.json({
             success: true,
@@ -573,7 +660,7 @@ const getOrdersByStatus = async (req, res) => {
                 { path: "subCategory", model: "SubCategory" }
             ]
         })
-            .populate("userId", "name email") // Populate user details
+            .populate("userId", "name email role") // Populate user details including role
             .sort({ createdAt: -1 });
         res.json({
             success: true,

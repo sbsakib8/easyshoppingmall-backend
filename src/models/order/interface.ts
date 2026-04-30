@@ -6,7 +6,9 @@ export interface IOrderProduct {
   name: string;
   image: string[];
   quantity: number;
-  price: number;
+  price: number;          // cost price
+  costPrice?: number;     // explicit cost price (DS)
+  sellingPrice?: number;  // DS selling price
   totalPrice: number;
   size?: string;
   color?: string;
@@ -25,6 +27,8 @@ export interface IOrder {
     image: string[];
     quantity: number;
     price: number;
+    costPrice?: number;
+    sellingPrice?: number;
     totalPrice: number;
     size?: string;
     color?: string;
@@ -54,6 +58,7 @@ export interface IOrder {
   invoice_receipt?: string;
   tran_id?: string;
   address: {
+    customer_name?: string;
     address_line: string;
     district: string;
     division: string;
@@ -66,6 +71,8 @@ export interface IOrder {
   couponDiscount?: number;
   order_status: string;
   referralBonusGiven?: boolean;
+  profitGiven?: boolean;
+  profitAmount?: number;
   createdAt: Date;
   updatedAt: Date;
 }

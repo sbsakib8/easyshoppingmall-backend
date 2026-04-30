@@ -26,6 +26,7 @@ router.post("/manual", isAuth_1.isAuth, order_controllers_1.createManualOrder);
  * @access  Private (User)
  */
 router.get("/my-orders", isAuth_1.isAuth, order_controllers_1.getMyOrders);
+router.get("/:id", isAuth_1.isAuth, order_controllers_1.getOrderDetails);
 router.post("/manual-payment", isAuth_1.isAuth, order_controllers_1.ManualPayment);
 /**
  * @route   GET /api/orders/admin/all
