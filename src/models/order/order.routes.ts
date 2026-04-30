@@ -8,6 +8,7 @@ import {
   deleteOrder,
   getAllOrders,
   getMyOrders,
+  getOrderDetails,
   getOrdersByStatus,
   ManualPayment,
   updateOrderStatus
@@ -35,6 +36,7 @@ router.post("/manual", isAuth, createManualOrder);
  * @access  Private (User)
  */
 router.get("/my-orders", isAuth, getMyOrders);
+router.get("/:id", isAuth, getOrderDetails);
 router.post("/manual-payment", isAuth, ManualPayment);
 
 /**

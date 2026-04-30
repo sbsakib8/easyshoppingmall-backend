@@ -208,6 +208,30 @@ export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
+export const getOrderDetails = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const order = await OrderModel.findById(id)
+      .populate({
+        path: "products.productId",
+        populate: [
+          { path: "category", model: "Category" },
+          { path: "subCategory", model: "SubCategory" }
+        ]
+      })
+      .populate("userId", "name email mobile");
+
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    res.json({ success: true, data: order });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 /**
  * @desc Update order status (Admin only)
  * @route PUT /api/orders/:id/status
@@ -428,47 +452,65 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // ✅ 3. Validate cart
-    const cart = await CartModel.findOne({ userId }).populate({
-      path: "products.productId",
-      populate: [
-        { path: "category", model: "Category" },
-        { path: "subCategory", model: "SubCategory" }
-      ]
-    });
-    if (!cart || cart.products.length === 0) {
-      return res.status(404).json({ success: false, message: "Cart is empty" });
+    // ✅ 3. Validate products (Priority: req.body.products > database cart)
+    let orderProducts: any[] = [];
+    let cartId: any = null;
+
+    if (req.body.products && Array.isArray(req.body.products) && req.body.products.length > 0) {
+      orderProducts = req.body.products.map((p: any) => ({
+        productId: p.productId,
+        name: p.name || "Product",
+        image: p.image || [],
+        quantity: Number(p.quantity) || 1,
+        price: Number(p.costPrice || p.price) || 0,
+        sellingPrice: Number(p.sellingPrice) || Number(p.price) || 0,
+        totalPrice: (Number(p.quantity) || 1) * (Number(p.price) || 0),
+        size: p.size ?? null,
+        color: p.color ?? null,
+        weight: p.weight ?? null,
+      }));
+    } else {
+      const cart = await CartModel.findOne({ userId }).populate({
+        path: "products.productId",
+        populate: [
+          { path: "category", model: "Category" },
+          { path: "subCategory", model: "SubCategory" }
+        ]
+      });
+      if (!cart || cart.products.length === 0) {
+        return res.status(404).json({ success: false, message: "Cart is empty" });
+      }
+      cartId = cart._id;
+
+      const validProducts = cart.products.filter((item: any) => {
+        const product = item.productId;
+        return product && typeof product === "object" && "_id" in product;
+      });
+      if (validProducts.length === 0) {
+        return res.status(400).json({ success: false, message: "No valid products in cart" });
+      }
+
+      orderProducts = validProducts.map((item: any) => {
+        const product = item.productId;
+        const quantity = Number(item.quantity) || 0;
+        const price = Number(product.price) || 0;
+
+        return {
+          productId: product._id,
+          name: product.productName || "Unnamed Product",
+          image: product.images || [],
+          quantity,
+          price,
+          sellingPrice: price, // Default for manual/B2C
+          totalPrice: quantity * price,
+          size: item.size ?? null,
+          color: item.color ?? null,
+          weight: item.weight ?? null,
+        };
+      });
     }
 
-    // Type-safe check for valid products
-    const validProducts = cart.products.filter((item: any) => {
-      const product = item.productId;
-      // Only keep if product is an object and has _id
-      return product && typeof product === "object" && "_id" in product;
-    });
-    if (validProducts.length === 0) {
-      return res.status(400).json({ success: false, message: "No valid products in cart" });
-    }
-
-    const orderProducts = validProducts.map((item: any) => {
-      const product = item.productId;
-      const quantity = Number(item.quantity) || 0;
-      const price = Number(product.price) || 0;
-
-      return {
-        productId: product._id,
-        name: product.productName || "Unnamed Product",
-        image: product.images || [],
-        quantity,
-        price,
-        totalPrice: quantity * price,
-        size: item.size ?? null,
-        color: item.color ?? null,
-        weight: item.weight ?? null,
-      };
-    });
-
-    // ✅ 4. Manual payment validation & duplicate check
+    // ✅ 4. Payment validation
     if (payment_method === "manual") {
       if (!payment_details || !payment_details.transactionId) {
         return res.status(400).json({
@@ -488,9 +530,32 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
           message: "এই ট্রানজ্যাকশন আইডি ইতিমধ্যেই ব্যবহার হয়েছে!",
         });
       }
+    } else if (payment_method === "balance") {
+      const user = await UserModel.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      // Calculate total with delivery (Backend should recalculate to be safe)
+      const dhakaDistricts = ["Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel", "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"];
+      let calculatedDeliveryCharge = 130;
+      if (delivery_address?.district && dhakaDistricts.some(d => delivery_address.district.includes(d))) {
+        calculatedDeliveryCharge = 80;
+      }
+      
+      const subTotalCalc = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
+      const totalToPay = subTotalCalc + calculatedDeliveryCharge;
+
+      if ((user.balance || 0) < totalToPay) {
+        return res.status(400).json({ success: false, message: "Insufficient balance" });
+      }
+
+      // Deduct balance
+      user.balance = (user.balance || 0) - totalToPay;
+      await user.save();
     }
 
-    // Verify Delivery Charge on Server
+    // Verify Delivery Charge on Server (Duplicate but kept for logic consistency)
     const dhakaDistricts = [
       "Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel",
       "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"
@@ -541,14 +606,15 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
     // ✅ 5. Create order
     order = new OrderModel({
       userId,
-      cart: cart._id,
+      cart: cartId || null,
       orderId: uuidv4(),
       products: orderProducts,
       address: delivery_address,
       payment_method,
       payment_type,
       payment_details: payment_details || {},
-      order_status: "pending",
+      payment_status: payment_method === "balance" ? "paid" : "pending",
+      order_status: payment_method === "balance" ? "processing" : "pending",
       deliveryCharge: calculatedDeliveryCharge,
       appliedCoupon: appliedCoupon || null,
       couponDiscount: couponDiscount || 0,
@@ -608,7 +674,7 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
           { path: "subCategory", model: "SubCategory" }
         ]
       })
-      .populate("userId", "name email") // Populate user details
+      .populate("userId", "name email role") // Populate user details including role
       .sort({ createdAt: -1 });
 
     res.json({
@@ -646,7 +712,7 @@ export const getOrdersByStatus = async (req: Request, res: Response): Promise<vo
           { path: "subCategory", model: "SubCategory" }
         ]
       })
-      .populate("userId", "name email") // Populate user details
+      .populate("userId", "name email role") // Populate user details including role
       .sort({ createdAt: -1 });
 
     res.json({

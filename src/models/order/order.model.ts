@@ -17,7 +17,7 @@ const orderSchema = new Schema<IOrder>(
     cart: {
       type: Schema.Types.ObjectId,
       ref: "Cart",
-      required: true,
+      required: false,
     },
 
     // Product Details
