@@ -339,7 +339,6 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
       .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
       .populate("address_details");
 
-
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
@@ -350,7 +349,48 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
       await user.save();
     }
 
-    res.status(200).json({ success: true, user });
+    // Fetch referral statistics for DROPSHIPPING role
+    let referrals: {
+      count: number;
+      users: any[];
+      orders: any[];
+    } = {
+      count: user.referralCount || 0,
+      users: [],
+      orders: []
+    };
+
+    if (user.role === "DROPSHIPPING" || user.roles.includes("DROPSHIPPING")) {
+      const referredUsers = await User.find({ referredBy: userId })
+        .select("name email image createdAt")
+        .sort({ createdAt: -1 });
+
+      const referredUserIds = referredUsers.map(u => u._id);
+      
+      const referredOrders = await OrderModel.find({ userId: { $in: referredUserIds } })
+        .select("orderId totalAmt subTotalAmt deliveryCharge order_status payment_status payment_method payment_type referralBonusAmount referralPercentage profitAmount createdAt userId products address")
+        .populate("userId", "name email image")
+        .sort({ createdAt: -1 })
+        .limit(50);
+
+      referrals = {
+        count: referredUsers.length,
+        users: referredUsers,
+        orders: referredOrders
+      };
+      
+      // Sync referralCount if it's out of date
+      if (user.referralCount !== referredUsers.length) {
+        user.referralCount = referredUsers.length;
+        await user.save();
+      }
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      user,
+      referrals 
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

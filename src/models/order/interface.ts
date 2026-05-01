@@ -40,14 +40,14 @@ export interface IOrder {
   amount_due?: number;
   deliveryCharge: number;
   payment_method: string;
-  payment_type: "full" | "delivery";
+  payment_type: "full" | "delivery" | "cod";
   payment_status: "pending" | "submitted" | "paid" | "failed" | "refunded";
   payment_details: {
     manual?: {
       provider?: string;
       senderNumber?: string; // Renamed from providerNumber
       transactionId?: string;
-      paidFor?: "full" | "delivery";
+      paidFor?: "full" | "delivery" | "cod";
     };
     ssl?: {
       tran_id?: string;
@@ -71,6 +71,8 @@ export interface IOrder {
   couponDiscount?: number;
   order_status: string;
   referralBonusGiven?: boolean;
+  referralBonusAmount?: number;
+  referralPercentage?: number;
   profitGiven?: boolean;
   profitAmount?: number;
   createdAt: Date;

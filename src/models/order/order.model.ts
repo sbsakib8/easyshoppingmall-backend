@@ -62,12 +62,12 @@ const orderSchema = new Schema<IOrder>(
     // Payment Details
     payment_method: {
       type: String,
-      enum: ["manual", "sslcommerz"],
+      enum: ["manual", "sslcommerz", "balance", "cod"],
       default: "manual",
     },
     payment_type: {
       type: String,
-      enum: ["full", "delivery"],
+      enum: ["full", "delivery", "cod"],
       default: "full",
       required: true,
     },
@@ -110,6 +110,14 @@ const orderSchema = new Schema<IOrder>(
       type: Boolean,
       default: false,
     },
+    referralBonusAmount: {
+      type: Number,
+      default: 0,
+    },
+    referralPercentage: {
+      type: Number,
+      default: 0,
+    },
     profitGiven: {
       type: Boolean,
       default: false,
@@ -143,16 +151,19 @@ orderSchema.pre<IOrder & Document>("save", function (next) {
   if (this.totalAmt < 0) this.totalAmt = 0;
 
   // Payment amount calculation
-  if (this.payment_method === "manual") {
-    if (this.payment_type === "full") {
-      this.amount_paid = this.totalAmt;
-      this.amount_due = 0;
-    }
+  if (this.payment_type === "full") {
+    this.amount_paid = this.totalAmt;
+    this.amount_due = 0;
+  }
 
-    if (this.payment_type === "delivery") {
-      this.amount_paid = Number(this.deliveryCharge) || 0;
-      this.amount_due = this.totalAmt - this.amount_paid;
-    }
+  if (this.payment_type === "delivery") {
+    this.amount_paid = Number(this.deliveryCharge) || 0;
+    this.amount_due = this.totalAmt - this.amount_paid;
+  }
+
+  if (this.payment_method === "cod" || this.payment_type === "cod") {
+    this.amount_paid = 0;
+    this.amount_due = this.totalAmt;
   }
   if (
     this.payment_method === "manual" &&

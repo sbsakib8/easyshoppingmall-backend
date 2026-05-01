@@ -7,6 +7,7 @@ import UserModel from "../user/user.model";
 import { AuthUser } from "./interface";
 import OrderModel from "./order.model";
 import CouponModel from "../coupon/coupon.model";
+import WebsiteInfo from "../content/websiteInfo/websiteinfo.model";
 const { v4: uuidv4 } = require('uuid');
 
 /**
@@ -281,20 +282,32 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       if (!order.referralBonusGiven && user && user.referredBy) {
         const referrer = await UserModel.findById(user.referredBy);
         if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
-          const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 0), 0);
-          referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
+          // Fetch referral percentage from WebsiteInfo
+          const websiteInfo = await WebsiteInfo.findOne({ active: true });
+          const referralPercent = websiteInfo?.referralPercentage || 0;
 
           let bonusAmount = 0;
-          if (order.totalAmt >= 500) {
-            bonusAmount = Math.floor(order.totalAmt / 500) * 10;
-          } else if (referrer.deliveredItemsCount > 10) {
-            bonusAmount = 10;
+          if (referralPercent > 0) {
+            bonusAmount = Math.floor((order.subTotalAmt * referralPercent) / 100);
+          } else {
+            // Fallback to legacy logic if percentage not set
+            if (order.totalAmt >= 500) {
+              bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+            } else {
+              const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 0), 0);
+              referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
+              if (referrer.deliveredItemsCount > 10) {
+                bonusAmount = 10;
+              }
+            }
           }
 
           if (bonusAmount > 0) {
-            console.log(`[Referral Bonus] Giving ${bonusAmount} to ${referrer._id}`);
+            console.log(`[Referral Bonus] Giving ${bonusAmount} to ${referrer._id} (${referralPercent}%)`);
             referrer.balance = (referrer.balance || 0) + bonusAmount;
             order.referralBonusGiven = true;
+            order.referralBonusAmount = bonusAmount;
+            order.referralPercentage = referralPercent;
             await referrer.save();
           }
         }
@@ -572,7 +585,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       }
       
       const subTotalCalc = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
-      const totalToPay = subTotalCalc + calculatedDeliveryCharge;
+      const totalToPay = payment_type === "delivery" ? calculatedDeliveryCharge : (subTotalCalc + calculatedDeliveryCharge);
 
       if ((user.balance || 0) < totalToPay) {
         return res.status(400).json({ success: false, message: "Insufficient balance" });
