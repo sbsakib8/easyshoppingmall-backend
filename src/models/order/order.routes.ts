@@ -11,6 +11,7 @@ import {
   getOrderDetails,
   getOrdersByStatus,
   ManualPayment,
+  payDueAmount,
   updateOrderStatus
 } from "../order/order.controllers";
 
@@ -38,6 +39,7 @@ router.post("/manual", isAuth, createManualOrder);
 router.get("/my-orders", isAuth, getMyOrders);
 router.get("/:id", isAuth, getOrderDetails);
 router.post("/manual-payment", isAuth, ManualPayment);
+router.post("/:id/pay-due", isAuth, payDueAmount);
 
 /**
  * @route   GET /api/orders/admin/all

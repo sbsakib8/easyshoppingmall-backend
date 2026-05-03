@@ -282,13 +282,13 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       if (!order.referralBonusGiven && user && user.referredBy) {
         const referrer = await UserModel.findById(user.referredBy);
         if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
-          // Fetch referral percentage from WebsiteInfo
+          // Fetch referral bonus amount from WebsiteInfo (Treated as fixed Taka)
           const websiteInfo = await WebsiteInfo.findOne({ active: true });
-          const referralPercent = websiteInfo?.referralPercentage || 0;
+          const referralBonus = websiteInfo?.referralPercentage || 0;
 
           let bonusAmount = 0;
-          if (referralPercent > 0) {
-            bonusAmount = Math.floor((order.subTotalAmt * referralPercent) / 100);
+          if (referralBonus > 0) {
+            bonusAmount = referralBonus;
           } else {
             // Fallback to legacy logic if percentage not set
             if (order.totalAmt >= 500) {
@@ -303,11 +303,11 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
           }
 
           if (bonusAmount > 0) {
-            console.log(`[Referral Bonus] Giving ${bonusAmount} to ${referrer._id} (${referralPercent}%)`);
+            console.log(`[Referral Bonus] Giving ${bonusAmount} to ${referrer._id} (Fixed Amount)`);
             referrer.balance = (referrer.balance || 0) + bonusAmount;
             order.referralBonusGiven = true;
             order.referralBonusAmount = bonusAmount;
-            order.referralPercentage = referralPercent;
+            order.referralPercentage = referralBonus;
             await referrer.save();
           }
         }
@@ -715,7 +715,14 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
           { path: "subCategory", model: "SubCategory" }
         ]
       })
-      .populate("userId", "name email role") // Populate user details including role
+      .populate({
+        path: "userId",
+        select: "name email role referredBy",
+        populate: {
+          path: "referredBy",
+          select: "name referralCode"
+        }
+      }) // Populate user details including referrer info
       .sort({ createdAt: -1 });
 
     res.json({
@@ -753,7 +760,14 @@ export const getOrdersByStatus = async (req: Request, res: Response): Promise<vo
           { path: "subCategory", model: "SubCategory" }
         ]
       })
-      .populate("userId", "name email role") // Populate user details including role
+      .populate({
+        path: "userId",
+        select: "name email role referredBy",
+        populate: {
+          path: "referredBy",
+          select: "name referralCode"
+        }
+      }) // Populate user details including referrer info
       .sort({ createdAt: -1 });
 
     res.json({
@@ -833,6 +847,121 @@ export const confirmManualPayment = async (req: Request, res: Response) => {
       data: updatedOrder.populate("userId", "name email"),
     });
   } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * @desc Pay due amount for an existing order (User only)
+ * @route POST /api/orders/:id/pay-due
+ * @access Private (User)
+ */
+export const payDueAmount = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { paymentMethod, paymentType, manualDetails } = req.body;
+    const userId = req.userId;
+
+    if (!paymentMethod || !paymentType) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment method and payment type are required.",
+      });
+    }
+
+    const order = await OrderModel.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    // Verify ownership
+    if (order.userId.toString() !== userId) {
+      return res.status(403).json({ success: false, message: "Unauthorized" });
+    }
+
+    // Recalculate totals to be sure
+    // (This happens in pre-save, but we need the values now)
+    let subTotal = order.products.reduce((acc, p) => acc + (p.totalPrice || 0), 0);
+    const totalAmt = subTotal + (order.deliveryCharge || 0) - (order.couponDiscount || 0);
+    
+    let amountToPay = 0;
+    if (paymentType === "delivery") {
+      amountToPay = order.deliveryCharge;
+    } else {
+      amountToPay = totalAmt;
+    }
+
+    if (paymentMethod === "balance") {
+      const user = await UserModel.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      if ((user.balance || 0) < amountToPay) {
+        return res.status(400).json({ success: false, message: "Insufficient balance" });
+      }
+
+      // Deduct balance
+      user.balance = (user.balance || 0) - amountToPay;
+      await user.save();
+
+      // Update Order
+      order.payment_method = "balance";
+      order.payment_type = paymentType;
+      order.payment_status = "paid";
+      order.order_status = "processing";
+      // amount_paid and amount_due will be updated in pre-save hook
+      await order.save();
+
+      return res.json({
+        success: true,
+        message: `Payment of ৳${amountToPay} successful via balance.`,
+        order,
+      });
+    } else if (paymentMethod === "manual") {
+      if (!manualDetails || !manualDetails.transactionId || !manualDetails.provider) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction ID and provider are required for manual payment",
+        });
+      }
+
+      // Check for duplicate transactionId
+      const existingTxn = await OrderModel.findOne({ 
+        "payment_details.manual.transactionId": manualDetails.transactionId 
+      });
+      if (existingTxn) {
+        return res.status(400).json({
+          success: false,
+          message: "This transaction ID has already been used.",
+        });
+      }
+
+      // Update Order
+      order.payment_method = "manual";
+      order.payment_type = paymentType;
+      order.payment_status = "submitted";
+      order.payment_details = {
+        manual: {
+          provider: manualDetails.provider,
+          senderNumber: manualDetails.senderNumber || "N/A",
+          transactionId: manualDetails.transactionId,
+          paidFor: paymentType,
+        },
+      };
+      
+      await order.save();
+
+      return res.json({
+        success: true,
+        message: "Manual payment info submitted, pending admin confirmation",
+        order,
+      });
+    }
+
+    return res.status(400).json({ success: false, message: "Invalid payment method" });
+  } catch (error: any) {
+    console.error("Pay Due Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

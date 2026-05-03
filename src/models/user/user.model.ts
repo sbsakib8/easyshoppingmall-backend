@@ -28,6 +28,18 @@ export interface IUser extends Document {
     referralCount?: number;
     deliveredItemsCount?: number;
     balance?: number;
+    shopName?: string | null;
+    shopLogo?: string | null;
+    facebookPage?: string | null;
+    whatsappNumber?: string | null;
+    shopAddress?: string | null;
+    shopWebsite?: string | null;
+    paymentDetails?: {
+        bkash?: string | null;
+        nagad?: string | null;
+        rocket?: string | null;
+        bank?: string | null;
+    } | null;
     createdAt?: Date;
     updatedAt?: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -148,6 +160,36 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
         balance: {
             type: Number,
             default: 0
+        },
+        shopName: {
+            type: String,
+            default: null
+        },
+        shopLogo: {
+            type: String,
+            default: null
+        },
+        facebookPage: {
+            type: String,
+            default: null
+        },
+        whatsappNumber: {
+            type: String,
+            default: null
+        },
+        shopAddress: {
+            type: String,
+            default: null
+        },
+        shopWebsite: {
+            type: String,
+            default: null
+        },
+        paymentDetails: {
+            bkash: { type: String, default: null },
+            nagad: { type: String, default: null },
+            rocket: { type: String, default: null },
+            bank: { type: String, default: null }
         }
     },
     { timestamps: true }
