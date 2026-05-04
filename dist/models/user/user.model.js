@@ -119,6 +119,36 @@ const userSchema = new mongoose_1.default.Schema({
     balance: {
         type: Number,
         default: 0
+    },
+    shopName: {
+        type: String,
+        default: null
+    },
+    shopLogo: {
+        type: String,
+        default: null
+    },
+    facebookPage: {
+        type: String,
+        default: null
+    },
+    whatsappNumber: {
+        type: String,
+        default: null
+    },
+    shopAddress: {
+        type: String,
+        default: null
+    },
+    shopWebsite: {
+        type: String,
+        default: null
+    },
+    paymentDetails: {
+        bkash: { type: String, default: null },
+        nagad: { type: String, default: null },
+        rocket: { type: String, default: null },
+        bank: { type: String, default: null }
     }
 }, { timestamps: true });
 // SYNC role to roles array before save
