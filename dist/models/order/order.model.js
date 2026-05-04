@@ -48,7 +48,7 @@ const orderSchema = new mongoose_1.Schema({
     cart: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: "Cart",
-        required: true,
+        required: false,
     },
     // Product Details
     products: [
@@ -57,7 +57,9 @@ const orderSchema = new mongoose_1.Schema({
             name: { type: String, required: true },
             image: { type: [String], default: [] },
             quantity: { type: Number, default: 1 },
-            price: { type: Number, required: true },
+            price: { type: Number, required: true }, // cost price
+            costPrice: { type: Number, default: 0 }, // explicit cost price (DS)
+            sellingPrice: { type: Number, default: 0 }, // DS selling price
             totalPrice: { type: Number, default: 0 },
             size: { type: String, default: null },
             color: { type: String, default: null },
@@ -66,6 +68,7 @@ const orderSchema = new mongoose_1.Schema({
     ],
     // Delivery Details
     address: {
+        customer_name: { type: String, default: "" },
         address_line: { type: String, required: true },
         district: { type: String, default: "" },
         division: { type: String, default: "" },
@@ -128,6 +131,18 @@ const orderSchema = new mongoose_1.Schema({
         enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed"],
         default: "pending",
     },
+    referralBonusGiven: {
+        type: Boolean,
+        default: false,
+    },
+    profitGiven: {
+        type: Boolean,
+        default: false,
+    },
+    profitAmount: {
+        type: Number,
+        default: 0,
+    },
 }, { timestamps: true });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ userId: 1, createdAt: -1 });
@@ -136,8 +151,9 @@ orderSchema.pre("save", function (next) {
     let subTotal = 0;
     this.products.forEach((p) => {
         const quantity = Number(p.quantity) || 0;
-        const price = Number(p.price) || 0;
-        p.totalPrice = quantity * price;
+        const cost = Number(p.price) || 0;
+        const selling = Number(p.sellingPrice && p.sellingPrice > 0 ? p.sellingPrice : p.price) || 0;
+        p.totalPrice = quantity * selling; // This is what the CUSTOMER pays
         subTotal += p.totalPrice;
     });
     this.subTotalAmt = subTotal;

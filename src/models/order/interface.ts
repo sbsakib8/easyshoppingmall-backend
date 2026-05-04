@@ -6,7 +6,9 @@ export interface IOrderProduct {
   name: string;
   image: string[];
   quantity: number;
-  price: number;
+  price: number;          // cost price
+  costPrice?: number;     // explicit cost price (DS)
+  sellingPrice?: number;  // DS selling price
   totalPrice: number;
   size?: string;
   color?: string;
@@ -25,6 +27,8 @@ export interface IOrder {
     image: string[];
     quantity: number;
     price: number;
+    costPrice?: number;
+    sellingPrice?: number;
     totalPrice: number;
     size?: string;
     color?: string;
@@ -36,14 +40,14 @@ export interface IOrder {
   amount_due?: number;
   deliveryCharge: number;
   payment_method: string;
-  payment_type: "full" | "delivery";
+  payment_type: "full" | "delivery" | "cod";
   payment_status: "pending" | "submitted" | "paid" | "failed" | "refunded";
   payment_details: {
     manual?: {
       provider?: string;
       senderNumber?: string; // Renamed from providerNumber
       transactionId?: string;
-      paidFor?: "full" | "delivery";
+      paidFor?: "full" | "delivery" | "cod";
     };
     ssl?: {
       tran_id?: string;
@@ -54,6 +58,7 @@ export interface IOrder {
   invoice_receipt?: string;
   tran_id?: string;
   address: {
+    customer_name?: string;
     address_line: string;
     district: string;
     division: string;
@@ -65,6 +70,11 @@ export interface IOrder {
   appliedCoupon?: string;
   couponDiscount?: number;
   order_status: string;
+  referralBonusGiven?: boolean;
+  referralBonusAmount?: number;
+  referralPercentage?: number;
+  profitGiven?: boolean;
+  profitAmount?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -74,5 +84,6 @@ export interface AuthUser {
   name?: string;
   email?: string;
   role?: "user" | "admin";
+  roles?: string[];
   mobile?: string;
 }

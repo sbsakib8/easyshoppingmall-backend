@@ -83,6 +83,11 @@ const userSchema = new mongoose_1.default.Schema({
         enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING"],
         default: "USER"
     },
+    roles: {
+        type: [String],
+        enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING"],
+        default: ["USER"]
+    },
     date_of_birth: {
         type: Date,
         default: null,
@@ -106,8 +111,23 @@ const userSchema = new mongoose_1.default.Schema({
     referralCount: {
         type: Number,
         default: 0
+    },
+    deliveredItemsCount: {
+        type: Number,
+        default: 0
+    },
+    balance: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true });
+// SYNC role to roles array before save
+userSchema.pre("save", function (next) {
+    if (this.role && !this.roles.includes(this.role)) {
+        this.roles.push(this.role);
+    }
+    next();
+});
 userSchema.index({ role: 1, createdAt: -1 });
 userSchema.index({ role: 1, date_of_birth: 1 });
 userSchema.pre("save", async function (next) {

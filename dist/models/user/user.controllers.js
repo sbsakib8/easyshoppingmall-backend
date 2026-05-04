@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.getAllUsers = exports.getUserProfile = exports.googleAuth = exports.resetpassword = exports.verifyotp = exports.sendotp = exports.signOut = exports.signIn = exports.signUp = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
-const genaretetoken_1 = __importDefault(require("../../utils/genaretetoken"));
+const generatetoken_1 = __importDefault(require("../../utils/generatetoken"));
 const nodemailer_1 = require("../../utils/nodemailer");
 const address_model_1 = __importDefault(require("../address/address.model"));
 const cart_model_1 = require("../cart/cart.model");
@@ -66,7 +66,7 @@ const signUp = async (req, res) => {
         if (referredBy) {
             await user_model_1.default.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
         }
-        const token = (0, genaretetoken_1.default)(user._id.toString());
+        const token = (0, generatetoken_1.default)(user._id.toString());
         //  cookie
         res.cookie("token", token, cookieOptions);
         res.status(201).json({
@@ -136,7 +136,7 @@ const signIn = async (req, res) => {
             res.status(401).json({ message: "incorrect password" });
             return;
         }
-        const token = (0, genaretetoken_1.default)(user._id.toString());
+        const token = (0, generatetoken_1.default)(user._id.toString());
         res.cookie("token", token, cookieOptions);
         res.json({
             success: true,
@@ -281,7 +281,7 @@ const googleAuth = async (req, res) => {
                 await user_model_1.default.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
             }
         }
-        const token = (0, genaretetoken_1.default)(user._id.toString());
+        const token = (0, generatetoken_1.default)(user._id.toString());
         res.cookie("token", token, cookieOptions);
         res.status(200).json({
             success: true,

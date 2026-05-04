@@ -1,8 +1,8 @@
 import mongoose from "mongoose";
 import type { CookieOptions, Request, Response } from "express";
 import { AuthRequest } from "../../middlewares/isAuth";
-import uploadClouinary from "../../utils/cloudinary";
-import generateToken from "../../utils/genaretetoken";
+import uploadCloudinary from "../../utils/cloudinary";
+import generateToken from "../../utils/generatetoken";
 import { sendEmail } from "../../utils/nodemailer";
 import AddressModel from "../address/address.model";
 import { CartModel } from "../cart/cart.model";
@@ -339,7 +339,6 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
       .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
       .populate("address_details");
 
-
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
@@ -350,7 +349,48 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
       await user.save();
     }
 
-    res.status(200).json({ success: true, user });
+    // Fetch referral statistics for DROPSHIPPING role
+    let referrals: {
+      count: number;
+      users: any[];
+      orders: any[];
+    } = {
+      count: user.referralCount || 0,
+      users: [],
+      orders: []
+    };
+
+    if (user.role === "DROPSHIPPING" || user.roles.includes("DROPSHIPPING")) {
+      const referredUsers = await User.find({ referredBy: userId })
+        .select("name email image createdAt")
+        .sort({ createdAt: -1 });
+
+      const referredUserIds = referredUsers.map(u => u._id);
+      
+      const referredOrders = await OrderModel.find({ userId: { $in: referredUserIds } })
+        .select("orderId totalAmt subTotalAmt deliveryCharge order_status payment_status payment_method payment_type referralBonusAmount referralPercentage profitAmount createdAt userId products address")
+        .populate("userId", "name email image")
+        .sort({ createdAt: -1 })
+        .limit(50);
+
+      referrals = {
+        count: referredUsers.length,
+        users: referredUsers,
+        orders: referredOrders
+      };
+      
+      // Sync referralCount if it's out of date
+      if (user.referralCount !== referredUsers.length) {
+        user.referralCount = referredUsers.length;
+        await user.save();
+      }
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      user,
+      referrals 
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -385,11 +425,13 @@ export const userImage = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "No image file provided" });
     }
 
-    const imageUrl = await uploadClouinary(req.file.buffer);
+    const imageUrl = await uploadCloudinary(req.file.buffer);
+
+    const updateData = req.query.type === 'shopLogo' ? { shopLogo: imageUrl } : { image: imageUrl };
 
     const user = await User.findByIdAndUpdate(
       req.userId,
-      { image: imageUrl },
+      updateData,
       { new: true }
     )
       .select("-password")
@@ -460,6 +502,11 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       role,
       date_of_birth,
       gender,
+      shopName,
+      shopLogo,
+      facebookPage,
+      whatsappNumber,
+      paymentDetails,
       address_data, // New: address information (object)
       address_details, // Alternative: address information (array)
     } = req.body;
@@ -482,6 +529,21 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       user.role = role;
     }
 
+    // Dropshipping Shop Details
+    if (shopName !== undefined) user.shopName = shopName;
+    if (shopLogo !== undefined) user.shopLogo = shopLogo;
+    if (facebookPage !== undefined) user.facebookPage = facebookPage;
+    if (whatsappNumber !== undefined) user.whatsappNumber = whatsappNumber;
+    
+    if (paymentDetails !== undefined) {
+      user.paymentDetails = {
+        bkash: paymentDetails.bkash !== undefined ? paymentDetails.bkash : (user.paymentDetails?.bkash || null),
+        nagad: paymentDetails.nagad !== undefined ? paymentDetails.nagad : (user.paymentDetails?.nagad || null),
+        rocket: paymentDetails.rocket !== undefined ? paymentDetails.rocket : (user.paymentDetails?.rocket || null),
+        bank: paymentDetails.bank !== undefined ? paymentDetails.bank : (user.paymentDetails?.bank || null),
+      };
+    }
+
     // Ensure user has a referral code (especially if becoming DROPSHIPPING)
     if (!user.referralCode) {
       user.referralCode = await generateReferralCode();
@@ -490,16 +552,20 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       // Handle both "MM/DD/YYYY" and "YYYY-MM-DD" formats
       let parsedDate: Date;
 
-      if (date_of_birth.includes('/')) {
-        // Format: "MM/DD/YYYY"
-        const [month, day, year] = date_of_birth.split('/').map(Number);
-        parsedDate = new Date(Date.UTC(year, month - 1, day));
-      } else if (date_of_birth.includes('-')) {
-        // Format: "YYYY-MM-DD"
-        const [year, month, day] = date_of_birth.split('-').map(Number);
-        parsedDate = new Date(Date.UTC(year, month - 1, day));
+      if (typeof date_of_birth === 'string') {
+        if (date_of_birth.includes('/')) {
+          // Format: "MM/DD/YYYY"
+          const [month, day, year] = date_of_birth.split('/').map(Number);
+          parsedDate = new Date(Date.UTC(year, month - 1, day));
+        } else if (date_of_birth.includes('-')) {
+          // Format: "YYYY-MM-DD"
+          const [year, month, day] = date_of_birth.split('-').map(Number);
+          parsedDate = new Date(Date.UTC(year, month - 1, day));
+        } else {
+          // Try to parse as-is
+          parsedDate = new Date(date_of_birth);
+        }
       } else {
-        // Try to parse as-is
         parsedDate = new Date(date_of_birth);
       }
 

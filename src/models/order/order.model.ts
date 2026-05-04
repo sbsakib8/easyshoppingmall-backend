@@ -17,7 +17,7 @@ const orderSchema = new Schema<IOrder>(
     cart: {
       type: Schema.Types.ObjectId,
       ref: "Cart",
-      required: true,
+      required: false,
     },
 
     // Product Details
@@ -27,7 +27,9 @@ const orderSchema = new Schema<IOrder>(
         name: { type: String, required: true },
         image: { type: [String], default: [] },
         quantity: { type: Number, default: 1 },
-        price: { type: Number, required: true },
+        price: { type: Number, required: true },          // cost price
+        costPrice: { type: Number, default: 0 },          // explicit cost price (DS)
+        sellingPrice: { type: Number, default: 0 },       // DS selling price
         totalPrice: { type: Number, default: 0 },
         size: { type: String, default: null },
         color: { type: String, default: null },
@@ -37,6 +39,7 @@ const orderSchema = new Schema<IOrder>(
 
     // Delivery Details
     address: {
+      customer_name: { type: String, default: "" },
       address_line: { type: String, required: true },
       district: { type: String, default: "" },
       division: { type: String, default: "" },
@@ -59,12 +62,12 @@ const orderSchema = new Schema<IOrder>(
     // Payment Details
     payment_method: {
       type: String,
-      enum: ["manual", "sslcommerz"],
+      enum: ["manual", "sslcommerz", "balance", "cod"],
       default: "manual",
     },
     payment_type: {
       type: String,
-      enum: ["full", "delivery"],
+      enum: ["full", "delivery", "cod"],
       default: "full",
       required: true,
     },
@@ -103,6 +106,26 @@ const orderSchema = new Schema<IOrder>(
       enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed"],
       default: "pending",
     },
+    referralBonusGiven: {
+      type: Boolean,
+      default: false,
+    },
+    referralBonusAmount: {
+      type: Number,
+      default: 0,
+    },
+    referralPercentage: {
+      type: Number,
+      default: 0,
+    },
+    profitGiven: {
+      type: Boolean,
+      default: false,
+    },
+    profitAmount: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
@@ -116,8 +139,10 @@ orderSchema.pre<IOrder & Document>("save", function (next) {
 
   this.products.forEach((p) => {
     const quantity = Number(p.quantity) || 0;
-    const price = Number(p.price) || 0;
-    p.totalPrice = quantity * price;
+    const cost = Number(p.price) || 0;
+    const selling = Number(p.sellingPrice && p.sellingPrice > 0 ? p.sellingPrice : p.price) || 0;
+    
+    p.totalPrice = quantity * selling; // This is what the CUSTOMER pays
     subTotal += p.totalPrice;
   });
 
@@ -126,16 +151,19 @@ orderSchema.pre<IOrder & Document>("save", function (next) {
   if (this.totalAmt < 0) this.totalAmt = 0;
 
   // Payment amount calculation
-  if (this.payment_method === "manual") {
-    if (this.payment_type === "full") {
-      this.amount_paid = this.totalAmt;
-      this.amount_due = 0;
-    }
+  if (this.payment_type === "full") {
+    this.amount_paid = this.totalAmt;
+    this.amount_due = 0;
+  }
 
-    if (this.payment_type === "delivery") {
-      this.amount_paid = Number(this.deliveryCharge) || 0;
-      this.amount_due = this.totalAmt - this.amount_paid;
-    }
+  if (this.payment_type === "delivery") {
+    this.amount_paid = Number(this.deliveryCharge) || 0;
+    this.amount_due = this.totalAmt - this.amount_paid;
+  }
+
+  if (this.payment_method === "cod" || this.payment_type === "cod") {
+    this.amount_paid = 0;
+    this.amount_due = this.totalAmt;
   }
   if (
     this.payment_method === "manual" &&

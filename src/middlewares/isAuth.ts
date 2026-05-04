@@ -37,6 +37,7 @@ export const isAuth = async (req: AuthRequest, res: Response, next: NextFunction
       name: user.name,
       email: user.email,
       role: user.role === "ADMIN" ? "admin" : "user",
+      roles: user.roles || [user.role],
       mobile: user.mobile || undefined,
     };
     next();

@@ -32,6 +32,9 @@ export interface IWebsiteInfo extends Document {
   // 🔹 Social Media Links
   socialLinks: ISocialLink[];
 
+  // 🔹 Referral Section
+  referralPercentage: number; // e.g., 5 (for 5%)
+
   // 🔹 General Control
   active: boolean;
 }
@@ -67,6 +70,7 @@ const WebsiteInfoSchema = new Schema<IWebsiteInfo>(
     number: { type: String, required: true },
 
     socialLinks: { type: [SocialLinkSchema], default: [] },
+    referralPercentage: { type: Number, default: 0 },
     active: { type: Boolean, default: true },
   },
   { timestamps: true }
