@@ -28,6 +28,7 @@ import subcategoriesRoutes from "./models/subcategory/subcategory.routes";
 import userRoutes from "./models/user/user.routes";
 import wishlistRouter from './models/wishlist/wishlist.routes';
 import couponRouter from './models/coupon/coupon.routes';
+import paymentRequestRouter from './models/paymentRequest/paymentRequest.routes';
 
 // middleware
 const app: Application = express();
@@ -88,6 +89,7 @@ app.use('/api/review', reviewRouter)
 app.use("/api/coupon", couponRouter)
 
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/payment-request", paymentRequestRouter);
 
 app.use("/api/admin", adminRoutes)
 
