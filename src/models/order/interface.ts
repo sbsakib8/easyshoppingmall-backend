@@ -73,8 +73,11 @@ export interface IOrder {
   referralBonusGiven?: boolean;
   referralBonusAmount?: number;
   referralPercentage?: number;
+  referralBonusPerProduct?: number;
+  profitPerProduct?: number;
   profitGiven?: boolean;
   profitAmount?: number;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -86,4 +89,5 @@ export interface AuthUser {
   role?: "user" | "admin";
   roles?: string[];
   mobile?: string;
+  balance?: number;
 }

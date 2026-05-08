@@ -3,13 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteOrder = exports.confirmManualPayment = exports.getOrdersByStatus = exports.getAllOrders = exports.createManualOrder = exports.ManualPayment = exports.updateOrderStatus = exports.getOrderDetails = exports.getMyOrders = exports.createOrder = void 0;
+exports.deleteOrder = exports.payDueAmount = exports.confirmManualPayment = exports.getOrdersByStatus = exports.getAllOrders = exports.createManualOrder = exports.ManualPayment = exports.updateOrderStatus = exports.getOrderDetails = exports.getMyOrders = exports.createOrder = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const cart_utils_1 = require("../../utils/cart.utils");
 const cart_model_1 = require("../cart/cart.model");
 const user_model_1 = __importDefault(require("../user/user.model"));
 const order_model_1 = __importDefault(require("./order.model"));
 const coupon_model_1 = __importDefault(require("../coupon/coupon.model"));
+const websiteinfo_model_1 = __importDefault(require("../content/websiteInfo/websiteinfo.model"));
 const { v4: uuidv4 } = require('uuid');
 /**
  * @desc Create a new order from user's cart
@@ -248,19 +249,32 @@ const updateOrderStatus = async (req, res) => {
             if (!order.referralBonusGiven && user && user.referredBy) {
                 const referrer = await user_model_1.default.findById(user.referredBy);
                 if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
-                    const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 0), 0);
-                    referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
+                    // Fetch referral bonus amount from WebsiteInfo (Treated as fixed Taka)
+                    const websiteInfo = await websiteinfo_model_1.default.findOne({ active: true });
+                    const referralBonus = websiteInfo?.referralPercentage || 0;
                     let bonusAmount = 0;
-                    if (order.totalAmt >= 500) {
-                        bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+                    if (referralBonus > 0) {
+                        bonusAmount = referralBonus;
                     }
-                    else if (referrer.deliveredItemsCount > 10) {
-                        bonusAmount = 10;
+                    else {
+                        // Fallback to legacy logic if percentage not set
+                        if (order.totalAmt >= 500) {
+                            bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+                        }
+                        else {
+                            const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 0), 0);
+                            referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
+                            if (referrer.deliveredItemsCount > 10) {
+                                bonusAmount = 10;
+                            }
+                        }
                     }
                     if (bonusAmount > 0) {
-                        console.log(`[Referral Bonus] Giving ${bonusAmount} to ${referrer._id}`);
+                        console.log(`[Referral Bonus] Giving ${bonusAmount} to ${referrer._id} (Fixed Amount)`);
                         referrer.balance = (referrer.balance || 0) + bonusAmount;
                         order.referralBonusGiven = true;
+                        order.referralBonusAmount = bonusAmount;
+                        order.referralPercentage = referralBonus;
                         await referrer.save();
                     }
                 }
@@ -508,7 +522,7 @@ const createManualOrder = async (req, res) => {
                 calculatedDeliveryCharge = 80;
             }
             const subTotalCalc = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
-            const totalToPay = subTotalCalc + calculatedDeliveryCharge;
+            const totalToPay = payment_type === "delivery" ? calculatedDeliveryCharge : (subTotalCalc + calculatedDeliveryCharge);
             if ((user.balance || 0) < totalToPay) {
                 return res.status(400).json({ success: false, message: "Insufficient balance" });
             }
@@ -624,7 +638,14 @@ const getAllOrders = async (req, res) => {
                 { path: "subCategory", model: "SubCategory" }
             ]
         })
-            .populate("userId", "name email role") // Populate user details including role
+            .populate({
+            path: "userId",
+            select: "name email role referredBy",
+            populate: {
+                path: "referredBy",
+                select: "name referralCode"
+            }
+        }) // Populate user details including referrer info
             .sort({ createdAt: -1 });
         res.json({
             success: true,
@@ -660,7 +681,14 @@ const getOrdersByStatus = async (req, res) => {
                 { path: "subCategory", model: "SubCategory" }
             ]
         })
-            .populate("userId", "name email role") // Populate user details including role
+            .populate({
+            path: "userId",
+            select: "name email role referredBy",
+            populate: {
+                path: "referredBy",
+                select: "name referralCode"
+            }
+        }) // Populate user details including referrer info
             .sort({ createdAt: -1 });
         res.json({
             success: true,
@@ -735,6 +763,109 @@ const confirmManualPayment = async (req, res) => {
     }
 };
 exports.confirmManualPayment = confirmManualPayment;
+/**
+ * @desc Pay due amount for an existing order (User only)
+ * @route POST /api/orders/:id/pay-due
+ * @access Private (User)
+ */
+const payDueAmount = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { paymentMethod, paymentType, manualDetails } = req.body;
+        const userId = req.userId;
+        if (!paymentMethod || !paymentType) {
+            return res.status(400).json({
+                success: false,
+                message: "Payment method and payment type are required.",
+            });
+        }
+        const order = await order_model_1.default.findById(id);
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+        // Verify ownership
+        if (order.userId.toString() !== userId) {
+            return res.status(403).json({ success: false, message: "Unauthorized" });
+        }
+        // Recalculate totals to be sure
+        // (This happens in pre-save, but we need the values now)
+        let subTotal = order.products.reduce((acc, p) => acc + (p.totalPrice || 0), 0);
+        const totalAmt = subTotal + (order.deliveryCharge || 0) - (order.couponDiscount || 0);
+        let amountToPay = 0;
+        if (paymentType === "delivery") {
+            amountToPay = order.deliveryCharge;
+        }
+        else {
+            amountToPay = totalAmt;
+        }
+        if (paymentMethod === "balance") {
+            const user = await user_model_1.default.findById(userId);
+            if (!user) {
+                return res.status(404).json({ success: false, message: "User not found" });
+            }
+            if ((user.balance || 0) < amountToPay) {
+                return res.status(400).json({ success: false, message: "Insufficient balance" });
+            }
+            // Deduct balance
+            user.balance = (user.balance || 0) - amountToPay;
+            await user.save();
+            // Update Order
+            order.payment_method = "balance";
+            order.payment_type = paymentType;
+            order.payment_status = "paid";
+            order.order_status = "processing";
+            // amount_paid and amount_due will be updated in pre-save hook
+            await order.save();
+            return res.json({
+                success: true,
+                message: `Payment of ৳${amountToPay} successful via balance.`,
+                order,
+            });
+        }
+        else if (paymentMethod === "manual") {
+            if (!manualDetails || !manualDetails.transactionId || !manualDetails.provider) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Transaction ID and provider are required for manual payment",
+                });
+            }
+            // Check for duplicate transactionId
+            const existingTxn = await order_model_1.default.findOne({
+                "payment_details.manual.transactionId": manualDetails.transactionId
+            });
+            if (existingTxn) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This transaction ID has already been used.",
+                });
+            }
+            // Update Order
+            order.payment_method = "manual";
+            order.payment_type = paymentType;
+            order.payment_status = "submitted";
+            order.payment_details = {
+                manual: {
+                    provider: manualDetails.provider,
+                    senderNumber: manualDetails.senderNumber || "N/A",
+                    transactionId: manualDetails.transactionId,
+                    paidFor: paymentType,
+                },
+            };
+            await order.save();
+            return res.json({
+                success: true,
+                message: "Manual payment info submitted, pending admin confirmation",
+                order,
+            });
+        }
+        return res.status(400).json({ success: false, message: "Invalid payment method" });
+    }
+    catch (error) {
+        console.error("Pay Due Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.payDueAmount = payDueAmount;
 /**
  * @desc Delete an order by ID (Admin only)
  * @route DELETE /api/orders/:id

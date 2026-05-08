@@ -118,6 +118,15 @@ const orderSchema = new Schema<IOrder>(
       type: Number,
       default: 0,
     },
+    referralBonusPerProduct: {
+      type: Number,
+      default: 0,
+    },
+    profitPerProduct: {
+      type: Number,
+      default: 0,
+    },
+
     profitGiven: {
       type: Boolean,
       default: false,

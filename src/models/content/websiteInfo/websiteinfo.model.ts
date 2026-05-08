@@ -32,10 +32,13 @@ export interface IWebsiteInfo extends Document {
   // 🔹 Social Media Links
   socialLinks: ISocialLink[];
 
-  // 🔹 Referral Section
-  referralPercentage: number; // e.g., 5 (for 5%)
+  // 🔹 Referral & Profit Section
+  referralPercentage: number;      // legacy/percentage
+  referralBonusPerProduct: number; // e.g., 10 (flat Taka)
+  profitPerProduct: number;        // e.g., 20 (flat Taka for DS)
 
   // 🔹 General Control
+
   active: boolean;
 }
 
@@ -71,7 +74,10 @@ const WebsiteInfoSchema = new Schema<IWebsiteInfo>(
 
     socialLinks: { type: [SocialLinkSchema], default: [] },
     referralPercentage: { type: Number, default: 0 },
+    referralBonusPerProduct: { type: Number, default: 0 },
+    profitPerProduct: { type: Number, default: 0 },
     active: { type: Boolean, default: true },
+
   },
   { timestamps: true }
 );
