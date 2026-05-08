@@ -89,4 +89,5 @@ export interface AuthUser {
   role?: "user" | "admin";
   roles?: string[];
   mobile?: string;
+  balance?: number;
 }

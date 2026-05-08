@@ -458,21 +458,22 @@ export const getMyDropshippingAnalytics = async (req: AuthRequest, res: Response
     // 4. Recent Transactions
     const recentOrders = await OrderModel.find(orderMatch)
       .sort({ updatedAt: -1 })
-      .limit(10)
+      .limit(100)
       .select("orderId profitGiven profitAmount order_status updatedAt");
 
     const recentReferralOrders = await OrderModel.find(referralOrderMatch)
       .sort({ updatedAt: -1 })
-      .limit(10)
+      .limit(100)
       .populate("userId", "name")
       .select("orderId referralBonusGiven referralBonusAmount order_status updatedAt userId");
 
     const transactions: any[] = [];
     recentOrders.forEach(o => {
-        if (o.profitAmount > 0) {
+        const pAmt = o.profitAmount || 0;
+        if (pAmt > 0) {
             transactions.push({
                 type: "profit",
-                amount: o.profitAmount,
+                amount: pAmt,
                 status: o.profitGiven ? "credited" : o.order_status === "cancelled" ? "lost" : "pending",
                 orderId: o.orderId,
                 date: o.updatedAt
@@ -481,11 +482,12 @@ export const getMyDropshippingAnalytics = async (req: AuthRequest, res: Response
     });
 
     recentReferralOrders.forEach(o => {
-        if (o.referralBonusAmount > 0) {
+        const rAmt = o.referralBonusAmount || 0;
+        if (rAmt > 0) {
             transactions.push({
                 type: "referral",
-                amount: o.referralBonusAmount,
-                user: o.userId?.name || "Customer",
+                amount: rAmt,
+                user: (o.userId as any)?.name || "Customer",
                 status: o.referralBonusGiven ? "credited" : o.order_status === "cancelled" ? "lost" : "pending",
                 orderId: o.orderId,
                 date: o.updatedAt
@@ -505,7 +507,8 @@ export const getMyDropshippingAnalytics = async (req: AuthRequest, res: Response
           lostProfit: myStats.lostProfit,
           totalRevenue: myStats.revenue,
           ordersCount: myStats.totalOrders,
-          referralCount: referrals.length
+          referralCount: referrals.length,
+          currentBalance: req.user?.balance || 0
         },
         orderPipeline,
         referralNetwork: referralNetwork.sort((a, b) => b.orderCount - a.orderCount),
