@@ -120,6 +120,10 @@ const createOrder = async (req, res) => {
                 }
             }
         }
+        // Fetch current financial settings for snapshot
+        const websiteInfo = await websiteinfo_model_1.default.findOne();
+        const referralBonusPerProduct = websiteInfo?.referralBonusPerProduct || 0;
+        const profitPerProduct = websiteInfo?.profitPerProduct || 0;
         // Create order
         const order = new order_model_1.default({
             userId,
@@ -135,6 +139,8 @@ const createOrder = async (req, res) => {
             deliveryCharge: calculatedDeliveryCharge,
             appliedCoupon: appliedCoupon || null,
             couponDiscount: couponDiscount || 0,
+            referralBonusPerProduct,
+            profitPerProduct,
         });
         await order.save();
         // Cart will be cleared after payment is confirmed (in paymentSuccess, confirmManualPayment, paymentIpn)
@@ -245,61 +251,65 @@ const updateOrderStatus = async (req, res) => {
         const user = order.userId;
         console.log(`[Order Update] ID: ${id}, Status: ${status}, IsFinished: ${isFinished}`);
         if (isFinished) {
+            const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 1), 0);
             // 1. Referral Bonus Logic for DROPSHIPPING (Referrer)
             if (!order.referralBonusGiven && user && user.referredBy) {
                 const referrer = await user_model_1.default.findById(user.referredBy);
                 if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
-                    // Fetch referral bonus amount from WebsiteInfo (Treated as fixed Taka)
-                    const websiteInfo = await websiteinfo_model_1.default.findOne({ active: true });
-                    const referralBonus = websiteInfo?.referralPercentage || 0;
                     let bonusAmount = 0;
-                    if (referralBonus > 0) {
-                        bonusAmount = referralBonus;
+                    // Priority 1: Snapshotted Fixed per Product Bonus
+                    if ((order.referralBonusPerProduct ?? 0) > 0) {
+                        bonusAmount = (order.referralBonusPerProduct ?? 0) * orderItemCount;
                     }
                     else {
-                        // Fallback to legacy logic if percentage not set
-                        if (order.totalAmt >= 500) {
-                            bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+                        // Priority 2: Live/Legacy Settings
+                        const websiteInfo = await websiteinfo_model_1.default.findOne();
+                        const referralBonus = websiteInfo?.referralPercentage || 0;
+                        if (referralBonus > 0) {
+                            bonusAmount = referralBonus;
                         }
                         else {
-                            const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 0), 0);
-                            referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
-                            if (referrer.deliveredItemsCount > 10) {
-                                bonusAmount = 10;
+                            if (order.totalAmt >= 500) {
+                                bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+                            }
+                            else {
+                                referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
+                                if (referrer.deliveredItemsCount > 10) {
+                                    bonusAmount = 10;
+                                }
                             }
                         }
                     }
                     if (bonusAmount > 0) {
-                        console.log(`[Referral Bonus] Giving ${bonusAmount} to ${referrer._id} (Fixed Amount)`);
                         referrer.balance = (referrer.balance || 0) + bonusAmount;
                         order.referralBonusGiven = true;
                         order.referralBonusAmount = bonusAmount;
-                        order.referralPercentage = referralBonus;
                         await referrer.save();
                     }
                 }
             }
             // 2. Profit Logic for DROPSHIPPING (Order Owner)
             if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
-                const totalProfit = order.products.reduce((sum, p) => {
-                    const cost = Number(p.costPrice || p.price) || 0;
-                    const selling = Number(p.sellingPrice) || 0;
-                    // CRITICAL: If selling price was never set, it might be 0 or equal to cost.
-                    // We only give profit if selling > cost.
-                    const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
-                    console.log(`[Profit Calc] Prod: ${p.name}, Cost: ${cost}, Sell: ${selling}, Qty: ${p.quantity}, ItemProfit: ${itemProfit}`);
-                    return sum + itemProfit;
-                }, 0);
+                let totalProfit = 0;
+                // Priority 1: Snapshotted Fixed per Product Profit
+                if ((order.profitPerProduct ?? 0) > 0) {
+                    totalProfit = (order.profitPerProduct ?? 0) * orderItemCount;
+                }
+                else {
+                    // Priority 2: (Selling - Cost) Calculation
+                    totalProfit = order.products.reduce((sum, p) => {
+                        const cost = Number(p.costPrice || p.price) || 0;
+                        const selling = Number(p.sellingPrice) || 0;
+                        const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
+                        return sum + itemProfit;
+                    }, 0);
+                }
                 if (totalProfit > 0) {
-                    console.log(`[Profit Dist] Crediting ${totalProfit} to ${user._id}`);
                     await user_model_1.default.findByIdAndUpdate(user._id, {
                         $inc: { balance: totalProfit }
                     });
                     order.profitGiven = true;
                     order.profitAmount = totalProfit;
-                }
-                else {
-                    console.log(`[Profit Dist] No profit to distribute for order ${order.orderId}`);
                 }
             }
         }
@@ -574,6 +584,10 @@ const createManualOrder = async (req, res) => {
                 }
             }
         }
+        // Fetch current financial settings for snapshot
+        const websiteInfo = await websiteinfo_model_1.default.findOne();
+        const referralBonusPerProduct = websiteInfo?.referralBonusPerProduct || 0;
+        const profitPerProduct = websiteInfo?.profitPerProduct || 0;
         // ✅ 5. Create order
         order = new order_model_1.default({
             userId,
@@ -589,6 +603,8 @@ const createManualOrder = async (req, res) => {
             deliveryCharge: calculatedDeliveryCharge,
             appliedCoupon: appliedCoupon || null,
             couponDiscount: couponDiscount || 0,
+            referralBonusPerProduct,
+            profitPerProduct,
         });
         await order.save();
         // ✅ 6. Update user's order history

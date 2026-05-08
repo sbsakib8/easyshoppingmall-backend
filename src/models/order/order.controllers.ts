@@ -296,8 +296,8 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
           let bonusAmount = 0;
           
           // Priority 1: Snapshotted Fixed per Product Bonus
-          if (order.referralBonusPerProduct > 0) {
-            bonusAmount = order.referralBonusPerProduct * orderItemCount;
+          if ((order.referralBonusPerProduct ?? 0) > 0) {
+            bonusAmount = (order.referralBonusPerProduct ?? 0) * orderItemCount;
           } 
           else {
             // Priority 2: Live/Legacy Settings
@@ -332,8 +332,8 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
         let totalProfit = 0;
 
         // Priority 1: Snapshotted Fixed per Product Profit
-        if (order.profitPerProduct > 0) {
-          totalProfit = order.profitPerProduct * orderItemCount;
+        if ((order.profitPerProduct ?? 0) > 0) {
+          totalProfit = (order.profitPerProduct ?? 0) * orderItemCount;
         }
         else {
           // Priority 2: (Selling - Cost) Calculation

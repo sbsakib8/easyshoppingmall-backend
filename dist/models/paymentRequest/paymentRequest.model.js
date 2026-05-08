@@ -34,32 +34,49 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const SocialLinkSchema = new mongoose_1.Schema({
-    platform: { type: String, required: true },
-    icon: { type: String },
-    url: { type: String, required: true },
-    active: { type: Boolean, default: true },
-}, { _id: false });
-const WebsiteInfoSchema = new mongoose_1.Schema({
-    offerText: { type: String, required: true },
-    countdownDays: { type: Number, default: 0 },
-    countdownHours: { type: Number, default: 0 },
-    countdownMinutes: { type: Number, default: 0 },
-    countdownSeconds: { type: Number, default: 0 },
-    countdownTargetDate: { type: Date },
-    deliveryText: { type: String, default: "" },
-    supportContact: { type: String, default: "" },
-    discountTitle: { type: String, required: true },
-    discountLabel: { type: String, default: "Sale" },
-    discountPercent: { type: Number, required: true },
-    discountLink: { type: String },
-    address: { type: String, required: true },
-    email: { type: String, required: true },
-    number: { type: String, required: true },
-    socialLinks: { type: [SocialLinkSchema], default: [] },
-    referralPercentage: { type: Number, default: 0 },
-    referralBonusPerProduct: { type: Number, default: 0 },
-    profitPerProduct: { type: Number, default: 0 },
-    active: { type: Boolean, default: true },
+const paymentRequestSchema = new mongoose_1.Schema({
+    userId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    amount: {
+        type: Number,
+        required: true,
+    },
+    paymentMethod: {
+        type: String,
+        required: true,
+    },
+    number: {
+        type: String,
+        required: true,
+    },
+    status: {
+        type: String,
+        enum: ["pending", "approved", "rejected"],
+        default: "pending",
+    },
+    transactionId: {
+        type: String,
+        default: null,
+    },
+    senderNumber: {
+        type: String,
+        default: null,
+    },
+    screenshot: {
+        type: String,
+        default: null,
+    },
+    adminNote: {
+        type: String,
+        default: "",
+    },
 }, { timestamps: true });
-exports.default = mongoose_1.default.model("WebsiteInfo", WebsiteInfoSchema);
+const PaymentRequestModel = mongoose_1.default.model("PaymentRequest", paymentRequestSchema);
+// Self-healing: Attempt to drop the stuck unique index if it exists
+PaymentRequestModel.collection.dropIndex("transactionId_1").catch(() => {
+    // Index doesn't exist or already dropped, ignore error
+});
+exports.default = PaymentRequestModel;
