@@ -258,8 +258,8 @@ const updateOrderStatus = async (req, res) => {
                 if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
                     let bonusAmount = 0;
                     // Priority 1: Snapshotted Fixed per Product Bonus
-                    if (order.referralBonusPerProduct > 0) {
-                        bonusAmount = order.referralBonusPerProduct * orderItemCount;
+                    if ((order.referralBonusPerProduct ?? 0) > 0) {
+                        bonusAmount = (order.referralBonusPerProduct ?? 0) * orderItemCount;
                     }
                     else {
                         // Priority 2: Live/Legacy Settings
@@ -292,8 +292,8 @@ const updateOrderStatus = async (req, res) => {
             if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
                 let totalProfit = 0;
                 // Priority 1: Snapshotted Fixed per Product Profit
-                if (order.profitPerProduct > 0) {
-                    totalProfit = order.profitPerProduct * orderItemCount;
+                if ((order.profitPerProduct ?? 0) > 0) {
+                    totalProfit = (order.profitPerProduct ?? 0) * orderItemCount;
                 }
                 else {
                     // Priority 2: (Selling - Cost) Calculation
