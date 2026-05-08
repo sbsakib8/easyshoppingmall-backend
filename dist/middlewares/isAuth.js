@@ -32,6 +32,7 @@ const isAuth = async (req, res, next) => {
             role: user.role === "ADMIN" ? "admin" : "user",
             roles: user.roles || [user.role],
             mobile: user.mobile || undefined,
+            balance: user.balance || 0,
         };
         next();
     }
