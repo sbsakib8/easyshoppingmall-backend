@@ -95,6 +95,10 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isBoost: {
+      type: Boolean,
+      default: false,
+    },
     gender: {
       type: String,
       default: "unisex",
