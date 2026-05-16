@@ -17,14 +17,20 @@ export const createPaymentRequest = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: "Invalid withdrawal amount" });
         }
 
-        const user = await User.findById(userId);
-        if (!user || (user.balance || 0) < requestAmount) {
-            return res.status(400).json({ success: false, message: "Insufficient balance" });
+        if (requestAmount < 200) {
+            return res.status(400).json({ success: false, message: "Minimum withdrawal amount is ৳200" });
         }
 
-        // Deduct balance
-        user.balance = (user.balance || 0) - requestAmount;
-        await user.save();
+        // Atomic balance deduction
+        const user = await User.findOneAndUpdate(
+            { _id: userId, balance: { $gte: requestAmount } },
+            { $inc: { balance: -requestAmount } },
+            { new: true }
+        );
+
+        if (!user) {
+            return res.status(400).json({ success: false, message: "Insufficient balance or invalid user" });
+        }
 
         try {
             const newRequest = await PaymentRequest.create({

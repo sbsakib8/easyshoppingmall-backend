@@ -32,7 +32,7 @@ const createProductController = async (req, res) => {
             }
             return [val];
         };
-        const { productName, description, category, subCategory, featured, brand, productWeight, productSize, color, price, productStock, productRank, discount, ratings, tags, more_details, publish, video_link, gender, } = req.body;
+        const { productName, description, category, subCategory, featured, brand, productWeight, productSize, color, price, productStock, productRank, discount, ratings, tags, more_details, publish, isBoost, video_link, gender, } = req.body;
         // Validation
         if (!productName) {
             res.status(400).json({
@@ -86,6 +86,7 @@ const createProductController = async (req, res) => {
             video_link: video_link,
             more_details: typeof more_details === 'string' ? JSON.parse(more_details) : more_details,
             publish: publish === undefined ? true : String(publish) === "true",
+            isBoost: String(isBoost) === "true",
             gender: gender || "unisex",
             sku,
         });
@@ -211,7 +212,7 @@ const getProductController = async (req, res) => {
         const isQueryEmpty = Object.keys(query).length === 1 && query.publish === true;
         const [data, totalCount] = await Promise.all([
             product_model_1.default.find(query)
-                .select("productName description brand price productStock productRank discount ratings images publish createdAt gender sku category subCategory")
+                .select("productName description brand price productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory")
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
