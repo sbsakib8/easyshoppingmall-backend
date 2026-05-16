@@ -24,6 +24,7 @@ interface PaginationRequest extends Request {
     productId?: string;
     _id?: string;
     publish?: boolean;
+    isBoost?: boolean;
     productName?: string;
     description?: string;
     category?: string[];
@@ -83,6 +84,7 @@ export const createProductController = async (
       tags,
       more_details,
       publish,
+      isBoost,
       video_link,
       gender,
     } = req.body;
@@ -145,6 +147,7 @@ export const createProductController = async (
       video_link: video_link,
       more_details: typeof more_details === 'string' ? JSON.parse(more_details) : more_details,
       publish: publish === undefined ? true : String(publish) === "true",
+      isBoost: String(isBoost) === "true",
       gender: gender || "unisex",
       sku,
     });
@@ -287,7 +290,7 @@ export const getProductController = async (
 
     const [data, totalCount] = await Promise.all([
       productModel.find(query)
-        .select("productName description brand price productStock productRank discount ratings images publish createdAt gender sku category subCategory")
+        .select("productName description brand price productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory")
         .sort(sort as any)
         .skip(skip)
         .limit(limit)

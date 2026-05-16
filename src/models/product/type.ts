@@ -23,6 +23,7 @@ export interface IProduct extends Document {
     more_details?: Record<string, any>;
     gender?: string;
     publish?: boolean;
+    isBoost?: boolean;
     sku?: string | null;
     createdAt?: Date;
     updatedAt?: Date;

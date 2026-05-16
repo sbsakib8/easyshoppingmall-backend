@@ -30,6 +30,8 @@ const user_routes_1 = __importDefault(require("./models/user/user.routes"));
 const wishlist_routes_1 = __importDefault(require("./models/wishlist/wishlist.routes"));
 const coupon_routes_1 = __importDefault(require("./models/coupon/coupon.routes"));
 const paymentRequest_routes_1 = __importDefault(require("./models/paymentRequest/paymentRequest.routes"));
+const videoAccess_routes_1 = __importDefault(require("./models/videoAccess/videoAccess.routes"));
+const videoContent_routes_1 = __importDefault(require("./models/videoContent/videoContent.routes"));
 // middleware
 const app = (0, express_1.default)();
 app.set("trust proxy", 1);
@@ -80,6 +82,8 @@ app.use('/api/review', review_routes_1.default);
 app.use("/api/coupon", coupon_routes_1.default);
 app.use("/api/analytics", analytics_routes_1.default);
 app.use("/api/payment-request", paymentRequest_routes_1.default);
+app.use("/api/video-access", videoAccess_routes_1.default);
+app.use("/api/video-content", videoContent_routes_1.default);
 app.use("/api/admin", admin_route_1.default);
 app.get("/", (req, res) => {
     res.send("APi  is running...");
