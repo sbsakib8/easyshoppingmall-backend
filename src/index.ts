@@ -31,6 +31,7 @@ import couponRouter from './models/coupon/coupon.routes';
 import paymentRequestRouter from './models/paymentRequest/paymentRequest.routes';
 import videoAccessRouter from './models/videoAccess/videoAccess.routes';
 import videoContentRouter from './models/videoContent/videoContent.routes';
+import videoRequestRouter from './models/videoRequest/videoRequest.routes';
 
 // middleware
 const app: Application = express();
@@ -94,6 +95,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/payment-request", paymentRequestRouter);
 app.use("/api/video-access", videoAccessRouter);
 app.use("/api/video-content", videoContentRouter);
+app.use("/api/video-request", videoRequestRouter);
 
 app.use("/api/admin", adminRoutes)
 

@@ -251,6 +251,9 @@ const updateOrderStatus = async (req, res) => {
         const user = order.userId;
         console.log(`[Order Update] ID: ${id}, Status: ${status}, IsFinished: ${isFinished}`);
         if (isFinished) {
+            order.payment_status = "paid";
+            order.amount_paid = order.totalAmt;
+            order.amount_due = 0;
             const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 1), 0);
             // 1. Referral Bonus Logic for DROPSHIPPING (Referrer)
             if (!order.referralBonusGiven && user && user.referredBy) {
@@ -458,7 +461,7 @@ const createManualOrder = async (req, res) => {
                 price: Number(p.costPrice || p.price) || 0,
                 costPrice: Number(p.costPrice || p.price) || 0,
                 sellingPrice: Number(p.sellingPrice) || Number(p.price) || 0,
-                totalPrice: (Number(p.quantity) || 1) * (Number(p.price) || 0),
+                totalPrice: (Number(p.quantity) || 1) * (Number(p.sellingPrice || p.price) || 0),
                 size: p.size ?? null,
                 color: p.color ?? null,
                 weight: p.weight ?? null,
@@ -501,6 +504,38 @@ const createManualOrder = async (req, res) => {
                 };
             });
         }
+        // Handle Coupon applying first so that balance check is accurate
+        let couponDiscount = 0;
+        if (appliedCoupon) {
+            const coupon = await coupon_model_1.default.findOne({ code: appliedCoupon.toUpperCase(), isActive: true });
+            if (coupon) {
+                let subTotalCalc = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
+                // Optional checks (same as applyCoupon logic):
+                const now = new Date();
+                const validTime = now >= coupon.validFrom && now <= coupon.validUntil;
+                const withinLimits = (coupon.usageLimit === 0 || coupon.usedCount < coupon.usageLimit);
+                const meetsMinimum = subTotalCalc >= coupon.minOrderAmount;
+                if (validTime && withinLimits && meetsMinimum) {
+                    if (coupon.discountType === "flat") {
+                        couponDiscount = coupon.discountAmount;
+                    }
+                    else if (coupon.discountType === "percentage") {
+                        couponDiscount = subTotalCalc * (coupon.discountAmount / 100);
+                        if (coupon.maxDiscountAmount > 0 && couponDiscount > coupon.maxDiscountAmount) {
+                            couponDiscount = coupon.maxDiscountAmount;
+                        }
+                    }
+                    if (couponDiscount > subTotalCalc)
+                        couponDiscount = subTotalCalc;
+                    // Increment usage
+                    coupon.usedCount += 1;
+                    await coupon.save();
+                }
+                else {
+                    console.warn(`Coupon ${appliedCoupon} failed final checkout validation`);
+                }
+            }
+        }
         // ✅ 4. Payment validation
         if (payment_method === "manual") {
             if (!payment_details || !payment_details.transactionId) {
@@ -531,8 +566,11 @@ const createManualOrder = async (req, res) => {
             if (delivery_address?.district && dhakaDistricts.some(d => delivery_address.district.includes(d))) {
                 calculatedDeliveryCharge = 80;
             }
-            const subTotalCalc = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
-            const totalToPay = payment_type === "delivery" ? calculatedDeliveryCharge : (subTotalCalc + calculatedDeliveryCharge);
+            // Dropshipper pays wholesale cost price upfront
+            const wholesaleSubTotal = orderProducts.reduce((acc, p) => acc + (p.quantity * (p.costPrice || p.price)), 0);
+            let totalToPay = payment_type === "delivery" ? calculatedDeliveryCharge : (wholesaleSubTotal + calculatedDeliveryCharge - couponDiscount);
+            if (totalToPay < 0)
+                totalToPay = 0;
             if ((user.balance || 0) < totalToPay) {
                 return res.status(400).json({ success: false, message: "Insufficient balance" });
             }
@@ -550,38 +588,6 @@ const createManualOrder = async (req, res) => {
             const district = delivery_address.district;
             if (dhakaDistricts.some(d => district.includes(d))) {
                 calculatedDeliveryCharge = 80;
-            }
-        }
-        // Handle Coupon applying
-        let couponDiscount = 0;
-        if (appliedCoupon) {
-            const coupon = await coupon_model_1.default.findOne({ code: appliedCoupon.toUpperCase(), isActive: true });
-            if (coupon) {
-                let subTotalCalc = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
-                // Optional checks (same as applyCoupon logic):
-                const now = new Date();
-                const validTime = now >= coupon.validFrom && now <= coupon.validUntil;
-                const withinLimits = (coupon.usageLimit === 0 || coupon.usedCount < coupon.usageLimit);
-                const meetsMinimum = subTotalCalc >= coupon.minOrderAmount;
-                if (validTime && withinLimits && meetsMinimum) {
-                    if (coupon.discountType === "flat") {
-                        couponDiscount = coupon.discountAmount;
-                    }
-                    else if (coupon.discountType === "percentage") {
-                        couponDiscount = subTotalCalc * (coupon.discountAmount / 100);
-                        if (coupon.maxDiscountAmount > 0 && couponDiscount > coupon.maxDiscountAmount) {
-                            couponDiscount = coupon.maxDiscountAmount;
-                        }
-                    }
-                    if (couponDiscount > subTotalCalc)
-                        couponDiscount = subTotalCalc;
-                    // Increment usage
-                    coupon.usedCount += 1;
-                    await coupon.save();
-                }
-                else {
-                    console.warn(`Coupon ${appliedCoupon} failed final checkout validation`);
-                }
             }
         }
         // Fetch current financial settings for snapshot
