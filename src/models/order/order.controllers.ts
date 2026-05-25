@@ -8,6 +8,7 @@ import { AuthUser } from "./interface";
 import OrderModel from "./order.model";
 import CouponModel from "../coupon/coupon.model";
 import WebsiteInfo from "../content/websiteInfo/websiteinfo.model";
+import Referral from "../referral/referral.model";
 const { v4: uuidv4 } = require('uuid');
 
 /**
@@ -143,7 +144,8 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
 
     // Fetch current financial settings for snapshot
     const websiteInfo = await WebsiteInfo.findOne();
-    const referralBonusPerProduct = websiteInfo?.referralBonusPerProduct || 0;
+    const referralSettings = await Referral.findOne();
+    const referralBonusPerProduct = referralSettings?.referralBonusPerProduct || 0;
     const profitPerProduct = websiteInfo?.profitPerProduct || 0;
 
     // Create order
@@ -305,8 +307,8 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
           }
           else {
             // Priority 2: Live/Legacy Settings
-            const websiteInfo = await WebsiteInfo.findOne();
-            const referralBonus = websiteInfo?.referralPercentage || 0;
+            const referralSettings = await Referral.findOne();
+            const referralBonus = referralSettings?.referralPercentage || 0;
 
             if (referralBonus > 0) {
               bonusAmount = referralBonus;
@@ -667,7 +669,8 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
 
     // Fetch current financial settings for snapshot
     const websiteInfo = await WebsiteInfo.findOne();
-    const referralBonusPerProduct = websiteInfo?.referralBonusPerProduct || 0;
+    const referralSettings = await Referral.findOne();
+    const referralBonusPerProduct = referralSettings?.referralBonusPerProduct || 0;
     const profitPerProduct = websiteInfo?.profitPerProduct || 0;
 
     // ✅ 5. Create order

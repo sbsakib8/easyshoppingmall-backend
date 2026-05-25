@@ -28,8 +28,8 @@ const adminGetAllVideos = async (req, res) => {
 exports.adminGetAllVideos = adminGetAllVideos;
 const createVideo = async (req, res) => {
     try {
-        const { title, description, url, videoType } = req.body;
-        const newVideo = await videoContent_model_1.default.create({ title, description, url, videoType });
+        const { title, description, url, videoType, moduleId } = req.body;
+        const newVideo = await videoContent_model_1.default.create({ title, description, url, videoType, moduleId });
         res.status(201).json({ success: true, data: newVideo });
     }
     catch (error) {

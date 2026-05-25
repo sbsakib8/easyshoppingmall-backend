@@ -5,6 +5,7 @@ export interface IVideoContent extends Document {
     description: string;
     url: string;
     videoType: "standard" | "demo" | "free" | "premium";
+    moduleId?: mongoose.Types.ObjectId;
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -27,7 +28,11 @@ const videoContentSchema = new Schema<IVideoContent>(
         videoType: {
             type: String,
             enum: ["standard", "demo", "free", "premium"],
-            required: true,
+            default: "standard",
+        },
+        moduleId: {
+            type: Schema.Types.ObjectId,
+            ref: "VideoModule",
         },
         isActive: {
             type: Boolean,

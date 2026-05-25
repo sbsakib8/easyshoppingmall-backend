@@ -11,6 +11,7 @@ const user_model_1 = __importDefault(require("../user/user.model"));
 const order_model_1 = __importDefault(require("./order.model"));
 const coupon_model_1 = __importDefault(require("../coupon/coupon.model"));
 const websiteinfo_model_1 = __importDefault(require("../content/websiteInfo/websiteinfo.model"));
+const referral_model_1 = __importDefault(require("../referral/referral.model"));
 const { v4: uuidv4 } = require('uuid');
 /**
  * @desc Create a new order from user's cart
@@ -122,7 +123,8 @@ const createOrder = async (req, res) => {
         }
         // Fetch current financial settings for snapshot
         const websiteInfo = await websiteinfo_model_1.default.findOne();
-        const referralBonusPerProduct = websiteInfo?.referralBonusPerProduct || 0;
+        const referralSettings = await referral_model_1.default.findOne();
+        const referralBonusPerProduct = referralSettings?.referralBonusPerProduct || 0;
         const profitPerProduct = websiteInfo?.profitPerProduct || 0;
         // Create order
         const order = new order_model_1.default({
@@ -266,8 +268,8 @@ const updateOrderStatus = async (req, res) => {
                     }
                     else {
                         // Priority 2: Live/Legacy Settings
-                        const websiteInfo = await websiteinfo_model_1.default.findOne();
-                        const referralBonus = websiteInfo?.referralPercentage || 0;
+                        const referralSettings = await referral_model_1.default.findOne();
+                        const referralBonus = referralSettings?.referralPercentage || 0;
                         if (referralBonus > 0) {
                             bonusAmount = referralBonus;
                         }
@@ -592,7 +594,8 @@ const createManualOrder = async (req, res) => {
         }
         // Fetch current financial settings for snapshot
         const websiteInfo = await websiteinfo_model_1.default.findOne();
-        const referralBonusPerProduct = websiteInfo?.referralBonusPerProduct || 0;
+        const referralSettings = await referral_model_1.default.findOne();
+        const referralBonusPerProduct = referralSettings?.referralBonusPerProduct || 0;
         const profitPerProduct = websiteInfo?.profitPerProduct || 0;
         // ✅ 5. Create order
         order = new order_model_1.default({

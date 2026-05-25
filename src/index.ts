@@ -16,6 +16,7 @@ import categoryRoutes from "./models/category/category.routes";
 import blogRoutes from "./models/content/blogs/blogs.routes";
 import contactRoutes from "./models/content/contact/contact.routes";
 import websiteInfo from "./models/content/websiteInfo/websiteinfo.routes";
+import referralRouter from "./models/referral/referral.routes";
 import notifications from "./models/notification/notification.routes";
 import orderRoute from './models/order/order.routes';
 import paymentRouter from './models/payment/payment.route';
@@ -31,6 +32,7 @@ import couponRouter from './models/coupon/coupon.routes';
 import paymentRequestRouter from './models/paymentRequest/paymentRequest.routes';
 import videoAccessRouter from './models/videoAccess/videoAccess.routes';
 import videoContentRouter from './models/videoContent/videoContent.routes';
+import videoModuleRouter from './models/videoModule/videoModule.routes';
 import videoRequestRouter from './models/videoRequest/videoRequest.routes';
 
 // middleware
@@ -82,6 +84,7 @@ app.use("/api/LeftBanner", leftBannerRoutes);
 app.use("/api/RightBanner", RightBannerRoutes);
 app.use("/api/blog", blogRoutes);
 app.use("/api/websiteinfo", websiteInfo);
+app.use("/api/referral", referralRouter);
 app.use("/api/contact", contactRoutes);
 app.use("/api/notification", notifications);
 app.use("/api/cart", cartRouter)
@@ -95,6 +98,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/payment-request", paymentRequestRouter);
 app.use("/api/video-access", videoAccessRouter);
 app.use("/api/video-content", videoContentRouter);
+app.use("/api/video-module", videoModuleRouter);
 app.use("/api/video-request", videoRequestRouter);
 
 app.use("/api/admin", adminRoutes)

@@ -22,8 +22,8 @@ export const adminGetAllVideos = async (req: Request, res: Response) => {
 
 export const createVideo = async (req: Request, res: Response) => {
     try {
-        const { title, description, url, videoType } = req.body;
-        const newVideo = await VideoContent.create({ title, description, url, videoType });
+        const { title, description, url, videoType, moduleId } = req.body;
+        const newVideo = await VideoContent.create({ title, description, url, videoType, moduleId });
         res.status(201).json({ success: true, data: newVideo });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
