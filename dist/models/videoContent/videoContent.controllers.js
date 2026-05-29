@@ -7,8 +7,25 @@ exports.deleteVideo = exports.updateVideo = exports.createVideo = exports.adminG
 const videoContent_model_1 = __importDefault(require("./videoContent.model"));
 const getAllVideos = async (req, res) => {
     try {
-        const videos = await videoContent_model_1.default.find({ isActive: true }).sort({ createdAt: -1 });
-        res.status(200).json({ success: true, data: videos });
+        const videos = await videoContent_model_1.default.find({ isActive: true })
+            .populate({
+            path: "moduleId",
+            match: { isActive: true },
+            populate: {
+                path: "courseId",
+                match: { isActive: true }
+            }
+        })
+            .sort({ createdAt: -1 });
+        // Filter out videos whose parent module or parent course is missing/inactive
+        const filteredVideos = videos.filter((video) => {
+            const module = video.moduleId;
+            if (!module || !module.courseId) {
+                return false;
+            }
+            return true;
+        });
+        res.status(200).json({ success: true, data: filteredVideos });
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import VideoModuleModel from "./videoModule.model";
+import VideoContentModel from "../videoContent/videoContent.model";
 // import { AuthRequest } from "../../middlewares/user.middelwear";
 type AuthRequest = Request;
 
@@ -64,11 +65,15 @@ export const updateModule = async (req: AuthRequest, res: Response) => {
 export const deleteModule = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
+        
+        // Delete all videos belonging to this module
+        await VideoContentModel.deleteMany({ moduleId: id });
+        
         const deleted = await VideoModuleModel.findByIdAndDelete(id);
         if (!deleted) {
             return res.status(404).json({ success: false, message: "Module not found" });
         }
-        res.status(200).json({ success: true, message: "Module deleted successfully" });
+        res.status(200).json({ success: true, message: "Module and its videos deleted successfully" });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error", error });
     }

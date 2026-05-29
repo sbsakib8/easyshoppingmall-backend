@@ -2,7 +2,9 @@ import { Request, Response } from "express";
 import mongoose, { Types } from "mongoose";
 import OrderModel from "../order/order.model";
 import UserModel from "../user/user.model";
+import VideoAccessModel from "../videoAccess/videoAccess.model";
 import { AuthRequest } from "../../middlewares/isAuth";
+
 
 /**
  * @desc    Get comprehensive dropshipping analytics for admin dashboard
@@ -455,7 +457,41 @@ export const getMyDropshippingAnalytics = async (req: AuthRequest, res: Response
     const totalReferralBonus = referralNetwork.reduce((s, r) => s + r.bonusEarned, 0);
     const totalPendingReferralBonus = referralNetwork.reduce((s, r) => s + r.pendingBonus, 0);
 
-    // 4. Recent Transactions
+    // 4. Video Referral Analytics (Referred users buy courses)
+    const videoAccessReferrals = await VideoAccessModel.find({
+      $or: [
+        { userId: { $in: referralIds } },
+        { referredBy: userId }
+      ],
+      courseId: { $ne: null }
+    })
+      .populate("userId", "name email")
+      .populate("courseId", "title referralBonus");
+
+    const videoReferrals = videoAccessReferrals.map((v: any) => ({
+      _id: v._id,
+      buyerName: v.userId?.name || "N/A",
+      buyerEmail: v.userId?.email || "N/A",
+      courseTitle: v.courseId?.title || "N/A",
+      bonusAmount: v.courseId?.referralBonus || 0,
+      amount: v.amount,
+      status: v.status,
+      createdAt: v.createdAt
+    }));
+
+    videoReferrals.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // Approved video referral bonuses
+    const approvedVideoReferralBonus = videoReferrals
+      .filter((v: any) => v.status === "approved")
+      .reduce((sum: number, v: any) => sum + v.bonusAmount, 0);
+
+    // Pending video referral bonuses
+    const pendingVideoReferralBonus = videoReferrals
+      .filter((v: any) => v.status === "pending")
+      .reduce((sum: number, v: any) => sum + v.bonusAmount, 0);
+
+    // 5. Recent Transactions
     const recentOrders = await OrderModel.find(orderMatch)
       .sort({ updatedAt: -1 })
       .limit(100)
@@ -495,6 +531,20 @@ export const getMyDropshippingAnalytics = async (req: AuthRequest, res: Response
         }
     });
 
+    // Add video referrals to transactions feed
+    videoReferrals.forEach((v: any) => {
+        if (v.bonusAmount > 0) {
+            transactions.push({
+                type: "referral",
+                amount: v.bonusAmount,
+                user: `${v.buyerName} (Course)`,
+                status: v.status === "approved" ? "credited" : v.status === "rejected" ? "lost" : "pending",
+                orderId: v._id.toString(),
+                date: v.createdAt
+            });
+        }
+    });
+
     transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     res.status(200).json({
@@ -502,8 +552,8 @@ export const getMyDropshippingAnalytics = async (req: AuthRequest, res: Response
       data: {
         summary: {
           totalProfit: myStats.profitPaid,
-          pendingProfit: myStats.pendingProfit + totalPendingReferralBonus,
-          referralIncome: totalReferralBonus,
+          pendingProfit: myStats.pendingProfit + totalPendingReferralBonus + pendingVideoReferralBonus,
+          referralIncome: totalReferralBonus + approvedVideoReferralBonus,
           lostProfit: myStats.lostProfit,
           totalRevenue: myStats.revenue,
           ordersCount: myStats.totalOrders,
@@ -512,7 +562,8 @@ export const getMyDropshippingAnalytics = async (req: AuthRequest, res: Response
         },
         orderPipeline,
         referralNetwork: referralNetwork.sort((a, b) => b.orderCount - a.orderCount),
-        transactions: transactions.slice(0, 15)
+        transactions: transactions.slice(0, 15),
+        videoReferrals
       }
     });
   } catch (error: any) {

@@ -4,6 +4,8 @@ export interface IVideoCourse extends Document {
     title: string;
     description: string;
     price: number;
+    discountPrice?: number;
+    referralBonus?: number;
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -20,6 +22,14 @@ const videoCourseSchema = new Schema<IVideoCourse>(
             default: "",
         },
         price: {
+            type: Number,
+            default: 0,
+        },
+        discountPrice: {
+            type: Number,
+            default: 0,
+        },
+        referralBonus: {
             type: Number,
             default: 0,
         },

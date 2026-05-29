@@ -34,11 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const videoModuleSchema = new mongoose_1.Schema({
-    courseId: {
-        type: mongoose_1.Schema.Types.ObjectId,
-        ref: "VideoCourse",
-    },
+const videoCourseSchema = new mongoose_1.Schema({
     title: {
         type: String,
         required: true,
@@ -51,10 +47,18 @@ const videoModuleSchema = new mongoose_1.Schema({
         type: Number,
         default: 0,
     },
+    discountPrice: {
+        type: Number,
+        default: 0,
+    },
+    referralBonus: {
+        type: Number,
+        default: 0,
+    },
     isActive: {
         type: Boolean,
         default: true,
     },
 }, { timestamps: true });
-const VideoModuleModel = mongoose_1.default.model("VideoModule", videoModuleSchema);
-exports.default = VideoModuleModel;
+const VideoCourseModel = mongoose_1.default.model("VideoCourse", videoCourseSchema);
+exports.default = VideoCourseModel;

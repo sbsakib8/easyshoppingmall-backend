@@ -5,10 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteModule = exports.updateModule = exports.getActiveModules = exports.getAllModulesAdmin = exports.createModule = void 0;
 const videoModule_model_1 = __importDefault(require("./videoModule.model"));
+const videoContent_model_1 = __importDefault(require("../videoContent/videoContent.model"));
 // Create a new module (Admin)
 const createModule = async (req, res) => {
     try {
-        const { title, description, price, isActive } = req.body;
+        const { title, description, price, isActive, courseId } = req.body;
         if (!title) {
             return res.status(400).json({ success: false, message: "Title is required" });
         }
@@ -16,7 +17,8 @@ const createModule = async (req, res) => {
             title,
             description,
             price,
-            isActive
+            isActive,
+            courseId
         });
         await newModule.save();
         res.status(201).json({ success: true, message: "Module created successfully", data: newModule });
@@ -67,11 +69,13 @@ exports.updateModule = updateModule;
 const deleteModule = async (req, res) => {
     try {
         const { id } = req.params;
+        // Delete all videos belonging to this module
+        await videoContent_model_1.default.deleteMany({ moduleId: id });
         const deleted = await videoModule_model_1.default.findByIdAndDelete(id);
         if (!deleted) {
             return res.status(404).json({ success: false, message: "Module not found" });
         }
-        res.status(200).json({ success: true, message: "Module deleted successfully" });
+        res.status(200).json({ success: true, message: "Module and its videos deleted successfully" });
     }
     catch (error) {
         res.status(500).json({ success: false, message: "Server error", error });

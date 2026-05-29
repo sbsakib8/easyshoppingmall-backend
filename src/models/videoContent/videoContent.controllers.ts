@@ -3,8 +3,27 @@ import VideoContent from "./videoContent.model";
 
 export const getAllVideos = async (req: Request, res: Response) => {
     try {
-        const videos = await VideoContent.find({ isActive: true }).sort({ createdAt: -1 });
-        res.status(200).json({ success: true, data: videos });
+        const videos = await VideoContent.find({ isActive: true })
+            .populate({
+                path: "moduleId",
+                match: { isActive: true },
+                populate: {
+                    path: "courseId",
+                    match: { isActive: true }
+                }
+            })
+            .sort({ createdAt: -1 });
+
+        // Filter out videos whose parent module or parent course is missing/inactive
+        const filteredVideos = videos.filter((video: any) => {
+            const module = video.moduleId;
+            if (!module || !module.courseId) {
+                return false;
+            }
+            return true;
+        });
+
+        res.status(200).json({ success: true, data: filteredVideos });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }

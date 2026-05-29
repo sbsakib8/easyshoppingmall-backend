@@ -34,6 +34,7 @@ const paymentRequest_routes_1 = __importDefault(require("./models/paymentRequest
 const videoAccess_routes_1 = __importDefault(require("./models/videoAccess/videoAccess.routes"));
 const videoContent_routes_1 = __importDefault(require("./models/videoContent/videoContent.routes"));
 const videoModule_routes_1 = __importDefault(require("./models/videoModule/videoModule.routes"));
+const videoCourse_routes_1 = __importDefault(require("./models/videoCourse/videoCourse.routes"));
 const videoRequest_routes_1 = __importDefault(require("./models/videoRequest/videoRequest.routes"));
 // middleware
 const app = (0, express_1.default)();
@@ -86,6 +87,7 @@ app.use('/api/review', review_routes_1.default);
 app.use("/api/coupon", coupon_routes_1.default);
 app.use("/api/analytics", analytics_routes_1.default);
 app.use("/api/payment-request", paymentRequest_routes_1.default);
+app.use("/api/video-course", videoCourse_routes_1.default);
 app.use("/api/video-access", videoAccess_routes_1.default);
 app.use("/api/video-content", videoContent_routes_1.default);
 app.use("/api/video-module", videoModule_routes_1.default);
