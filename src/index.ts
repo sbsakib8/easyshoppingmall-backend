@@ -33,11 +33,11 @@ import paymentRequestRouter from './models/paymentRequest/paymentRequest.routes'
 import videoAccessRouter from './models/videoAccess/videoAccess.routes';
 import videoContentRouter from './models/videoContent/videoContent.routes';
 import videoModuleRouter from './models/videoModule/videoModule.routes';
+import videoCourseRouter from './models/videoCourse/videoCourse.routes';
 import videoRequestRouter from './models/videoRequest/videoRequest.routes';
 
 // middleware
 const app: Application = express();
-
 
 app.set("trust proxy", 1);
 
@@ -96,6 +96,7 @@ app.use("/api/coupon", couponRouter)
 
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/payment-request", paymentRequestRouter);
+app.use("/api/video-course", videoCourseRouter);
 app.use("/api/video-access", videoAccessRouter);
 app.use("/api/video-content", videoContentRouter);
 app.use("/api/video-module", videoModuleRouter);

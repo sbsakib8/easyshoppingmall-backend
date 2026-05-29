@@ -6,7 +6,7 @@ type AuthRequest = Request;
 // Create a new module (Admin)
 export const createModule = async (req: AuthRequest, res: Response) => {
     try {
-        const { title, description, price, isActive } = req.body;
+        const { title, description, price, isActive, courseId } = req.body;
         if (!title) {
             return res.status(400).json({ success: false, message: "Title is required" });
         }
@@ -15,7 +15,8 @@ export const createModule = async (req: AuthRequest, res: Response) => {
             title,
             description,
             price,
-            isActive
+            isActive,
+            courseId
         });
 
         await newModule.save();
