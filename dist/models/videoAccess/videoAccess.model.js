@@ -81,6 +81,10 @@ const videoAccessSchema = new mongoose_1.Schema({
         ref: "User",
         default: null,
     },
+    referralBonusCredited: {
+        type: Boolean,
+        default: false,
+    },
 }, { timestamps: true });
 const VideoAccessModel = mongoose_1.default.model("VideoAccess", videoAccessSchema);
 exports.default = VideoAccessModel;

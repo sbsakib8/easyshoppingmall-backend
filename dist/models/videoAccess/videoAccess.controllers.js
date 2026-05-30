@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateVideoAccessStatus = exports.getAllVideoAccessRequests = exports.getMyVideoAccess = exports.createVideoAccessRequest = void 0;
+exports.repairVideoReferralBalances = exports.updateVideoAccessStatus = exports.getAllVideoAccessRequests = exports.getMyVideoAccess = exports.createVideoAccessRequest = void 0;
 const videoAccess_model_1 = __importDefault(require("./videoAccess.model"));
 const user_model_1 = __importDefault(require("../user/user.model"));
 const videoCourse_model_1 = __importDefault(require("../videoCourse/videoCourse.model"));
@@ -132,6 +132,9 @@ const updateVideoAccessStatus = async (req, res) => {
                         if (bonusAmount > 0) {
                             referrer.balance = (referrer.balance || 0) + bonusAmount;
                             await referrer.save();
+                            // ✅ Mark bonus as credited so repair script won't double-credit
+                            request.referralBonusCredited = true;
+                            await request.save();
                             console.log(`[Referral Bonus] Added ${bonusAmount} to referrer ${referrer._id} for course ${request.courseId} purchased by ${user._id}`);
                         }
                     }
@@ -149,3 +152,72 @@ const updateVideoAccessStatus = async (req, res) => {
     }
 };
 exports.updateVideoAccessStatus = updateVideoAccessStatus;
+/**
+ * @desc  Backfill missing video referral bonuses for approved requests that were never credited.
+ *        Safe to run multiple times — only credits records where referralBonusCredited is NOT true.
+ * @route POST /api/video-access/repair-referral-bonuses
+ * @access Private (Admin)
+ */
+const repairVideoReferralBalances = async (req, res) => {
+    try {
+        // Find all approved requests with a referrer that were NOT yet credited
+        const unpaidRequests = await videoAccess_model_1.default.find({
+            status: "approved",
+            referredBy: { $ne: null },
+            referralBonusCredited: { $ne: true },
+            courseId: { $ne: null },
+        }).populate("courseId", "title referralBonus");
+        let credited = 0;
+        let skipped = 0;
+        const results = [];
+        for (const request of unpaidRequests) {
+            const course = request.courseId;
+            const bonusAmount = course?.referralBonus || 0;
+            if (!bonusAmount || bonusAmount <= 0) {
+                skipped++;
+                results.push({
+                    requestId: request._id,
+                    status: "skipped",
+                    reason: "No referral bonus configured for course",
+                });
+                continue;
+            }
+            const referrer = await user_model_1.default.findById(request.referredBy);
+            if (!referrer) {
+                skipped++;
+                results.push({
+                    requestId: request._id,
+                    status: "skipped",
+                    reason: "Referrer user not found",
+                });
+                continue;
+            }
+            // Credit the balance
+            referrer.balance = (referrer.balance || 0) + bonusAmount;
+            await referrer.save();
+            // Mark as credited
+            request.referralBonusCredited = true;
+            await request.save();
+            credited++;
+            results.push({
+                requestId: request._id,
+                referrerId: referrer._id,
+                referrerName: referrer.name,
+                bonusAmount,
+                newBalance: referrer.balance,
+                status: "credited",
+            });
+            console.log(`[Repair] Credited ${bonusAmount} to ${referrer.name} (${referrer._id}) for request ${request._id}`);
+        }
+        res.status(200).json({
+            success: true,
+            message: `Repair complete. Credited: ${credited}, Skipped: ${skipped}`,
+            data: { credited, skipped, results },
+        });
+    }
+    catch (error) {
+        console.error("[Repair Error]", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.repairVideoReferralBalances = repairVideoReferralBalances;
