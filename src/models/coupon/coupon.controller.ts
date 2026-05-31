@@ -1,6 +1,7 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import { AuthRequest } from "../../middlewares/isAuth";
 import CouponModel from "./coupon.model";
+import productModel from "../product/product.model";
 
 // Apply coupon to calculate discount
 export const applyCoupon = async (req: AuthRequest, res: Response) => {
@@ -101,6 +102,51 @@ export const applyCoupon = async (req: AuthRequest, res: Response) => {
             }
         });
 
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Public: Get coupons applicable to a product (for dropshipping product detail page)
+export const getProductCoupons = async (req: Request, res: Response) => {
+    try {
+        const { productId } = req.params;
+
+        if (!productId) {
+            return res.status(400).json({ success: false, message: "productId is required" });
+        }
+
+        // Fetch the product to get its category and subCategory
+        const product = await productModel.findById(productId).select("category subCategory").lean();
+        if (!product) {
+            return res.status(404).json({ success: false, message: "Product not found" });
+        }
+
+        const now = new Date();
+        const categoryIds = (product.category || []).map((c: any) => c._id || c);
+        const subCategoryIds = (product.subCategory || []).map((s: any) => s._id || s);
+
+        // Find active, non-expired coupons that are:
+        // 1. Applicable to this specific product, OR
+        // 2. Applicable to its category, OR
+        // 3. Applicable to its subcategory, OR
+        // 4. Global (no specific applicability filter)
+        const coupons = await CouponModel.find({
+            isActive: true,
+            validFrom: { $lte: now },
+            validUntil: { $gte: now },
+            $or: [
+                { applicableProduct: productId },
+                { applicableCategory: { $in: categoryIds } },
+                { applicableSubCategory: { $in: subCategoryIds } },
+                { applicableProduct: null, applicableCategory: null, applicableSubCategory: null },
+            ],
+        })
+        .select("code description discountType discountAmount maxDiscountAmount minOrderAmount validUntil usageLimit usedCount isActive")
+        .sort({ createdAt: -1 })
+        .lean();
+
+        res.status(200).json({ success: true, data: coupons });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
