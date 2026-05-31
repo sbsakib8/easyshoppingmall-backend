@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.getAllUsers = exports.getUserProfile = exports.googleAuth = exports.resetpassword = exports.verifyotp = exports.sendotp = exports.signOut = exports.signIn = exports.signUp = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
-const genaretetoken_1 = __importDefault(require("../../utils/genaretetoken"));
+const generatetoken_1 = __importDefault(require("../../utils/generatetoken"));
 const nodemailer_1 = require("../../utils/nodemailer");
 const address_model_1 = __importDefault(require("../address/address.model"));
 const cart_model_1 = require("../cart/cart.model");
@@ -66,7 +66,7 @@ const signUp = async (req, res) => {
         if (referredBy) {
             await user_model_1.default.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
         }
-        const token = (0, genaretetoken_1.default)(user._id.toString());
+        const token = (0, generatetoken_1.default)(user._id.toString());
         //  cookie
         res.cookie("token", token, cookieOptions);
         res.status(201).json({
@@ -136,7 +136,7 @@ const signIn = async (req, res) => {
             res.status(401).json({ message: "incorrect password" });
             return;
         }
-        const token = (0, genaretetoken_1.default)(user._id.toString());
+        const token = (0, generatetoken_1.default)(user._id.toString());
         res.cookie("token", token, cookieOptions);
         res.json({
             success: true,
@@ -281,7 +281,7 @@ const googleAuth = async (req, res) => {
                 await user_model_1.default.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
             }
         }
-        const token = (0, genaretetoken_1.default)(user._id.toString());
+        const token = (0, generatetoken_1.default)(user._id.toString());
         res.cookie("token", token, cookieOptions);
         res.status(200).json({
             success: true,
@@ -320,7 +320,38 @@ const getUserProfile = async (req, res) => {
             user.referralCode = await generateReferralCode();
             await user.save();
         }
-        res.status(200).json({ success: true, user });
+        // Fetch referral statistics for DROPSHIPPING role
+        let referrals = {
+            count: user.referralCount || 0,
+            users: [],
+            orders: []
+        };
+        if (user.role === "DROPSHIPPING" || user.roles.includes("DROPSHIPPING")) {
+            const referredUsers = await user_model_1.default.find({ referredBy: userId })
+                .select("name email image createdAt")
+                .sort({ createdAt: -1 });
+            const referredUserIds = referredUsers.map(u => u._id);
+            const referredOrders = await order_model_1.default.find({ userId: { $in: referredUserIds } })
+                .select("orderId totalAmt subTotalAmt deliveryCharge order_status payment_status payment_method payment_type referralBonusAmount referralPercentage profitAmount createdAt userId products address")
+                .populate("userId", "name email image")
+                .sort({ createdAt: -1 })
+                .limit(50);
+            referrals = {
+                count: referredUsers.length,
+                users: referredUsers,
+                orders: referredOrders
+            };
+            // Sync referralCount if it's out of date
+            if (user.referralCount !== referredUsers.length) {
+                user.referralCount = referredUsers.length;
+                await user.save();
+            }
+        }
+        res.status(200).json({
+            success: true,
+            user,
+            referrals
+        });
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -351,7 +382,8 @@ const userImage = async (req, res) => {
             return res.status(400).json({ message: "No image file provided" });
         }
         const imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
-        const user = await user_model_1.default.findByIdAndUpdate(req.userId, { image: imageUrl }, { new: true })
+        const updateData = req.query.type === 'shopLogo' ? { shopLogo: imageUrl } : { image: imageUrl };
+        const user = await user_model_1.default.findByIdAndUpdate(req.userId, updateData, { new: true })
             .select("-password")
             .populate({
             path: "address_details",
@@ -408,9 +440,16 @@ exports.userImage = userImage;
 const updateUserProfile = async (req, res) => {
     try {
         const userId = req.params.id;
-        const { name, email, mobile, customerstatus, image, status, verify_email, role, date_of_birth, gender, address_data, // New: address information (object)
+        const { name, email, mobile, customerstatus, image, status, verify_email, role, date_of_birth, gender, shopName, shopLogo, facebookPage, whatsappNumber, paymentDetails, address_data, // New: address information (object)
         address_details, // Alternative: address information (array)
          } = req.body;
+        if (role !== undefined && req.user?.role !== "admin") {
+            res.status(403).json({
+                success: false,
+                message: "Permission denied: Only admins can update user roles",
+            });
+            return;
+        }
         const user = await user_model_1.default.findById(userId);
         if (!user) {
             res.status(404).json({ success: false, message: "User not found" });
@@ -434,6 +473,23 @@ const updateUserProfile = async (req, res) => {
         if (role !== undefined) {
             user.role = role;
         }
+        // Dropshipping Shop Details
+        if (shopName !== undefined)
+            user.shopName = shopName;
+        if (shopLogo !== undefined)
+            user.shopLogo = shopLogo;
+        if (facebookPage !== undefined)
+            user.facebookPage = facebookPage;
+        if (whatsappNumber !== undefined)
+            user.whatsappNumber = whatsappNumber;
+        if (paymentDetails !== undefined) {
+            user.paymentDetails = {
+                bkash: paymentDetails.bkash !== undefined ? paymentDetails.bkash : (user.paymentDetails?.bkash || null),
+                nagad: paymentDetails.nagad !== undefined ? paymentDetails.nagad : (user.paymentDetails?.nagad || null),
+                rocket: paymentDetails.rocket !== undefined ? paymentDetails.rocket : (user.paymentDetails?.rocket || null),
+                bank: paymentDetails.bank !== undefined ? paymentDetails.bank : (user.paymentDetails?.bank || null),
+            };
+        }
         // Ensure user has a referral code (especially if becoming DROPSHIPPING)
         if (!user.referralCode) {
             user.referralCode = await generateReferralCode();
@@ -441,18 +497,23 @@ const updateUserProfile = async (req, res) => {
         if (date_of_birth !== undefined) {
             // Handle both "MM/DD/YYYY" and "YYYY-MM-DD" formats
             let parsedDate;
-            if (date_of_birth.includes('/')) {
-                // Format: "MM/DD/YYYY"
-                const [month, day, year] = date_of_birth.split('/').map(Number);
-                parsedDate = new Date(Date.UTC(year, month - 1, day));
-            }
-            else if (date_of_birth.includes('-')) {
-                // Format: "YYYY-MM-DD"
-                const [year, month, day] = date_of_birth.split('-').map(Number);
-                parsedDate = new Date(Date.UTC(year, month - 1, day));
+            if (typeof date_of_birth === 'string') {
+                if (date_of_birth.includes('/')) {
+                    // Format: "MM/DD/YYYY"
+                    const [month, day, year] = date_of_birth.split('/').map(Number);
+                    parsedDate = new Date(Date.UTC(year, month - 1, day));
+                }
+                else if (date_of_birth.includes('-')) {
+                    // Format: "YYYY-MM-DD"
+                    const [year, month, day] = date_of_birth.split('-').map(Number);
+                    parsedDate = new Date(Date.UTC(year, month - 1, day));
+                }
+                else {
+                    // Try to parse as-is
+                    parsedDate = new Date(date_of_birth);
+                }
             }
             else {
-                // Try to parse as-is
                 parsedDate = new Date(date_of_birth);
             }
             // Only set if valid date

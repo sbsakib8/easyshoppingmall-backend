@@ -7,6 +7,8 @@ import UserModel from "../user/user.model";
 import { AuthUser } from "./interface";
 import OrderModel from "./order.model";
 import CouponModel from "../coupon/coupon.model";
+import WebsiteInfo from "../content/websiteInfo/websiteinfo.model";
+import Referral from "../referral/referral.model";
 const { v4: uuidv4 } = require('uuid');
 
 /**
@@ -140,6 +142,12 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
       }
     }
 
+    // Fetch current financial settings for snapshot
+    const websiteInfo = await WebsiteInfo.findOne();
+    const referralSettings = await Referral.findOne();
+    const referralBonusPerProduct = referralSettings?.referralBonusPerProduct || 0;
+    const profitPerProduct = websiteInfo?.profitPerProduct || 0;
+
     // Create order
     const order = new OrderModel({
       userId,
@@ -155,7 +163,10 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
       deliveryCharge: calculatedDeliveryCharge,
       appliedCoupon: appliedCoupon || null,
       couponDiscount: couponDiscount || 0,
+      referralBonusPerProduct,
+      profitPerProduct,
     });
+
 
     await order.save();
     // Cart will be cleared after payment is confirmed (in paymentSuccess, confirmManualPayment, paymentIpn)
@@ -208,6 +219,30 @@ export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
+export const getOrderDetails = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const order = await OrderModel.findById(id)
+      .populate({
+        path: "products.productId",
+        populate: [
+          { path: "category", model: "Category" },
+          { path: "subCategory", model: "SubCategory" }
+        ]
+      })
+      .populate("userId", "name email mobile");
+
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    res.json({ success: true, data: order });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 /**
  * @desc Update order status (Admin only)
  * @route PUT /api/orders/:id/status
@@ -237,16 +272,97 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const order = await OrderModel.findByIdAndUpdate(
-      id,
-      { order_status: status },
-      { new: true }
-    ).populate("userId", "name email");
+    const order = await OrderModel.findById(id).populate("userId");
 
     if (!order) {
       res.status(404).json({ success: false, message: "Order not found" });
       return;
     }
+
+    order.order_status = status;
+
+    // Referral/Profit Logic
+    const isFinished = status === "delivered" || status === "completed";
+    const user: any = order.userId;
+
+    console.log(`[Order Update] ID: ${id}, Status: ${status}, IsFinished: ${isFinished}`);
+
+    if (isFinished) {
+      order.payment_status = "paid";
+      order.amount_paid = order.totalAmt;
+      order.amount_due = 0;
+
+      const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 1), 0);
+
+      // 1. Referral Bonus Logic for DROPSHIPPING (Referrer)
+      if (!order.referralBonusGiven && user && user.referredBy) {
+        const referrer = await UserModel.findById(user.referredBy);
+        if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
+
+          let bonusAmount = 0;
+
+          // Priority 1: Snapshotted Fixed per Product Bonus
+          if ((order.referralBonusPerProduct ?? 0) > 0) {
+            bonusAmount = (order.referralBonusPerProduct ?? 0) * orderItemCount;
+          }
+          else {
+            // Priority 2: Live/Legacy Settings
+            const referralSettings = await Referral.findOne();
+            const referralBonus = referralSettings?.referralPercentage || 0;
+
+            if (referralBonus > 0) {
+              bonusAmount = referralBonus;
+            } else {
+              if (order.totalAmt >= 500) {
+                bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+              } else {
+                referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
+                if (referrer.deliveredItemsCount > 10) {
+                  bonusAmount = 10;
+                }
+              }
+            }
+          }
+
+          if (bonusAmount > 0) {
+            referrer.balance = (referrer.balance || 0) + bonusAmount;
+            order.referralBonusGiven = true;
+            order.referralBonusAmount = bonusAmount;
+            await referrer.save();
+          }
+        }
+      }
+
+      // 2. Profit Logic for DROPSHIPPING (Order Owner)
+      if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
+        let totalProfit = 0;
+
+        // Priority 1: Snapshotted Fixed per Product Profit
+        if ((order.profitPerProduct ?? 0) > 0) {
+          totalProfit = (order.profitPerProduct ?? 0) * orderItemCount;
+        }
+        else {
+          // Priority 2: (Selling - Cost) Calculation
+          totalProfit = order.products.reduce((sum, p) => {
+            const cost = Number(p.costPrice || p.price) || 0;
+            const selling = Number(p.sellingPrice) || 0;
+            const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
+            return sum + itemProfit;
+          }, 0);
+        }
+
+        if (totalProfit > 0) {
+          await UserModel.findByIdAndUpdate(user._id, {
+            $inc: { balance: totalProfit }
+          });
+          order.profitGiven = true;
+          order.profitAmount = totalProfit;
+        }
+      }
+    }
+
+
+    await order.save();
 
     res.json({
       success: true,
@@ -397,83 +513,66 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // ✅ 3. Validate cart
-    const cart = await CartModel.findOne({ userId }).populate({
-      path: "products.productId",
-      populate: [
-        { path: "category", model: "Category" },
-        { path: "subCategory", model: "SubCategory" }
-      ]
-    });
-    if (!cart || cart.products.length === 0) {
-      return res.status(404).json({ success: false, message: "Cart is empty" });
-    }
+    // ✅ 3. Validate products (Priority: req.body.products > database cart)
+    let orderProducts: any[] = [];
+    let cartId: any = null;
 
-    // Type-safe check for valid products
-    const validProducts = cart.products.filter((item: any) => {
-      const product = item.productId;
-      // Only keep if product is an object and has _id
-      return product && typeof product === "object" && "_id" in product;
-    });
-    if (validProducts.length === 0) {
-      return res.status(400).json({ success: false, message: "No valid products in cart" });
-    }
-
-    const orderProducts = validProducts.map((item: any) => {
-      const product = item.productId;
-      const quantity = Number(item.quantity) || 0;
-      const price = Number(product.price) || 0;
-
-      return {
-        productId: product._id,
-        name: product.productName || "Unnamed Product",
-        image: product.images || [],
-        quantity,
-        price,
-        totalPrice: quantity * price,
-        size: item.size ?? null,
-        color: item.color ?? null,
-        weight: item.weight ?? null,
-      };
-    });
-
-    // ✅ 4. Manual payment validation & duplicate check
-    if (payment_method === "manual") {
-      if (!payment_details || !payment_details.transactionId) {
-        return res.status(400).json({
-          success: false,
-          message: "Transaction ID is required for manual payment",
-        });
-      }
-
-      const existingOrder = await OrderModel.findOne({
-        payment_method: "manual",
-        "payment_details.manual.transactionId": payment_details.transactionId,
+    if (req.body.products && Array.isArray(req.body.products) && req.body.products.length > 0) {
+      orderProducts = req.body.products.map((p: any) => ({
+        productId: p.productId,
+        name: p.name || "Product",
+        image: p.image || [],
+        quantity: Number(p.quantity) || 1,
+        price: Number(p.costPrice || p.price) || 0,
+        costPrice: Number(p.costPrice || p.price) || 0,
+        sellingPrice: Number(p.sellingPrice) || Number(p.price) || 0,
+        totalPrice: (Number(p.quantity) || 1) * (Number(p.sellingPrice || p.price) || 0),
+        size: p.size ?? null,
+        color: p.color ?? null,
+        weight: p.weight ?? null,
+      }));
+    } else {
+      const cart = await CartModel.findOne({ userId }).populate({
+        path: "products.productId",
+        populate: [
+          { path: "category", model: "Category" },
+          { path: "subCategory", model: "SubCategory" }
+        ]
       });
-
-      if (existingOrder) {
-        return res.status(400).json({
-          success: false,
-          message: "এই ট্রানজ্যাকশন আইডি ইতিমধ্যেই ব্যবহার হয়েছে!",
-        });
+      if (!cart || cart.products.length === 0) {
+        return res.status(404).json({ success: false, message: "Cart is empty" });
       }
+      cartId = cart._id;
+
+      const validProducts = cart.products.filter((item: any) => {
+        const product = item.productId;
+        return product && typeof product === "object" && "_id" in product;
+      });
+      if (validProducts.length === 0) {
+        return res.status(400).json({ success: false, message: "No valid products in cart" });
+      }
+
+      orderProducts = validProducts.map((item: any) => {
+        const product = item.productId;
+        const quantity = Number(item.quantity) || 0;
+        const price = Number(product.price) || 0;
+
+        return {
+          productId: product._id,
+          name: product.productName || "Unnamed Product",
+          image: product.images || [],
+          quantity,
+          price,
+          sellingPrice: price, // Default for manual/B2C
+          totalPrice: quantity * price,
+          size: item.size ?? null,
+          color: item.color ?? null,
+          weight: item.weight ?? null,
+        };
+      });
     }
 
-    // Verify Delivery Charge on Server
-    const dhakaDistricts = [
-      "Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel",
-      "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"
-    ];
-    let calculatedDeliveryCharge = 130;
-
-    if (delivery_address?.district) {
-      const district = delivery_address.district;
-      if (dhakaDistricts.some(d => district.includes(d))) {
-        calculatedDeliveryCharge = 80;
-      }
-    }
-
-    // Handle Coupon applying
+    // Handle Coupon applying first so that balance check is accurate
     let couponDiscount = 0;
     if (appliedCoupon) {
       const coupon = await CouponModel.findOne({ code: appliedCoupon.toUpperCase(), isActive: true });
@@ -507,21 +606,92 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // ✅ 4. Payment validation
+    if (payment_method === "manual") {
+      if (!payment_details || !payment_details.transactionId) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction ID is required for manual payment",
+        });
+      }
+
+      const existingOrder = await OrderModel.findOne({
+        payment_method: "manual",
+        "payment_details.manual.transactionId": payment_details.transactionId,
+      });
+
+      if (existingOrder) {
+        return res.status(400).json({
+          success: false,
+          message: "এই ট্রানজ্যাকশন আইডি ইতিমধ্যেই ব্যবহার হয়েছে!",
+        });
+      }
+    } else if (payment_method === "balance") {
+      const user = await UserModel.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      // Calculate total with delivery (Backend should recalculate to be safe)
+      const dhakaDistricts = ["Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel", "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"];
+      let calculatedDeliveryCharge = 130;
+      if (delivery_address?.district && dhakaDistricts.some(d => delivery_address.district.includes(d))) {
+        calculatedDeliveryCharge = 80;
+      }
+
+      // Dropshipper pays wholesale cost price upfront
+      const wholesaleSubTotal = orderProducts.reduce((acc, p) => acc + (p.quantity * (p.costPrice || p.price)), 0);
+      let totalToPay = payment_type === "delivery" ? calculatedDeliveryCharge : (wholesaleSubTotal + calculatedDeliveryCharge - couponDiscount);
+      if (totalToPay < 0) totalToPay = 0;
+
+      if ((user.balance || 0) < totalToPay) {
+        return res.status(400).json({ success: false, message: "Insufficient balance" });
+      }
+
+      // Deduct balance
+      user.balance = (user.balance || 0) - totalToPay;
+      await user.save();
+    }
+
+    // Verify Delivery Charge on Server (Duplicate but kept for logic consistency)
+    const dhakaDistricts = [
+      "Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel",
+      "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"
+    ];
+    let calculatedDeliveryCharge = 130;
+
+    if (delivery_address?.district) {
+      const district = delivery_address.district;
+      if (dhakaDistricts.some(d => district.includes(d))) {
+        calculatedDeliveryCharge = 80;
+      }
+    }
+
+    // Fetch current financial settings for snapshot
+    const websiteInfo = await WebsiteInfo.findOne();
+    const referralSettings = await Referral.findOne();
+    const referralBonusPerProduct = referralSettings?.referralBonusPerProduct || 0;
+    const profitPerProduct = websiteInfo?.profitPerProduct || 0;
+
     // ✅ 5. Create order
     order = new OrderModel({
       userId,
-      cart: cart._id,
+      cart: cartId || null,
       orderId: uuidv4(),
       products: orderProducts,
       address: delivery_address,
       payment_method,
       payment_type,
       payment_details: payment_details || {},
-      order_status: "pending",
+      payment_status: payment_method === "balance" ? "paid" : "pending",
+      order_status: payment_method === "balance" ? "processing" : "pending",
       deliveryCharge: calculatedDeliveryCharge,
       appliedCoupon: appliedCoupon || null,
       couponDiscount: couponDiscount || 0,
+      referralBonusPerProduct,
+      profitPerProduct,
     });
+
 
     await order.save();
 
@@ -577,7 +747,14 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
           { path: "subCategory", model: "SubCategory" }
         ]
       })
-      .populate("userId", "name email") // Populate user details
+      .populate({
+        path: "userId",
+        select: "name email role referredBy",
+        populate: {
+          path: "referredBy",
+          select: "name referralCode"
+        }
+      }) // Populate user details including referrer info
       .sort({ createdAt: -1 });
 
     res.json({
@@ -615,7 +792,14 @@ export const getOrdersByStatus = async (req: Request, res: Response): Promise<vo
           { path: "subCategory", model: "SubCategory" }
         ]
       })
-      .populate("userId", "name email") // Populate user details
+      .populate({
+        path: "userId",
+        select: "name email role referredBy",
+        populate: {
+          path: "referredBy",
+          select: "name referralCode"
+        }
+      }) // Populate user details including referrer info
       .sort({ createdAt: -1 });
 
     res.json({
@@ -695,6 +879,121 @@ export const confirmManualPayment = async (req: Request, res: Response) => {
       data: updatedOrder.populate("userId", "name email"),
     });
   } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * @desc Pay due amount for an existing order (User only)
+ * @route POST /api/orders/:id/pay-due
+ * @access Private (User)
+ */
+export const payDueAmount = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { paymentMethod, paymentType, manualDetails } = req.body;
+    const userId = req.userId;
+
+    if (!paymentMethod || !paymentType) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment method and payment type are required.",
+      });
+    }
+
+    const order = await OrderModel.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    // Verify ownership
+    if (order.userId.toString() !== userId) {
+      return res.status(403).json({ success: false, message: "Unauthorized" });
+    }
+
+    // Recalculate totals to be sure
+    // (This happens in pre-save, but we need the values now)
+    let subTotal = order.products.reduce((acc, p) => acc + (p.totalPrice || 0), 0);
+    const totalAmt = subTotal + (order.deliveryCharge || 0) - (order.couponDiscount || 0);
+
+    let amountToPay = 0;
+    if (paymentType === "delivery") {
+      amountToPay = order.deliveryCharge;
+    } else {
+      amountToPay = totalAmt;
+    }
+
+    if (paymentMethod === "balance") {
+      const user = await UserModel.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      if ((user.balance || 0) < amountToPay) {
+        return res.status(400).json({ success: false, message: "Insufficient balance" });
+      }
+
+      // Deduct balance
+      user.balance = (user.balance || 0) - amountToPay;
+      await user.save();
+
+      // Update Order
+      order.payment_method = "balance";
+      order.payment_type = paymentType;
+      order.payment_status = "paid";
+      order.order_status = "processing";
+      // amount_paid and amount_due will be updated in pre-save hook
+      await order.save();
+
+      return res.json({
+        success: true,
+        message: `Payment of ৳${amountToPay} successful via balance.`,
+        order,
+      });
+    } else if (paymentMethod === "manual") {
+      if (!manualDetails || !manualDetails.transactionId || !manualDetails.provider) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction ID and provider are required for manual payment",
+        });
+      }
+
+      // Check for duplicate transactionId
+      const existingTxn = await OrderModel.findOne({
+        "payment_details.manual.transactionId": manualDetails.transactionId
+      });
+      if (existingTxn) {
+        return res.status(400).json({
+          success: false,
+          message: "This transaction ID has already been used.",
+        });
+      }
+
+      // Update Order
+      order.payment_method = "manual";
+      order.payment_type = paymentType;
+      order.payment_status = "submitted";
+      order.payment_details = {
+        manual: {
+          provider: manualDetails.provider,
+          senderNumber: manualDetails.senderNumber || "N/A",
+          transactionId: manualDetails.transactionId,
+          paidFor: paymentType,
+        },
+      };
+
+      await order.save();
+
+      return res.json({
+        success: true,
+        message: "Manual payment info submitted, pending admin confirmation",
+        order,
+      });
+    }
+
+    return res.status(400).json({ success: false, message: "Invalid payment method" });
+  } catch (error: any) {
+    console.error("Pay Due Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

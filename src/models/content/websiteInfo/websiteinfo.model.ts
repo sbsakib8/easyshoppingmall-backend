@@ -32,7 +32,9 @@ export interface IWebsiteInfo extends Document {
   // 🔹 Social Media Links
   socialLinks: ISocialLink[];
 
-  // 🔹 General Control
+  // 🔹 Referral & Profit Section
+  profitPerProduct: number;        // e.g., 20 (flat Taka for DS)
+
   active: boolean;
 }
 
@@ -67,7 +69,9 @@ const WebsiteInfoSchema = new Schema<IWebsiteInfo>(
     number: { type: String, required: true },
 
     socialLinks: { type: [SocialLinkSchema], default: [] },
+    profitPerProduct: { type: Number, default: 0 },
     active: { type: Boolean, default: true },
+
   },
   { timestamps: true }
 );

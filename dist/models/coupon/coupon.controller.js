@@ -3,33 +3,34 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateCoupon = exports.deleteCoupon = exports.getCoupons = exports.createCoupon = exports.applyCoupon = void 0;
+exports.updateCoupon = exports.deleteCoupon = exports.getCoupons = exports.createCoupon = exports.getProductCoupons = exports.applyCoupon = void 0;
 const coupon_model_1 = __importDefault(require("./coupon.model"));
+const product_model_1 = __importDefault(require("../product/product.model"));
 // Apply coupon to calculate discount
 const applyCoupon = async (req, res) => {
     try {
         const { code, checkoutAmount, cartItems } = req.body;
         if (!code || !checkoutAmount) {
-            return res.status(400).json({ success: false, message: "Coupon code and checkout amount are required" });
+            return res.status(400).json({ success: false, message: "কুপন কোড এবং চেকআউট অ্যামাউন্ট আবশ্যক" });
         }
         const coupon = await coupon_model_1.default.findOne({ code: code.toUpperCase(), isActive: true });
         if (!coupon) {
-            return res.status(404).json({ success: false, message: "Invalid or inactive coupon" });
+            return res.status(404).json({ success: false, message: "অবৈধ বা নিষ্ক্রিয় কুপন" });
         }
         // Check expiry
         const now = new Date();
         if (now < coupon.validFrom || now > coupon.validUntil) {
-            return res.status(400).json({ success: false, message: "Coupon is expired or not valid yet" });
+            return res.status(400).json({ success: false, message: "কুপনটির মেয়াদ শেষ বা এখনো কার্যকর হয়নি" });
         }
         // Check usage limits
         if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) {
-            return res.status(400).json({ success: false, message: "Coupon usage limit reached" });
+            return res.status(400).json({ success: false, message: "কুপন ব্যবহারের সর্বোচ্চ সীমা অতিক্রম করেছে" });
         }
         // Check min order amount (global check)
         if (checkoutAmount < coupon.minOrderAmount) {
             return res.status(400).json({
                 success: false,
-                message: `This coupon requires a minimum order of ৳${coupon.minOrderAmount}`
+                message: `এই কুপনটির জন্য ন্যূনতম অর্ডার হতে হবে ৳${coupon.minOrderAmount}`
             });
         }
         let discountAmount = 0;
@@ -37,7 +38,7 @@ const applyCoupon = async (req, res) => {
         let isCouponValidForCart = false;
         if (coupon.applicableProduct || coupon.applicableSubCategory || coupon.applicableCategory) {
             if (!cartItems || !Array.isArray(cartItems)) {
-                return res.status(400).json({ success: false, message: "Cart items are required for targeted coupons" });
+                return res.status(400).json({ success: false, message: "টার্গেটেড কুপনগুলোর জন্য কার্ট আইটেম প্রয়োজন" });
             }
             cartItems.forEach((item) => {
                 const productId = item.productId?._id || item.productId || item.id;
@@ -59,7 +60,7 @@ const applyCoupon = async (req, res) => {
                 }
             });
             if (!isCouponValidForCart) {
-                return res.status(400).json({ success: false, message: "This coupon is not applicable to any items in your cart" });
+                return res.status(400).json({ success: false, message: "এই কুপনটি আপনার কার্টের কোনো পণ্যের জন্য প্রযোজ্য নয়" });
             }
         }
         else {
@@ -81,7 +82,7 @@ const applyCoupon = async (req, res) => {
             discountAmount = applicableAmount;
         res.status(200).json({
             success: true,
-            message: "Coupon applied successfully",
+            message: "কুপন সফলভাবে প্রযোজ্য হয়েছে",
             discountAmount: discountAmount,
             coupon: {
                 code: coupon.code,
@@ -98,6 +99,47 @@ const applyCoupon = async (req, res) => {
     }
 };
 exports.applyCoupon = applyCoupon;
+// Public: Get coupons applicable to a product (for dropshipping product detail page)
+const getProductCoupons = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        if (!productId) {
+            return res.status(400).json({ success: false, message: "productId is required" });
+        }
+        // Fetch the product to get its category and subCategory
+        const product = await product_model_1.default.findById(productId).select("category subCategory").lean();
+        if (!product) {
+            return res.status(404).json({ success: false, message: "Product not found" });
+        }
+        const now = new Date();
+        const categoryIds = (product.category || []).map((c) => c._id || c);
+        const subCategoryIds = (product.subCategory || []).map((s) => s._id || s);
+        // Find active, non-expired coupons that are:
+        // 1. Applicable to this specific product, OR
+        // 2. Applicable to its category, OR
+        // 3. Applicable to its subcategory, OR
+        // 4. Global (no specific applicability filter)
+        const coupons = await coupon_model_1.default.find({
+            isActive: true,
+            validFrom: { $lte: now },
+            validUntil: { $gte: now },
+            $or: [
+                { applicableProduct: productId },
+                { applicableCategory: { $in: categoryIds } },
+                { applicableSubCategory: { $in: subCategoryIds } },
+                { applicableProduct: null, applicableCategory: null, applicableSubCategory: null },
+            ],
+        })
+            .select("code description discountType discountAmount maxDiscountAmount minOrderAmount validUntil usageLimit usedCount isActive")
+            .sort({ createdAt: -1 })
+            .lean();
+        res.status(200).json({ success: true, data: coupons });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.getProductCoupons = getProductCoupons;
 // Admin: Create Coupon
 const createCoupon = async (req, res) => {
     try {
