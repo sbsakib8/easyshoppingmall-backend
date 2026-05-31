@@ -443,6 +443,13 @@ const updateUserProfile = async (req, res) => {
         const { name, email, mobile, customerstatus, image, status, verify_email, role, date_of_birth, gender, shopName, shopLogo, facebookPage, whatsappNumber, paymentDetails, address_data, // New: address information (object)
         address_details, // Alternative: address information (array)
          } = req.body;
+        if (role !== undefined && req.user?.role !== "admin") {
+            res.status(403).json({
+                success: false,
+                message: "Permission denied: Only admins can update user roles",
+            });
+            return;
+        }
         const user = await user_model_1.default.findById(userId);
         if (!user) {
             res.status(404).json({ success: false, message: "User not found" });

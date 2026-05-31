@@ -177,17 +177,24 @@ orderSchema.pre("save", function (next) {
     if (this.totalAmt < 0)
         this.totalAmt = 0;
     // Payment amount calculation
-    if (this.payment_type === "full") {
+    if (this.payment_status === "paid" || this.order_status === "completed" || this.order_status === "delivered") {
         this.amount_paid = this.totalAmt;
         this.amount_due = 0;
+        this.payment_status = "paid";
     }
-    if (this.payment_type === "delivery") {
-        this.amount_paid = Number(this.deliveryCharge) || 0;
-        this.amount_due = this.totalAmt - this.amount_paid;
-    }
-    if (this.payment_method === "cod" || this.payment_type === "cod") {
-        this.amount_paid = 0;
-        this.amount_due = this.totalAmt;
+    else {
+        if (this.payment_type === "full") {
+            this.amount_paid = this.totalAmt;
+            this.amount_due = 0;
+        }
+        if (this.payment_type === "delivery") {
+            this.amount_paid = Number(this.deliveryCharge) || 0;
+            this.amount_due = this.totalAmt - this.amount_paid;
+        }
+        if (this.payment_method === "cod" || this.payment_type === "cod") {
+            this.amount_paid = 0;
+            this.amount_due = this.totalAmt;
+        }
     }
     if (this.payment_method === "manual" &&
         this.payment_details &&

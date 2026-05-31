@@ -1,5 +1,5 @@
-import mongoose from "mongoose";
 import type { CookieOptions, Request, Response } from "express";
+import mongoose from "mongoose";
 import { AuthRequest } from "../../middlewares/isAuth";
 import uploadCloudinary from "../../utils/cloudinary";
 import generateToken from "../../utils/generatetoken";
@@ -366,7 +366,7 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
         .sort({ createdAt: -1 });
 
       const referredUserIds = referredUsers.map(u => u._id);
-      
+
       const referredOrders = await OrderModel.find({ userId: { $in: referredUserIds } })
         .select("orderId totalAmt subTotalAmt deliveryCharge order_status payment_status payment_method payment_type referralBonusAmount referralPercentage profitAmount createdAt userId products address")
         .populate("userId", "name email image")
@@ -378,7 +378,7 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
         users: referredUsers,
         orders: referredOrders
       };
-      
+
       // Sync referralCount if it's out of date
       if (user.referralCount !== referredUsers.length) {
         user.referralCount = referredUsers.length;
@@ -386,10 +386,10 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       user,
-      referrals 
+      referrals
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -511,6 +511,14 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       address_details, // Alternative: address information (array)
     } = req.body;
 
+    if (role !== undefined && req.user?.role !== "admin") {
+      res.status(403).json({
+        success: false,
+        message: "Permission denied: Only admins can update user roles",
+      });
+      return;
+    }
+
     const user = await User.findById(userId);
     if (!user) {
       res.status(404).json({ success: false, message: "User not found" });
@@ -534,7 +542,7 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     if (shopLogo !== undefined) user.shopLogo = shopLogo;
     if (facebookPage !== undefined) user.facebookPage = facebookPage;
     if (whatsappNumber !== undefined) user.whatsappNumber = whatsappNumber;
-    
+
     if (paymentDetails !== undefined) {
       user.paymentDetails = {
         bkash: paymentDetails.bkash !== undefined ? paymentDetails.bkash : (user.paymentDetails?.bkash || null),

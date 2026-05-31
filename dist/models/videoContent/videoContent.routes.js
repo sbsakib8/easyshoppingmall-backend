@@ -7,8 +7,9 @@ const express_1 = __importDefault(require("express"));
 const videoContent_controllers_1 = require("./videoContent.controllers");
 const isAuth_1 = require("../../middlewares/isAuth");
 const isAdmin_1 = require("../../middlewares/isAdmin");
+const optionalAuth_1 = require("../../middlewares/optionalAuth");
 const router = express_1.default.Router();
-router.get("/all", videoContent_controllers_1.getAllVideos);
+router.get("/all", optionalAuth_1.optionalAuth, videoContent_controllers_1.getAllVideos);
 // Admin routes
 router.get("/admin/all", isAuth_1.isAuth, isAdmin_1.isAdmin, videoContent_controllers_1.adminGetAllVideos);
 router.post("/create", isAuth_1.isAuth, isAdmin_1.isAdmin, videoContent_controllers_1.createVideo);

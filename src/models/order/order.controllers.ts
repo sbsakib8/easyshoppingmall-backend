@@ -8,6 +8,7 @@ import { AuthUser } from "./interface";
 import OrderModel from "./order.model";
 import CouponModel from "../coupon/coupon.model";
 import WebsiteInfo from "../content/websiteInfo/websiteinfo.model";
+import Referral from "../referral/referral.model";
 const { v4: uuidv4 } = require('uuid');
 
 /**
@@ -143,7 +144,8 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
 
     // Fetch current financial settings for snapshot
     const websiteInfo = await WebsiteInfo.findOne();
-    const referralBonusPerProduct = websiteInfo?.referralBonusPerProduct || 0;
+    const referralSettings = await Referral.findOne();
+    const referralBonusPerProduct = referralSettings?.referralBonusPerProduct || 0;
     const profitPerProduct = websiteInfo?.profitPerProduct || 0;
 
     // Create order
@@ -286,23 +288,27 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
     console.log(`[Order Update] ID: ${id}, Status: ${status}, IsFinished: ${isFinished}`);
 
     if (isFinished) {
+      order.payment_status = "paid";
+      order.amount_paid = order.totalAmt;
+      order.amount_due = 0;
+
       const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 1), 0);
 
       // 1. Referral Bonus Logic for DROPSHIPPING (Referrer)
       if (!order.referralBonusGiven && user && user.referredBy) {
         const referrer = await UserModel.findById(user.referredBy);
         if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
-          
+
           let bonusAmount = 0;
-          
+
           // Priority 1: Snapshotted Fixed per Product Bonus
           if ((order.referralBonusPerProduct ?? 0) > 0) {
             bonusAmount = (order.referralBonusPerProduct ?? 0) * orderItemCount;
-          } 
+          }
           else {
             // Priority 2: Live/Legacy Settings
-            const websiteInfo = await WebsiteInfo.findOne();
-            const referralBonus = websiteInfo?.referralPercentage || 0;
+            const referralSettings = await Referral.findOne();
+            const referralBonus = referralSettings?.referralPercentage || 0;
 
             if (referralBonus > 0) {
               bonusAmount = referralBonus;
@@ -520,7 +526,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
         price: Number(p.costPrice || p.price) || 0,
         costPrice: Number(p.costPrice || p.price) || 0,
         sellingPrice: Number(p.sellingPrice) || Number(p.price) || 0,
-        totalPrice: (Number(p.quantity) || 1) * (Number(p.price) || 0),
+        totalPrice: (Number(p.quantity) || 1) * (Number(p.sellingPrice || p.price) || 0),
         size: p.size ?? null,
         color: p.color ?? null,
         weight: p.weight ?? null,
@@ -566,66 +572,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // ✅ 4. Payment validation
-    if (payment_method === "manual") {
-      if (!payment_details || !payment_details.transactionId) {
-        return res.status(400).json({
-          success: false,
-          message: "Transaction ID is required for manual payment",
-        });
-      }
-
-      const existingOrder = await OrderModel.findOne({
-        payment_method: "manual",
-        "payment_details.manual.transactionId": payment_details.transactionId,
-      });
-
-      if (existingOrder) {
-        return res.status(400).json({
-          success: false,
-          message: "এই ট্রানজ্যাকশন আইডি ইতিমধ্যেই ব্যবহার হয়েছে!",
-        });
-      }
-    } else if (payment_method === "balance") {
-      const user = await UserModel.findById(userId);
-      if (!user) {
-        return res.status(404).json({ success: false, message: "User not found" });
-      }
-
-      // Calculate total with delivery (Backend should recalculate to be safe)
-      const dhakaDistricts = ["Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel", "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"];
-      let calculatedDeliveryCharge = 130;
-      if (delivery_address?.district && dhakaDistricts.some(d => delivery_address.district.includes(d))) {
-        calculatedDeliveryCharge = 80;
-      }
-      
-      const subTotalCalc = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
-      const totalToPay = payment_type === "delivery" ? calculatedDeliveryCharge : (subTotalCalc + calculatedDeliveryCharge);
-
-      if ((user.balance || 0) < totalToPay) {
-        return res.status(400).json({ success: false, message: "Insufficient balance" });
-      }
-
-      // Deduct balance
-      user.balance = (user.balance || 0) - totalToPay;
-      await user.save();
-    }
-
-    // Verify Delivery Charge on Server (Duplicate but kept for logic consistency)
-    const dhakaDistricts = [
-      "Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel",
-      "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"
-    ];
-    let calculatedDeliveryCharge = 130;
-
-    if (delivery_address?.district) {
-      const district = delivery_address.district;
-      if (dhakaDistricts.some(d => district.includes(d))) {
-        calculatedDeliveryCharge = 80;
-      }
-    }
-
-    // Handle Coupon applying
+    // Handle Coupon applying first so that balance check is accurate
     let couponDiscount = 0;
     if (appliedCoupon) {
       const coupon = await CouponModel.findOne({ code: appliedCoupon.toUpperCase(), isActive: true });
@@ -659,9 +606,71 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // ✅ 4. Payment validation
+    if (payment_method === "manual") {
+      if (!payment_details || !payment_details.transactionId) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction ID is required for manual payment",
+        });
+      }
+
+      const existingOrder = await OrderModel.findOne({
+        payment_method: "manual",
+        "payment_details.manual.transactionId": payment_details.transactionId,
+      });
+
+      if (existingOrder) {
+        return res.status(400).json({
+          success: false,
+          message: "এই ট্রানজ্যাকশন আইডি ইতিমধ্যেই ব্যবহার হয়েছে!",
+        });
+      }
+    } else if (payment_method === "balance") {
+      const user = await UserModel.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      // Calculate total with delivery (Backend should recalculate to be safe)
+      const dhakaDistricts = ["Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel", "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"];
+      let calculatedDeliveryCharge = 130;
+      if (delivery_address?.district && dhakaDistricts.some(d => delivery_address.district.includes(d))) {
+        calculatedDeliveryCharge = 80;
+      }
+
+      // Dropshipper pays wholesale cost price upfront
+      const wholesaleSubTotal = orderProducts.reduce((acc, p) => acc + (p.quantity * (p.costPrice || p.price)), 0);
+      let totalToPay = payment_type === "delivery" ? calculatedDeliveryCharge : (wholesaleSubTotal + calculatedDeliveryCharge - couponDiscount);
+      if (totalToPay < 0) totalToPay = 0;
+
+      if ((user.balance || 0) < totalToPay) {
+        return res.status(400).json({ success: false, message: "Insufficient balance" });
+      }
+
+      // Deduct balance
+      user.balance = (user.balance || 0) - totalToPay;
+      await user.save();
+    }
+
+    // Verify Delivery Charge on Server (Duplicate but kept for logic consistency)
+    const dhakaDistricts = [
+      "Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel",
+      "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"
+    ];
+    let calculatedDeliveryCharge = 130;
+
+    if (delivery_address?.district) {
+      const district = delivery_address.district;
+      if (dhakaDistricts.some(d => district.includes(d))) {
+        calculatedDeliveryCharge = 80;
+      }
+    }
+
     // Fetch current financial settings for snapshot
     const websiteInfo = await WebsiteInfo.findOne();
-    const referralBonusPerProduct = websiteInfo?.referralBonusPerProduct || 0;
+    const referralSettings = await Referral.findOne();
+    const referralBonusPerProduct = referralSettings?.referralBonusPerProduct || 0;
     const profitPerProduct = websiteInfo?.profitPerProduct || 0;
 
     // ✅ 5. Create order
@@ -906,7 +915,7 @@ export const payDueAmount = async (req: AuthRequest, res: Response) => {
     // (This happens in pre-save, but we need the values now)
     let subTotal = order.products.reduce((acc, p) => acc + (p.totalPrice || 0), 0);
     const totalAmt = subTotal + (order.deliveryCharge || 0) - (order.couponDiscount || 0);
-    
+
     let amountToPay = 0;
     if (paymentType === "delivery") {
       amountToPay = order.deliveryCharge;
@@ -950,8 +959,8 @@ export const payDueAmount = async (req: AuthRequest, res: Response) => {
       }
 
       // Check for duplicate transactionId
-      const existingTxn = await OrderModel.findOne({ 
-        "payment_details.manual.transactionId": manualDetails.transactionId 
+      const existingTxn = await OrderModel.findOne({
+        "payment_details.manual.transactionId": manualDetails.transactionId
       });
       if (existingTxn) {
         return res.status(400).json({
@@ -972,7 +981,7 @@ export const payDueAmount = async (req: AuthRequest, res: Response) => {
           paidFor: paymentType,
         },
       };
-      
+
       await order.save();
 
       return res.json({

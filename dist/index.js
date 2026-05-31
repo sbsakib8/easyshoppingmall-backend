@@ -18,6 +18,7 @@ const category_routes_1 = __importDefault(require("./models/category/category.ro
 const blogs_routes_1 = __importDefault(require("./models/content/blogs/blogs.routes"));
 const contact_routes_1 = __importDefault(require("./models/content/contact/contact.routes"));
 const websiteinfo_routes_1 = __importDefault(require("./models/content/websiteInfo/websiteinfo.routes"));
+const referral_routes_1 = __importDefault(require("./models/referral/referral.routes"));
 const notification_routes_1 = __importDefault(require("./models/notification/notification.routes"));
 const order_routes_1 = __importDefault(require("./models/order/order.routes"));
 const payment_route_1 = __importDefault(require("./models/payment/payment.route"));
@@ -32,6 +33,9 @@ const coupon_routes_1 = __importDefault(require("./models/coupon/coupon.routes")
 const paymentRequest_routes_1 = __importDefault(require("./models/paymentRequest/paymentRequest.routes"));
 const videoAccess_routes_1 = __importDefault(require("./models/videoAccess/videoAccess.routes"));
 const videoContent_routes_1 = __importDefault(require("./models/videoContent/videoContent.routes"));
+const videoModule_routes_1 = __importDefault(require("./models/videoModule/videoModule.routes"));
+const videoCourse_routes_1 = __importDefault(require("./models/videoCourse/videoCourse.routes"));
+const videoRequest_routes_1 = __importDefault(require("./models/videoRequest/videoRequest.routes"));
 // middleware
 const app = (0, express_1.default)();
 app.set("trust proxy", 1);
@@ -72,6 +76,7 @@ app.use("/api/LeftBanner", leftBanner_routes_1.default);
 app.use("/api/RightBanner", rightBanner_routes_1.default);
 app.use("/api/blog", blogs_routes_1.default);
 app.use("/api/websiteinfo", websiteinfo_routes_1.default);
+app.use("/api/referral", referral_routes_1.default);
 app.use("/api/contact", contact_routes_1.default);
 app.use("/api/notification", notification_routes_1.default);
 app.use("/api/cart", cart_routes_1.default);
@@ -82,8 +87,11 @@ app.use('/api/review', review_routes_1.default);
 app.use("/api/coupon", coupon_routes_1.default);
 app.use("/api/analytics", analytics_routes_1.default);
 app.use("/api/payment-request", paymentRequest_routes_1.default);
+app.use("/api/video-course", videoCourse_routes_1.default);
 app.use("/api/video-access", videoAccess_routes_1.default);
 app.use("/api/video-content", videoContent_routes_1.default);
+app.use("/api/video-module", videoModule_routes_1.default);
+app.use("/api/video-request", videoRequest_routes_1.default);
 app.use("/api/admin", admin_route_1.default);
 app.get("/", (req, res) => {
     res.send("APi  is running...");

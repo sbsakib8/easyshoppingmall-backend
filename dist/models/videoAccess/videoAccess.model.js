@@ -40,6 +40,11 @@ const videoAccessSchema = new mongoose_1.Schema({
         ref: "User",
         required: true,
     },
+    courseId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "VideoCourse",
+        default: null,
+    },
     amount: {
         type: Number,
         required: true,
@@ -70,6 +75,15 @@ const videoAccessSchema = new mongoose_1.Schema({
     adminNote: {
         type: String,
         default: "",
+    },
+    referredBy: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+    },
+    referralBonusCredited: {
+        type: Boolean,
+        default: false,
     },
 }, { timestamps: true });
 const VideoAccessModel = mongoose_1.default.model("VideoAccess", videoAccessSchema);
