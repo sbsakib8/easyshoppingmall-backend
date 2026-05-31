@@ -57,8 +57,6 @@ const WebsiteInfoSchema = new mongoose_1.Schema({
     email: { type: String, required: true },
     number: { type: String, required: true },
     socialLinks: { type: [SocialLinkSchema], default: [] },
-    referralPercentage: { type: Number, default: 0 },
-    referralBonusPerProduct: { type: Number, default: 0 },
     profitPerProduct: { type: Number, default: 0 },
     active: { type: Boolean, default: true },
 }, { timestamps: true });

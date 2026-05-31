@@ -8,10 +8,11 @@ import {
 } from "./videoContent.controllers";
 import { isAuth } from "../../middlewares/isAuth";
 import { isAdmin } from "../../middlewares/isAdmin";
+import { optionalAuth } from "../../middlewares/optionalAuth";
 
 const router = express.Router();
 
-router.get("/all", getAllVideos);
+router.get("/all", optionalAuth, getAllVideos);
 
 // Admin routes
 router.get("/admin/all", isAuth, isAdmin, adminGetAllVideos);

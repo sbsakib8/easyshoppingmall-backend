@@ -12,4 +12,5 @@ couponRouter.post("/create", isAuth_1.isAuth, isAdmin_1.isAdmin, coupon_controll
 couponRouter.get("/", isAuth_1.isAuth, isAdmin_1.isAdmin, coupon_controller_1.getCoupons);
 couponRouter.delete("/delete/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, coupon_controller_1.deleteCoupon);
 couponRouter.put("/update/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, coupon_controller_1.updateCoupon);
+couponRouter.patch("/update/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, coupon_controller_1.updateCoupon);
 exports.default = couponRouter;

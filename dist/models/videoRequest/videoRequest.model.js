@@ -34,32 +34,40 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const videoContentSchema = new mongoose_1.Schema({
-    title: {
-        type: String,
+const videoRequestSchema = new mongoose_1.Schema({
+    userId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "User",
         required: true,
     },
-    description: {
-        type: String,
-        default: "",
-    },
-    url: {
-        type: String,
+    productId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Product",
         required: true,
     },
     videoType: {
         type: String,
-        enum: ["standard", "demo", "free", "premium"],
-        default: "standard",
+        enum: ["facebook_ad", "tiktok_video", "youtube_short", "unboxing", "other"],
+        required: true,
+        default: "facebook_ad",
     },
-    moduleId: {
-        type: mongoose_1.Schema.Types.ObjectId,
-        ref: "VideoModule",
+    notes: {
+        type: String,
+        default: "",
     },
-    isActive: {
-        type: Boolean,
-        default: true,
+    status: {
+        type: String,
+        enum: ["pending", "approved", "completed", "rejected"],
+        default: "pending",
+    },
+    deliveredVideoUrl: {
+        type: String,
+        default: "",
+    },
+    adminNote: {
+        type: String,
+        default: "",
     },
 }, { timestamps: true });
-const VideoContentModel = mongoose_1.default.model("VideoContent", videoContentSchema);
-exports.default = VideoContentModel;
+const VideoRequestModel = mongoose_1.default.model("VideoRequest", videoRequestSchema);
+exports.default = VideoRequestModel;
