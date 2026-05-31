@@ -7,6 +7,7 @@ const isAdmin_1 = require("../../middlewares/isAdmin");
 const couponRouter = (0, express_1.Router)();
 // Public / User Routes
 couponRouter.post("/apply", coupon_controller_1.applyCoupon);
+couponRouter.get("/product/:productId", coupon_controller_1.getProductCoupons);
 // Admin Routes
 couponRouter.post("/create", isAuth_1.isAuth, isAdmin_1.isAdmin, coupon_controller_1.createCoupon);
 couponRouter.get("/", isAuth_1.isAuth, isAdmin_1.isAdmin, coupon_controller_1.getCoupons);
