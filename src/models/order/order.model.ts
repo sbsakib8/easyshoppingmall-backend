@@ -94,7 +94,7 @@ const orderSchema = new Schema<IOrder>(
       },
     },
     paymentId: { type: String, default: "" },
-    tran_id: { type: String, index: true, unique: true },
+    tran_id: { type: String, unique: true, sparse: true },
     invoice_receipt: { type: String, default: "" },
 
     appliedCoupon: { type: String, default: null },
