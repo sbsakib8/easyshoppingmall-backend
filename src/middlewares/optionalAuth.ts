@@ -27,7 +27,7 @@ export const optionalAuth = async (req: AuthRequest, res: Response, next: NextFu
       _id: user._id.toString(),
       name: user.name,
       email: user.email,
-      role: user.role === "ADMIN" ? "admin" : "user",
+      role: user.role?.toLowerCase() || "user",
       roles: user.roles || [user.role],
       mobile: user.mobile || undefined,
       balance: user.balance || 0,

@@ -94,7 +94,7 @@ const orderSchema = new Schema<IOrder>(
       },
     },
     paymentId: { type: String, default: "" },
-    tran_id: { type: String, unique: true, sparse: true },
+    tran_id: { type: String, default: undefined, unique: true, sparse: true },
     invoice_receipt: { type: String, default: "" },
 
     appliedCoupon: { type: String, default: null },
@@ -161,8 +161,19 @@ orderSchema.pre<IOrder & Document>("save", function (next) {
 
   // Payment amount calculation
   if (this.payment_status === "paid" || this.order_status === "completed" || this.order_status === "delivered") {
-    this.amount_paid = this.totalAmt;
-    this.amount_due = 0;
+    if (this.payment_type === "delivery") {
+      const existingPaid = Number(this.amount_paid) || 0;
+      if (existingPaid >= this.totalAmt) {
+        this.amount_paid = this.totalAmt;
+        this.amount_due = 0;
+      } else {
+        this.amount_paid = Number(this.deliveryCharge) || 0;
+        this.amount_due = this.totalAmt - this.amount_paid;
+      }
+    } else {
+      this.amount_paid = this.totalAmt;
+      this.amount_due = 0;
+    }
     this.payment_status = "paid";
   } else {
     if (this.payment_type === "full") {

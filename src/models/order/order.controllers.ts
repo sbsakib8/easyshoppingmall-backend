@@ -156,10 +156,10 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
       products: orderProducts,
       address: delivery_address,
       payment_method: payment_method,
-      payment_status: "pending",
+      payment_status: payment_method === "balance" ? "paid" : "pending",
       payment_details: payment_details || null,
       payment_type: payment_type || "full",
-      order_status: "pending",
+      order_status: payment_method === "balance" ? "processing" : "pending",
       deliveryCharge: calculatedDeliveryCharge,
       appliedCoupon: appliedCoupon || null,
       couponDiscount: couponDiscount || 0,
@@ -167,9 +167,27 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
       profitPerProduct,
     });
 
+    // Handle balance payment (calculate totalAmt before pre-save hook runs)
+    if (payment_method === "balance") {
+      const subTotal = orderProducts.reduce((acc: number, p: any) => acc + p.totalPrice, 0);
+      const calcTotal = subTotal + calculatedDeliveryCharge - couponDiscount;
+      const user = await UserModel.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+      if ((user.balance || 0) < calcTotal) {
+        return res.status(400).json({ success: false, message: "Insufficient balance" });
+      }
+      user.balance = (user.balance || 0) - calcTotal;
+      await user.save();
+    }
 
     await order.save();
     // Cart will be cleared after payment is confirmed (in paymentSuccess, confirmManualPayment, paymentIpn)
+    // For balance, clear immediately since payment is instant
+    if (payment_method === "balance") {
+      await clearUserCart(userId);
+    }
     await UserModel.findByIdAndUpdate(userId, {
       $push: { orderHistory: order._id },
     });
@@ -219,7 +237,7 @@ export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
-export const getOrderDetails = async (req: Request, res: Response): Promise<void> => {
+export const getOrderDetails = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const order = await OrderModel.findById(id)
@@ -234,6 +252,14 @@ export const getOrderDetails = async (req: Request, res: Response): Promise<void
 
     if (!order) {
       res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    const orderUserId = typeof order.userId === "object" && order.userId?._id
+      ? order.userId._id.toString()
+      : order.userId.toString();
+    if (orderUserId !== req.userId) {
+      res.status(403).json({ success: false, message: "Unauthorized: Not your order" });
       return;
     }
 
@@ -288,75 +314,83 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
     console.log(`[Order Update] ID: ${id}, Status: ${status}, IsFinished: ${isFinished}`);
 
     if (isFinished) {
-      order.payment_status = "paid";
-      order.amount_paid = order.totalAmt;
-      order.amount_due = 0;
+      // For delivery-type, only mark fully paid if amount_due was already settled
+      if (order.payment_type !== "delivery" || (order.amount_due ?? 0) <= 0) {
+        order.payment_status = "paid";
+        order.amount_paid = order.totalAmt;
+        order.amount_due = 0;
+      }
 
       const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 1), 0);
 
-      // 1. Referral Bonus Logic for DROPSHIPPING (Referrer)
-      if (!order.referralBonusGiven && user && user.referredBy) {
-        const referrer = await UserModel.findById(user.referredBy);
-        if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
+      // Only distribute referral/profit when order is fully paid
+      const isFullyPaid = order.payment_type !== "delivery" || (order.amount_due ?? 0) <= 0;
 
-          let bonusAmount = 0;
+      if (isFullyPaid) {
+        // 1. Referral Bonus Logic for DROPSHIPPING (Referrer)
+        if (!order.referralBonusGiven && user && user.referredBy) {
+          const referrer = await UserModel.findById(user.referredBy);
+          if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
 
-          // Priority 1: Snapshotted Fixed per Product Bonus
-          if ((order.referralBonusPerProduct ?? 0) > 0) {
-            bonusAmount = (order.referralBonusPerProduct ?? 0) * orderItemCount;
-          }
-          else {
-            // Priority 2: Live/Legacy Settings
-            const referralSettings = await Referral.findOne();
-            const referralBonus = referralSettings?.referralPercentage || 0;
+            let bonusAmount = 0;
 
-            if (referralBonus > 0) {
-              bonusAmount = referralBonus;
-            } else {
-              if (order.totalAmt >= 500) {
-                bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+            // Priority 1: Snapshotted Fixed per Product Bonus
+            if ((order.referralBonusPerProduct ?? 0) > 0) {
+              bonusAmount = (order.referralBonusPerProduct ?? 0) * orderItemCount;
+            }
+            else {
+              // Priority 2: Live/Legacy Settings
+              const referralSettings = await Referral.findOne();
+              const referralBonus = referralSettings?.referralPercentage || 0;
+
+              if (referralBonus > 0) {
+                bonusAmount = referralBonus;
               } else {
-                referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
-                if (referrer.deliveredItemsCount > 10) {
-                  bonusAmount = 10;
+                if (order.totalAmt >= 500) {
+                  bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+                } else {
+                  referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
+                  if (referrer.deliveredItemsCount > 10) {
+                    bonusAmount = 10;
+                  }
                 }
               }
             }
+
+            if (bonusAmount > 0) {
+              referrer.balance = (referrer.balance || 0) + bonusAmount;
+              order.referralBonusGiven = true;
+              order.referralBonusAmount = bonusAmount;
+              await referrer.save();
+            }
+          }
+        }
+
+        // 2. Profit Logic for DROPSHIPPING (Order Owner)
+        if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
+          let totalProfit = 0;
+
+          // Priority 1: Snapshotted Fixed per Product Profit
+          if ((order.profitPerProduct ?? 0) > 0) {
+            totalProfit = (order.profitPerProduct ?? 0) * orderItemCount;
+          }
+          else {
+            // Priority 2: (Selling - Cost) Calculation
+            totalProfit = order.products.reduce((sum, p) => {
+              const cost = Number(p.costPrice || p.price) || 0;
+              const selling = Number(p.sellingPrice) || 0;
+              const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
+              return sum + itemProfit;
+            }, 0);
           }
 
-          if (bonusAmount > 0) {
-            referrer.balance = (referrer.balance || 0) + bonusAmount;
-            order.referralBonusGiven = true;
-            order.referralBonusAmount = bonusAmount;
-            await referrer.save();
+          if (totalProfit > 0) {
+            await UserModel.findByIdAndUpdate(user._id, {
+              $inc: { balance: totalProfit }
+            });
+            order.profitGiven = true;
+            order.profitAmount = totalProfit;
           }
-        }
-      }
-
-      // 2. Profit Logic for DROPSHIPPING (Order Owner)
-      if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
-        let totalProfit = 0;
-
-        // Priority 1: Snapshotted Fixed per Product Profit
-        if ((order.profitPerProduct ?? 0) > 0) {
-          totalProfit = (order.profitPerProduct ?? 0) * orderItemCount;
-        }
-        else {
-          // Priority 2: (Selling - Cost) Calculation
-          totalProfit = order.products.reduce((sum, p) => {
-            const cost = Number(p.costPrice || p.price) || 0;
-            const selling = Number(p.sellingPrice) || 0;
-            const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
-            return sum + itemProfit;
-          }, 0);
-        }
-
-        if (totalProfit > 0) {
-          await UserModel.findByIdAndUpdate(user._id, {
-            $inc: { balance: totalProfit }
-          });
-          order.profitGiven = true;
-          order.profitAmount = totalProfit;
         }
       }
     }
@@ -414,7 +448,7 @@ export const ManualPayment = async (req: Request, res: Response) => {
      */
     const order = await OrderModel.findOneAndUpdate(
       {
-        _id: orderId,
+        $or: [{ orderId }, { _id: mongoose.Types.ObjectId.isValid(orderId) ? orderId : undefined }],
         payment_method: "manual",
         payment_status: "pending",
         transactionId: { $exists: false },
@@ -912,15 +946,13 @@ export const payDueAmount = async (req: AuthRequest, res: Response) => {
     }
 
     // Recalculate totals to be sure
-    // (This happens in pre-save, but we need the values now)
     let subTotal = order.products.reduce((acc, p) => acc + (p.totalPrice || 0), 0);
     const totalAmt = subTotal + (order.deliveryCharge || 0) - (order.couponDiscount || 0);
 
-    let amountToPay = 0;
-    if (paymentType === "delivery") {
-      amountToPay = order.deliveryCharge;
-    } else {
-      amountToPay = totalAmt;
+    // Pay the actual remaining due amount, not the delivery charge again
+    const amountToPay = (order.amount_due ?? 0);
+    if (amountToPay <= 0) {
+      return res.status(400).json({ success: false, message: "No due amount remaining" });
     }
 
     if (paymentMethod === "balance") {
@@ -940,9 +972,13 @@ export const payDueAmount = async (req: AuthRequest, res: Response) => {
       // Update Order
       order.payment_method = "balance";
       order.payment_type = paymentType;
+      // If paying off full remaining on a delivery-type order, switch to "full"
+      // so the pre-save hook correctly sets amount_paid = totalAmt, amount_due = 0
+      if (order.payment_type === "delivery" && amountToPay >= (order.amount_due ?? 0)) {
+        order.payment_type = "full";
+      }
       order.payment_status = "paid";
       order.order_status = "processing";
-      // amount_paid and amount_due will be updated in pre-save hook
       await order.save();
 
       return res.json({

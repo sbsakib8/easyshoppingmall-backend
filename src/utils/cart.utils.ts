@@ -6,7 +6,7 @@ export const clearUserCart = async (
 ) => {
   await CartModel.findOneAndUpdate(
     { userId },
-    { $set: { products: [] } },
+    { $set: { products: [], subTotalAmt: 0, totalAmt: 0 } },
     { new: true }
   );
 };
