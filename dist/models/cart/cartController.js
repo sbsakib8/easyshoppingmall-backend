@@ -111,8 +111,12 @@ exports.addToCart = addToCart;
 const getCart = async (req, res) => {
     try {
         const userId = req.params?.userId;
+        const authUserId = req.userId;
         if (!userId) {
             return res.status(401).json({ success: false, message: "Unauthorized user" });
+        }
+        if (userId !== authUserId) {
+            return res.status(403).json({ success: false, message: "Unauthorized: Not your cart" });
         }
         // const cart = await CartModel.findOne({ userId }).populate("products.productId");
         const cart = await cart_model_1.CartModel.findOne({ userId })
@@ -145,8 +149,12 @@ exports.getCart = getCart;
 const updateCartItem = async (req, res) => {
     try {
         const { userId, productId, quantity, color, size, weight } = req.body;
+        const authUserId = req.userId;
         if (!userId || !productId || quantity == null) {
             return res.status(400).json({ success: false, message: "Missing required fields" });
+        }
+        if (userId !== authUserId) {
+            return res.status(403).json({ success: false, message: "Unauthorized: Not your cart" });
         }
         const cart = await cart_model_1.CartModel.findOne({ userId });
         if (!cart) {
@@ -181,6 +189,10 @@ const removeFromCart = async (req, res) => {
     try {
         const { userId, productId } = req.params;
         const { color, size, weight } = req.query;
+        const authUserId = req.userId;
+        if (userId !== authUserId) {
+            return res.status(403).json({ success: false, message: "Unauthorized: Not your cart" });
+        }
         const cart = await cart_model_1.CartModel.findOne({ userId });
         if (!cart) {
             return res.status(200).json({
@@ -220,6 +232,10 @@ exports.removeFromCart = removeFromCart;
 const clearCart = async (req, res) => {
     try {
         const { userId } = req.params;
+        const authUserId = req.userId;
+        if (userId !== authUserId) {
+            return res.status(403).json({ success: false, message: "Unauthorized: Not your cart" });
+        }
         let cart = await cart_model_1.CartModel.findOne({ userId });
         if (!cart) {
             cart = await cart_model_1.CartModel.create({

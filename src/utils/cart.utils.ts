@@ -2,11 +2,12 @@ import mongoose from "mongoose";
 import { CartModel } from "../models/cart/cart.model";
 
 export const clearUserCart = async (
-  userId: string | mongoose.Types.ObjectId
+  userId: string | mongoose.Types.ObjectId,
+  session?: mongoose.ClientSession
 ) => {
   await CartModel.findOneAndUpdate(
     { userId },
     { $set: { products: [], subTotalAmt: 0, totalAmt: 0 } },
-    { new: true }
+    { new: true, session }
   );
 };

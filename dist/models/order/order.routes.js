@@ -48,11 +48,11 @@ router.get("/admin/status/:status", isAuth_1.isAuth, isAdmin_1.isAdmin, order_co
  */
 router.put("/:id/status", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.updateOrderStatus);
 /**
- * @route   PATCH /api/admin/orders/:id/verify
+ * @route   PUT /api/orders/admin/:id/verify
  * @desc    Confirm manual payment by admin
  * @access  Private (Admin)
  */
-router.put("/admin/orders/:id/verify", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.confirmManualPayment);
+router.put("/admin/:id/verify", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.confirmManualPayment);
 /**
  * @route   DELETE /api/orders/:id
  * @desc    Delete an order by ID (Admin only)

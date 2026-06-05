@@ -1,5 +1,6 @@
 import mongoose, { Document, Model, Schema } from "mongoose";
 import { IOrder } from "./interface";
+import { validateAndCalculateDiscount } from "../coupon/coupon.service";
 
 const orderSchema = new Schema<IOrder>(
   {
@@ -143,7 +144,7 @@ orderSchema.index({ createdAt: -1 });
 orderSchema.index({ userId: 1, createdAt: -1 });
 
 // FIX PRE-HOOK TYPES
-orderSchema.pre<IOrder & Document>("save", function (next) {
+orderSchema.pre<IOrder & Document>("save", async function (next) {
   let subTotal = 0;
 
   this.products.forEach((p) => {
@@ -156,6 +157,35 @@ orderSchema.pre<IOrder & Document>("save", function (next) {
   });
 
   this.subTotalAmt = subTotal;
+
+  // Re-validate and recalculate coupon discount if applied (Bug 32)
+  if (this.appliedCoupon) {
+    try {
+      const isDropshipper = this.products.some(p => p.sellingPrice && p.sellingPrice > 0 && p.sellingPrice !== (p.costPrice || p.price));
+      const formattedItems = this.products.map(p => ({
+        productId: p.productId.toString(),
+        quantity: Number(p.quantity) || 0,
+        price: isDropshipper ? Number(p.costPrice || p.price) || 0 : Number(p.sellingPrice || p.price) || 0,
+      }));
+
+      const { discountAmount } = await validateAndCalculateDiscount({
+        code: this.appliedCoupon,
+        cartItems: formattedItems,
+        userId: this.userId.toString(),
+        isNew: this.isNew
+      });
+
+      this.couponDiscount = discountAmount;
+    } catch (err: any) {
+      if (this.isNew) {
+        return next(err);
+      }
+      console.warn(`Coupon validation failed during save of existing order ${this.orderId}: ${err.message}`);
+    }
+  } else {
+    this.couponDiscount = 0;
+  }
+
   this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0) - (Number(this.couponDiscount) || 0);
   if (this.totalAmt < 0) this.totalAmt = 0;
 
