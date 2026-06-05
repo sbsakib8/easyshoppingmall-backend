@@ -2,95 +2,65 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../../middlewares/isAuth";
 import CouponModel from "./coupon.model";
 import productModel from "../product/product.model";
+import { CartModel } from "../cart/cart.model";
+import { validateAndCalculateDiscount } from "./coupon.service";
+import mongoose from "mongoose";
 
 // Apply coupon to calculate discount
 export const applyCoupon = async (req: AuthRequest, res: Response) => {
     try {
-        const { code, checkoutAmount, cartItems } = req.body;
+        const { code } = req.body;
+        const userId = req.userId;
 
-        if (!code || !checkoutAmount) {
-            return res.status(400).json({ success: false, message: "কুপন কোড এবং চেকআউট অ্যামাউন্ট আবশ্যক" });
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "কুপন ব্যবহার করার জন্য অনুগ্রহ করে সাইন ইন করুন / Please sign in to apply a coupon"
+            });
         }
 
-        const coupon = await CouponModel.findOne({ code: code.toUpperCase(), isActive: true });
-
-        if (!coupon) {
-            return res.status(404).json({ success: false, message: "অবৈধ বা নিষ্ক্রিয় কুপন" });
-        }
-
-        // Check expiry
-        const now = new Date();
-        if (now < coupon.validFrom || now > coupon.validUntil) {
-            return res.status(400).json({ success: false, message: "কুপনটির মেয়াদ শেষ বা এখনো কার্যকর হয়নি" });
-        }
-
-        // Check usage limits
-        if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) {
-            return res.status(400).json({ success: false, message: "কুপন ব্যবহারের সর্বোচ্চ সীমা অতিক্রম করেছে" });
-        }
-
-        // Check min order amount (global check)
-        if (checkoutAmount < coupon.minOrderAmount) {
+        if (!code) {
             return res.status(400).json({
                 success: false,
-                message: `এই কুপনটির জন্য ন্যূনতম অর্ডার হতে হবে ৳${coupon.minOrderAmount}`
+                message: "কুপন কোড আবশ্যক / Coupon code is required"
             });
         }
 
-        let discountAmount = 0;
-        let applicableAmount = 0;
-        let isCouponValidForCart = false;
+        // Fetch user's cart from DB to prevent client-side tampering (Bug 6)
+        const cart = await CartModel.findOne({ userId }).populate("products.productId");
 
-        if (coupon.applicableProduct || coupon.applicableSubCategory || coupon.applicableCategory) {
-            if (!cartItems || !Array.isArray(cartItems)) {
-                return res.status(400).json({ success: false, message: "টার্গেটেড কুপনগুলোর জন্য কার্ট আইটেম প্রয়োজন" });
-            }
-
-            cartItems.forEach((item: any) => {
-                const productId = item.productId?._id || item.productId || item.id;
-                const productCategories = item.productId?.category || item.category || [];
-                const productSubCategories = item.productId?.subCategory || item.subCategory || [];
-
-                let matches = false;
-
-                if (coupon.applicableProduct && productId === coupon.applicableProduct.toString()) {
-                    matches = true;
-                } else if (coupon.applicableSubCategory && productSubCategories.some((scId: any) => (scId._id || scId).toString() === coupon.applicableSubCategory?.toString())) {
-                    matches = true;
-                } else if (coupon.applicableCategory && productCategories.some((cId: any) => (cId._id || cId).toString() === coupon.applicableCategory?.toString())) {
-                    matches = true;
-                }
-
-                if (matches) {
-                    applicableAmount += item.price * item.quantity;
-                    isCouponValidForCart = true;
-                }
+        if (!cart || cart.products.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "আপনার কার্ট খালি / Your cart is empty"
             });
-
-            if (!isCouponValidForCart) {
-                return res.status(400).json({ success: false, message: "এই কুপনটি আপনার কার্টের কোনো পণ্যের জন্য প্রযোজ্য নয়" });
-            }
-        } else {
-            applicableAmount = checkoutAmount;
-            isCouponValidForCart = true;
         }
 
-        // Calculate discount
-        if (coupon.discountType === "flat") {
-            discountAmount = coupon.discountAmount;
-        } else if (coupon.discountType === "percentage") {
-            discountAmount = applicableAmount * (coupon.discountAmount / 100);
-            if (coupon.maxDiscountAmount > 0 && discountAmount > coupon.maxDiscountAmount) {
-                discountAmount = coupon.maxDiscountAmount;
-            }
+        const cartItems = cart.products
+            .filter((item: any) => item.productId && "_id" in item.productId)
+            .map((item: any) => ({
+                productId: item.productId._id.toString(),
+                quantity: Number(item.quantity) || 0,
+                price: Number(item.productId.price) || 0,
+            }));
+
+        if (cartItems.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "কার্টে কোনো বৈধ পণ্য নেই / No valid products in cart"
+            });
         }
 
-        // Prevent discount > applicableAmount (especially for flat discounts)
-        if (discountAmount > applicableAmount) discountAmount = applicableAmount;
+        // Validate and calculate discount using service
+        const { discountAmount, coupon } = await validateAndCalculateDiscount({
+            code,
+            cartItems,
+            userId,
+        });
 
         res.status(200).json({
             success: true,
-            message: "কুপন সফলভাবে প্রযোজ্য হয়েছে",
+            message: "কুপন সফলভাবে প্রযোজ্য হয়েছে / Coupon applied successfully",
             discountAmount: discountAmount,
             coupon: {
                 code: coupon.code,
@@ -103,7 +73,85 @@ export const applyCoupon = async (req: AuthRequest, res: Response) => {
         });
 
     } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Apply coupon for Dropshipping checkout — accepts cartItems from request body
+// (DS cart lives in Redux/localStorage, NOT in CartModel, so we can't read DB cart)
+export const applyDropshippingCoupon = async (req: AuthRequest, res: Response) => {
+    try {
+        const { code, cartItems } = req.body;
+        const userId = req.userId;
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "কুপন ব্যবহার করার জন্য অনুগ্রহ করে সাইন ইন করুন / Please sign in to apply a coupon"
+            });
+        }
+
+        if (!code) {
+            return res.status(400).json({
+                success: false,
+                message: "কুপন কোড আবশ্যক / Coupon code is required"
+            });
+        }
+
+        if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "কার্টে কোনো পণ্য নেই / No items in cart"
+            });
+        }
+
+        // Validate each item has a valid productId
+        const validItems = cartItems.filter((item: any) =>
+            item.productId &&
+            typeof item.productId === "string" &&
+            mongoose.Types.ObjectId.isValid(item.productId) &&
+            Number(item.quantity) > 0
+        );
+
+        if (validItems.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "কার্টে কোনো বৈধ পণ্য নেই / No valid products in cart"
+            });
+        }
+
+        // Fetch real prices from DB to prevent client-side price tampering
+        const productIds = validItems.map((i: any) => new mongoose.Types.ObjectId(i.productId));
+        const dbProducts = await productModel.find({ _id: { $in: productIds } }).select("price").lean();
+        const priceMap = new Map<string, number>(dbProducts.map((p: any) => [p._id.toString(), Number(p.price) || 0]));
+
+        const safeCartItems = validItems.map((item: any) => ({
+            productId: item.productId,
+            quantity: Number(item.quantity) || 1,
+            price: priceMap.get(item.productId) ?? (Number(item.price) || 0),
+        }));
+
+        const { discountAmount, coupon } = await validateAndCalculateDiscount({
+            code,
+            cartItems: safeCartItems,
+            userId,
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "কুপন সফলভাবে প্রযোজ্য হয়েছে / Coupon applied successfully",
+            discountAmount,
+            coupon: {
+                code: coupon.code,
+                discountType: coupon.discountType,
+                discountAmount: coupon.discountAmount,
+                applicableProduct: coupon.applicableProduct,
+                applicableSubCategory: coupon.applicableSubCategory,
+                applicableCategory: coupon.applicableCategory,
+            }
+        });
+    } catch (error: any) {
+        res.status(400).json({ success: false, message: error.message });
     }
 };
 
@@ -131,15 +179,26 @@ export const getProductCoupons = async (req: Request, res: Response) => {
         // 2. Applicable to its category, OR
         // 3. Applicable to its subcategory, OR
         // 4. Global (no specific applicability filter)
+        // Uses $in: [null, undefined] to make it less strict and handle missing fields (Bug 16)
         const coupons = await CouponModel.find({
             isActive: true,
             validFrom: { $lte: now },
             validUntil: { $gte: now },
             $or: [
                 { applicableProduct: productId },
-                { applicableCategory: { $in: categoryIds } },
-                { applicableSubCategory: { $in: subCategoryIds } },
-                { applicableProduct: null, applicableCategory: null, applicableSubCategory: null },
+                {
+                    applicableProduct: { $in: [null, undefined] },
+                    applicableCategory: { $in: categoryIds }
+                },
+                {
+                    applicableProduct: { $in: [null, undefined] },
+                    applicableSubCategory: { $in: subCategoryIds }
+                },
+                {
+                    applicableProduct: { $in: [null, undefined] },
+                    applicableCategory: { $in: [null, undefined] },
+                    applicableSubCategory: { $in: [null, undefined] }
+                },
             ],
         })
         .select("code description discountType discountAmount maxDiscountAmount minOrderAmount validUntil usageLimit usedCount isActive")
@@ -159,7 +218,10 @@ export const createCoupon = async (req: AuthRequest, res: Response) => {
         const exists = await CouponModel.findOne({ code: data.code?.toUpperCase() });
 
         if (exists) {
-            return res.status(400).json({ success: false, message: "Coupon code already exists" });
+            return res.status(400).json({
+                success: false,
+                message: "কুপন কোডটি ইতিমধ্যে তৈরি করা হয়েছে / Coupon code already exists"
+            });
         }
 
         const coupon = new CouponModel({
@@ -171,14 +233,42 @@ export const createCoupon = async (req: AuthRequest, res: Response) => {
 
         res.status(201).json({ success: true, message: "Coupon created successfully", data: coupon });
     } catch (error: any) {
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                message: "কুপন কোডটি ইতিমধ্যে তৈরি করা হয়েছে / Coupon code already exists"
+            });
+        }
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
 // Admin: Get all coupons
+// By default, soft-deleted (inactive) coupons are excluded so the admin list
+// matches what the user-facing APIs return. Pass `includeInactive=true` to
+// see coupons that were deactivated/deleted.
 export const getCoupons = async (req: AuthRequest, res: Response) => {
     try {
-        const coupons = await CouponModel.find().sort({ createdAt: -1 });
+        const { isActive, isExpired, includeInactive } = req.query;
+        const filter: any = {};
+
+        if (isActive !== undefined) {
+            filter.isActive = isActive === "true";
+        } else if (includeInactive !== "true") {
+            // Default: hide inactive (soft-deleted) coupons
+            filter.isActive = true;
+        }
+
+        if (isExpired !== undefined) {
+            const now = new Date();
+            if (isExpired === "true") {
+                filter.validUntil = { $lt: now };
+            } else {
+                filter.validUntil = { $gte: now };
+            }
+        }
+
+        const coupons = await CouponModel.find(filter).sort({ createdAt: -1 });
         res.status(200).json({ success: true, data: coupons });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -186,11 +276,26 @@ export const getCoupons = async (req: AuthRequest, res: Response) => {
 };
 
 // Admin: Delete Coupon
+// Always perform a hard delete. Orders only persist `couponDiscount: Number`
+// (not a reference to the coupon document), so removing the coupon does not
+// break order history. The previous soft-delete behaviour caused the
+// "deleted" coupon to keep appearing in the admin list and to be
+// re-fetched on the frontend.
 export const deleteCoupon = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
-        await CouponModel.findByIdAndDelete(id);
-        res.status(200).json({ success: true, message: "Coupon deleted successfully" });
+        const coupon = await CouponModel.findByIdAndDelete(id);
+        if (!coupon) {
+            return res.status(404).json({
+                success: false,
+                message: "কুপনটি পাওয়া যায়নি / Coupon not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "কুপনটি সফলভাবে মুছে ফেলা হয়েছে / Coupon deleted successfully"
+        });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -200,19 +305,59 @@ export const deleteCoupon = async (req: AuthRequest, res: Response) => {
 export const updateCoupon = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
-        const data = req.body;
+        const data = { ...req.body };
+
+        // Strip read-only fields (Bug 29)
+        delete data._id;
+        delete data.usedCount;
+        delete data.createdAt;
+        delete data.updatedAt;
+
+        const coupon = await CouponModel.findById(id);
+        if (!coupon) {
+            return res.status(404).json({
+                success: false,
+                message: "কুপনটি পাওয়া যায়নি / Coupon not found"
+            });
+        }
+
+        // Protect used coupon code and discountType (Bugs 11, 27)
+        if (coupon.usedCount > 0) {
+            if (data.code && data.code.toUpperCase() !== coupon.code) {
+                return res.status(400).json({
+                    success: false,
+                    message: "ব্যবহৃত কুপনের কোড পরিবর্তন করা যাবে না / Cannot change the code of a coupon that has already been used"
+                });
+            }
+            if (data.discountType && data.discountType !== coupon.discountType) {
+                return res.status(400).json({
+                    success: false,
+                    message: "ব্যবহৃত কুপনের ডিসকাউন্ট ধরন পরিবর্তন করা যাবে না / Cannot change the discount type of a coupon that has already been used"
+                });
+            }
+        }
 
         if (data.code) {
             data.code = data.code.toUpperCase();
+            if (data.code !== coupon.code) {
+                const exists = await CouponModel.findOne({ code: data.code });
+                if (exists) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "কুপন কোডটি ইতিমধ্যে তৈরি করা হয়েছে / Coupon code already exists"
+                    });
+                }
+            }
         }
 
-        const coupon = await CouponModel.findByIdAndUpdate(id, data, { new: true });
+        Object.assign(coupon, data);
+        await coupon.save();
 
-        if (!coupon) {
-            return res.status(404).json({ success: false, message: "Coupon not found" });
-        }
-
-        res.status(200).json({ success: true, message: "Coupon updated successfully", data: coupon });
+        res.status(200).json({
+            success: true,
+            message: "কুপন সফলভাবে আপডেট করা হয়েছে / Coupon updated successfully",
+            data: coupon
+        });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }

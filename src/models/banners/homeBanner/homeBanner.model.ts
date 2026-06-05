@@ -24,6 +24,11 @@ const homeBannerSchema = new Schema<IHomeBanner>(
          type: Boolean,
           default: true
      },
+    sliderFor: {
+         type: String,
+         enum: ["USER", "DROPSHIPPING"],
+         default: "USER"
+     },
   },
   { timestamps: true }
 );

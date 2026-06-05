@@ -136,9 +136,14 @@ export const addToCart = async (req: Request, res: Response) => {
 export const getCart = async (req: RequestWithUser, res: Response): Promise<Response> => {
   try {
     const userId = req.params?.userId;
+    const authUserId = (req as any).userId;
 
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized user" });
+    }
+
+    if (userId !== authUserId) {
+      return res.status(403).json({ success: false, message: "Unauthorized: Not your cart" });
     }
 
     // const cart = await CartModel.findOne({ userId }).populate("products.productId");
@@ -174,9 +179,14 @@ export const getCart = async (req: RequestWithUser, res: Response): Promise<Resp
 export const updateCartItem = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { userId, productId, quantity, color, size, weight } = req.body;
+    const authUserId = (req as any).userId;
 
     if (!userId || !productId || quantity == null) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+
+    if (userId !== authUserId) {
+      return res.status(403).json({ success: false, message: "Unauthorized: Not your cart" });
     }
 
     const cart = await CartModel.findOne({ userId });
@@ -227,6 +237,11 @@ export const removeFromCart = async (req: Request, res: Response) => {
   try {
     const { userId, productId } = req.params;
     const { color, size, weight } = req.query;
+    const authUserId = (req as any).userId;
+
+    if (userId !== authUserId) {
+      return res.status(403).json({ success: false, message: "Unauthorized: Not your cart" });
+    }
 
     const cart = await CartModel.findOne({ userId });
     if (!cart) {
@@ -281,6 +296,11 @@ export const removeFromCart = async (req: Request, res: Response) => {
 export const clearCart = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { userId } = req.params;
+    const authUserId = (req as any).userId;
+
+    if (userId !== authUserId) {
+      return res.status(403).json({ success: false, message: "Unauthorized: Not your cart" });
+    }
 
     let cart = await CartModel.findOne({ userId });
 

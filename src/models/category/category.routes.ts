@@ -22,8 +22,8 @@ router.get("/", getCategories);
 // Get Category Tree
 router.get("/get-tree", getCategoryTree);
 
-// Get Single Category
-router.get("/:id", isAuth, isAdmin, getCategoryById);
+// Get Single Category (public, like GET /)
+router.get("/:id", getCategoryById);
 
 // Update Category
 router.put("/:id", isAuth, isAdmin, upload.single("image"), updateCategory);

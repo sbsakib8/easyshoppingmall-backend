@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { getAllPayments, getOrderPayments } from "./admin.payment.controller";
-// import admin from "../../middlewares/isAdmin"; // Adjusted import path based on the provided folder structure
+import { isAuth } from "../../middlewares/isAuth";
 import { isAdmin } from "../../middlewares/isAdmin";
 
 const router = Router();
 
-router.get("/payments", isAdmin, getAllPayments);
-router.get("/payments/:orderId", isAdmin, getOrderPayments);
+router.get("/payments", isAuth, isAdmin, getAllPayments);
+router.get("/payments/:orderId", isAuth, isAdmin, getOrderPayments);
 // router.get("/orders", isAuth, isAdmin, getAllOrders);
 
 export default router;

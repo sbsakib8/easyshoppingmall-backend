@@ -64,11 +64,11 @@ router.get("/admin/status/:status", isAuth, isAdmin, getOrdersByStatus);
 router.put("/:id/status", isAuth, isAdmin, updateOrderStatus);
 
 /**
- * @route   PATCH /api/admin/orders/:id/verify
+ * @route   PUT /api/orders/admin/:id/verify
  * @desc    Confirm manual payment by admin
  * @access  Private (Admin)
  */
-router.put("/admin/orders/:id/verify", isAuth, isAdmin, confirmManualPayment);
+router.put("/admin/:id/verify", isAuth, isAdmin, confirmManualPayment);
 
 /**
  * @route   DELETE /api/orders/:id
