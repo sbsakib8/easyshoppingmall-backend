@@ -12,6 +12,8 @@ const order_model_1 = __importDefault(require("./order.model"));
 const coupon_model_1 = __importDefault(require("../coupon/coupon.model"));
 const websiteinfo_model_1 = __importDefault(require("../content/websiteInfo/websiteinfo.model"));
 const referral_model_1 = __importDefault(require("../referral/referral.model"));
+const coupon_service_1 = require("../coupon/coupon.service");
+const product_model_1 = __importDefault(require("../product/product.model"));
 const { v4: uuidv4 } = require('uuid');
 /**
  * @desc Create a new order from user's cart
@@ -19,11 +21,14 @@ const { v4: uuidv4 } = require('uuid');
  * @access Private (User)
  */
 const createOrder = async (req, res) => {
+    const session = await mongoose_1.default.startSession();
+    session.startTransaction();
     try {
         const { delivery_address, payment_method, payment_details, payment_type, appliedCoupon } = req.body; // Renamed paymentMethod to payment_method, paymentDetails to payment_details
         const userId = req.userId; // Get userId from AuthRequest
-        const subtotalFromReq = Number(req.body.subtotal) || 0; // Not used in this version after product price calculation
         if (!userId || !delivery_address) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({
                 success: false,
                 message: "Missing required fields (userId, delivery_address)",
@@ -33,25 +38,35 @@ const createOrder = async (req, res) => {
         const requiredAddressFields = ["address_line", "district", "division", "upazila_thana", "pincode", "country", "mobile"];
         const missingAddressFields = requiredAddressFields.filter(field => !delivery_address[field]);
         if (missingAddressFields.length > 0) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({
                 success: false,
                 message: `Missing required address fields: ${missingAddressFields.join(", ")}`,
             });
         }
-        const cart = await cart_model_1.CartModel.findOne({ userId }).populate({
+        const cart = await cart_model_1.CartModel.findOne({ userId }).session(session).populate({
             path: "products.productId",
             populate: [
-                { path: "category", model: "Category" },
-                { path: "subCategory", model: "SubCategory" }
+                { path: "category" },
+                { path: "subCategory" }
             ]
         });
         if (!cart || cart.products.length === 0) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({ success: false, message: "Cart is empty" });
         }
         const validProducts = cart.products.filter((item) => item.productId && "_id" in item.productId);
         if (validProducts.length === 0) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({ success: false, message: "No valid products in cart" });
         }
+        // Fetch images directly from DB — populate() + session() does not reliably attach sub-fields
+        const productIds = validProducts.map((item) => item.productId._id);
+        const dbProductImages = await product_model_1.default.find({ _id: { $in: productIds } }).select("images").session(session).lean();
+        const imageMap = new Map(dbProductImages.map((p) => [p._id.toString(), p.images || []]));
         const orderProducts = validProducts.map((item) => {
             const product = item.productId;
             const productPrice = Number(product.price) || 0;
@@ -59,9 +74,11 @@ const createOrder = async (req, res) => {
             return {
                 productId: product._id,
                 name: product.productName || "Unnamed Product",
-                image: product.images || [],
+                image: imageMap.get(product._id.toString()) || [],
                 quantity: quantity,
                 price: productPrice,
+                costPrice: productPrice,
+                sellingPrice: productPrice,
                 totalPrice: quantity * productPrice,
                 size: item.size,
                 color: item.color,
@@ -70,6 +87,8 @@ const createOrder = async (req, res) => {
         });
         // Create order
         if (!payment_method) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({
                 success: false,
                 message: "Payment method is required for this endpoint.",
@@ -90,40 +109,25 @@ const createOrder = async (req, res) => {
         // Handle Coupon applying
         let couponDiscount = 0;
         if (appliedCoupon) {
-            const coupon = await coupon_model_1.default.findOne({ code: appliedCoupon.toUpperCase(), isActive: true });
-            if (coupon) {
-                let subTotalCalc = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
-                // Optional checks (same as applyCoupon logic):
-                const now = new Date();
-                const validTime = now >= coupon.validFrom && now <= coupon.validUntil;
-                const withinLimits = (coupon.usageLimit === 0 || coupon.usedCount < coupon.usageLimit);
-                const meetsMinimum = subTotalCalc >= coupon.minOrderAmount;
-                if (validTime && withinLimits && meetsMinimum) {
-                    if (coupon.discountType === "flat") {
-                        couponDiscount = coupon.discountAmount;
-                    }
-                    else if (coupon.discountType === "percentage") {
-                        couponDiscount = subTotalCalc * (coupon.discountAmount / 100);
-                        if (coupon.maxDiscountAmount > 0 && couponDiscount > coupon.maxDiscountAmount) {
-                            couponDiscount = coupon.maxDiscountAmount;
-                        }
-                    }
-                    if (couponDiscount > subTotalCalc)
-                        couponDiscount = subTotalCalc;
-                    // Increment usage
-                    coupon.usedCount += 1;
-                    await coupon.save();
-                }
-                else {
-                    // You might reject the order if coupon is invalid, or just proceed without discount
-                    // For now, proceeding with 0 discount if it fails validation at last second
-                    console.warn(`Coupon ${appliedCoupon} failed final checkout validation`);
-                }
-            }
+            const cartItemsForService = orderProducts.map(p => ({
+                productId: p.productId.toString(),
+                quantity: p.quantity,
+                price: p.price
+            }));
+            // Validate coupon and calculate discount using service (Bug 5, 8)
+            const { discountAmount, coupon } = await (0, coupon_service_1.validateAndCalculateDiscount)({
+                code: appliedCoupon,
+                cartItems: cartItemsForService,
+                userId,
+                session
+            });
+            couponDiscount = discountAmount;
+            // Atomically increment the usage limit (Bug 1)
+            await coupon_model_1.default.updateOne({ _id: coupon._id }, { $inc: { usedCount: 1 } }, { session });
         }
         // Fetch current financial settings for snapshot
-        const websiteInfo = await websiteinfo_model_1.default.findOne();
-        const referralSettings = await referral_model_1.default.findOne();
+        const websiteInfo = await websiteinfo_model_1.default.findOne().session(session);
+        const referralSettings = await referral_model_1.default.findOne().session(session);
         const referralBonusPerProduct = referralSettings?.referralBonusPerProduct || 0;
         const profitPerProduct = websiteInfo?.profitPerProduct || 0;
         // Create order
@@ -134,21 +138,44 @@ const createOrder = async (req, res) => {
             products: orderProducts,
             address: delivery_address,
             payment_method: payment_method,
-            payment_status: "pending",
+            payment_status: payment_method === "balance" ? "paid" : "pending",
             payment_details: payment_details || null,
             payment_type: payment_type || "full",
-            order_status: "pending",
+            order_status: payment_method === "balance" ? "processing" : "pending",
             deliveryCharge: calculatedDeliveryCharge,
             appliedCoupon: appliedCoupon || null,
             couponDiscount: couponDiscount || 0,
             referralBonusPerProduct,
             profitPerProduct,
         });
-        await order.save();
-        // Cart will be cleared after payment is confirmed (in paymentSuccess, confirmManualPayment, paymentIpn)
+        // Handle balance payment (calculate totalAmt before pre-save hook runs)
+        if (payment_method === "balance") {
+            const subTotal = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
+            const calcTotal = subTotal + calculatedDeliveryCharge - couponDiscount;
+            const user = await user_model_1.default.findById(userId).session(session);
+            if (!user) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(404).json({ success: false, message: "User not found" });
+            }
+            if ((user.balance || 0) < calcTotal) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({ success: false, message: "Insufficient balance" });
+            }
+            user.balance = (user.balance || 0) - calcTotal;
+            await user.save({ session });
+        }
+        await order.save({ session });
+        // Clear user cart if using balance (immediate payment)
+        if (payment_method === "balance") {
+            await (0, cart_utils_1.clearUserCart)(userId, session);
+        }
         await user_model_1.default.findByIdAndUpdate(userId, {
             $push: { orderHistory: order._id },
-        });
+        }, { session });
+        await session.commitTransaction();
+        session.endSession();
         res.status(201).json({
             success: true,
             message: "Order placed successfully",
@@ -156,8 +183,10 @@ const createOrder = async (req, res) => {
         });
     }
     catch (error) {
+        await session.abortTransaction();
+        session.endSession();
         console.error("Order Creation Error:", error);
-        res.status(500).json({
+        res.status(error.message?.includes("কুপন") || error.message?.includes("Coupon") ? 400 : 500).json({
             success: false,
             message: error.message || "Internal Server Error",
         });
@@ -175,15 +204,28 @@ const getMyOrders = async (req, res) => {
             .populate({
             path: "products.productId",
             populate: [
-                { path: "category", model: "Category" },
-                { path: "subCategory", model: "SubCategory" }
+                { path: "category" },
+                { path: "subCategory" }
             ]
         })
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
+        // Enrich products: if stored image[] is empty, fall back to populated productId.images
+        const enrichedOrders = orders.map((order) => ({
+            ...order,
+            products: (order.products || []).map((p) => {
+                const productImages = p.productId?.images;
+                const hasStoredImage = Array.isArray(p.image) ? p.image.length > 0 : !!p.image;
+                return {
+                    ...p,
+                    image: hasStoredImage ? p.image : (Array.isArray(productImages) && productImages.length > 0 ? productImages : []),
+                };
+            }),
+        }));
         res.json({
             success: true,
             message: "User orders fetched successfully",
-            data: orders,
+            data: enrichedOrders,
         });
     }
     catch (error) {
@@ -201,16 +243,36 @@ const getOrderDetails = async (req, res) => {
             .populate({
             path: "products.productId",
             populate: [
-                { path: "category", model: "Category" },
-                { path: "subCategory", model: "SubCategory" }
+                { path: "category" },
+                { path: "subCategory" }
             ]
         })
-            .populate("userId", "name email mobile");
+            .populate("userId", "name email mobile")
+            .lean();
         if (!order) {
             res.status(404).json({ success: false, message: "Order not found" });
             return;
         }
-        res.json({ success: true, data: order });
+        const orderUserId = typeof order.userId === "object" && order.userId?._id
+            ? order.userId._id.toString()
+            : order.userId.toString();
+        if (orderUserId !== req.userId) {
+            res.status(403).json({ success: false, message: "Unauthorized: Not your order" });
+            return;
+        }
+        // Enrich products: if stored image[] is empty, fall back to populated productId.images
+        const enrichedOrder = {
+            ...order,
+            products: (order.products || []).map((p) => {
+                const productImages = p.productId?.images;
+                const hasStoredImage = Array.isArray(p.image) ? p.image.length > 0 : !!p.image;
+                return {
+                    ...p,
+                    image: hasStoredImage ? p.image : (Array.isArray(productImages) && productImages.length > 0 ? productImages : []),
+                };
+            }),
+        };
+        res.json({ success: true, data: enrichedOrder });
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -253,68 +315,75 @@ const updateOrderStatus = async (req, res) => {
         const user = order.userId;
         console.log(`[Order Update] ID: ${id}, Status: ${status}, IsFinished: ${isFinished}`);
         if (isFinished) {
-            order.payment_status = "paid";
-            order.amount_paid = order.totalAmt;
-            order.amount_due = 0;
+            // For delivery-type, only mark fully paid if amount_due was already settled
+            if (order.payment_type !== "delivery" || (order.amount_due ?? 0) <= 0) {
+                order.payment_status = "paid";
+                order.amount_paid = order.totalAmt;
+                order.amount_due = 0;
+            }
             const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 1), 0);
-            // 1. Referral Bonus Logic for DROPSHIPPING (Referrer)
-            if (!order.referralBonusGiven && user && user.referredBy) {
-                const referrer = await user_model_1.default.findById(user.referredBy);
-                if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
-                    let bonusAmount = 0;
-                    // Priority 1: Snapshotted Fixed per Product Bonus
-                    if ((order.referralBonusPerProduct ?? 0) > 0) {
-                        bonusAmount = (order.referralBonusPerProduct ?? 0) * orderItemCount;
-                    }
-                    else {
-                        // Priority 2: Live/Legacy Settings
-                        const referralSettings = await referral_model_1.default.findOne();
-                        const referralBonus = referralSettings?.referralPercentage || 0;
-                        if (referralBonus > 0) {
-                            bonusAmount = referralBonus;
+            // Only distribute referral/profit when order is fully paid
+            const isFullyPaid = order.payment_type !== "delivery" || (order.amount_due ?? 0) <= 0;
+            if (isFullyPaid) {
+                // 1. Referral Bonus Logic for DROPSHIPPING (Referrer)
+                if (!order.referralBonusGiven && user && user.referredBy) {
+                    const referrer = await user_model_1.default.findById(user.referredBy);
+                    if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
+                        let bonusAmount = 0;
+                        // Priority 1: Snapshotted Fixed per Product Bonus
+                        if ((order.referralBonusPerProduct ?? 0) > 0) {
+                            bonusAmount = (order.referralBonusPerProduct ?? 0) * orderItemCount;
                         }
                         else {
-                            if (order.totalAmt >= 500) {
-                                bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+                            // Priority 2: Live/Legacy Settings
+                            const referralSettings = await referral_model_1.default.findOne();
+                            const referralBonus = referralSettings?.referralPercentage || 0;
+                            if (referralBonus > 0) {
+                                bonusAmount = referralBonus;
                             }
                             else {
-                                referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
-                                if (referrer.deliveredItemsCount > 10) {
-                                    bonusAmount = 10;
+                                if (order.totalAmt >= 500) {
+                                    bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+                                }
+                                else {
+                                    referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
+                                    if (referrer.deliveredItemsCount > 10) {
+                                        bonusAmount = 10;
+                                    }
                                 }
                             }
                         }
+                        if (bonusAmount > 0) {
+                            referrer.balance = (referrer.balance || 0) + bonusAmount;
+                            order.referralBonusGiven = true;
+                            order.referralBonusAmount = bonusAmount;
+                            await referrer.save();
+                        }
                     }
-                    if (bonusAmount > 0) {
-                        referrer.balance = (referrer.balance || 0) + bonusAmount;
-                        order.referralBonusGiven = true;
-                        order.referralBonusAmount = bonusAmount;
-                        await referrer.save();
+                }
+                // 2. Profit Logic for DROPSHIPPING (Order Owner)
+                if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
+                    let totalProfit = 0;
+                    // Priority 1: Snapshotted Fixed per Product Profit
+                    if ((order.profitPerProduct ?? 0) > 0) {
+                        totalProfit = (order.profitPerProduct ?? 0) * orderItemCount;
                     }
-                }
-            }
-            // 2. Profit Logic for DROPSHIPPING (Order Owner)
-            if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
-                let totalProfit = 0;
-                // Priority 1: Snapshotted Fixed per Product Profit
-                if ((order.profitPerProduct ?? 0) > 0) {
-                    totalProfit = (order.profitPerProduct ?? 0) * orderItemCount;
-                }
-                else {
-                    // Priority 2: (Selling - Cost) Calculation
-                    totalProfit = order.products.reduce((sum, p) => {
-                        const cost = Number(p.costPrice || p.price) || 0;
-                        const selling = Number(p.sellingPrice) || 0;
-                        const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
-                        return sum + itemProfit;
-                    }, 0);
-                }
-                if (totalProfit > 0) {
-                    await user_model_1.default.findByIdAndUpdate(user._id, {
-                        $inc: { balance: totalProfit }
-                    });
-                    order.profitGiven = true;
-                    order.profitAmount = totalProfit;
+                    else {
+                        // Priority 2: (Selling - Cost) Calculation
+                        totalProfit = order.products.reduce((sum, p) => {
+                            const cost = Number(p.costPrice || p.price) || 0;
+                            const selling = Number(p.sellingPrice) || 0;
+                            const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
+                            return sum + itemProfit;
+                        }, 0);
+                    }
+                    if (totalProfit > 0) {
+                        await user_model_1.default.findByIdAndUpdate(user._id, {
+                            $inc: { balance: totalProfit }
+                        });
+                        order.profitGiven = true;
+                        order.profitAmount = totalProfit;
+                    }
                 }
             }
         }
@@ -365,7 +434,7 @@ const ManualPayment = async (req, res) => {
          * - transactionId must not exist
          */
         const order = await order_model_1.default.findOneAndUpdate({
-            _id: orderId,
+            $or: [{ orderId }, { _id: mongoose_1.default.Types.ObjectId.isValid(orderId) ? orderId : undefined }],
             payment_method: "manual",
             payment_status: "pending",
             transactionId: { $exists: false },
@@ -424,12 +493,15 @@ exports.ManualPayment = ManualPayment;
  * @access Private (User)
  */
 const createManualOrder = async (req, res) => {
-    let order = null;
+    const session = await mongoose_1.default.startSession();
+    session.startTransaction();
     try {
         const { delivery_address, payment_details, payment_type, payment_method, appliedCoupon } = req.body;
         const userId = req.userId;
         // ✅ 1. Basic validation
         if (!userId || !delivery_address) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({
                 success: false,
                 message: "Missing required fields (userId, delivery_address)",
@@ -446,6 +518,8 @@ const createManualOrder = async (req, res) => {
         ];
         const missingFields = requiredAddressFields.filter(field => !delivery_address[field]);
         if (missingFields.length > 0) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({
                 success: false,
                 message: `Missing required address fields: ${missingFields.join(", ")}`,
@@ -455,29 +529,45 @@ const createManualOrder = async (req, res) => {
         let orderProducts = [];
         let cartId = null;
         if (req.body.products && Array.isArray(req.body.products) && req.body.products.length > 0) {
-            orderProducts = req.body.products.map((p) => ({
-                productId: p.productId,
-                name: p.name || "Product",
-                image: p.image || [],
-                quantity: Number(p.quantity) || 1,
-                price: Number(p.costPrice || p.price) || 0,
-                costPrice: Number(p.costPrice || p.price) || 0,
-                sellingPrice: Number(p.sellingPrice) || Number(p.price) || 0,
-                totalPrice: (Number(p.quantity) || 1) * (Number(p.sellingPrice || p.price) || 0),
-                size: p.size ?? null,
-                color: p.color ?? null,
-                weight: p.weight ?? null,
-            }));
+            // Fetch products from DB to prevent client-side tampering (Bug 6)
+            const productIds = req.body.products.map((p) => new mongoose_1.default.Types.ObjectId(p.productId));
+            const dbProducts = await product_model_1.default.find({ _id: { $in: productIds } }).session(session).lean();
+            const dbProductMap = new Map(dbProducts.map((p) => [p._id.toString(), p]));
+            orderProducts = req.body.products.map((p) => {
+                const dbProduct = dbProductMap.get(p.productId.toString());
+                if (!dbProduct) {
+                    throw new Error(`Product not found: ${p.productId}`);
+                }
+                // Dropshipper pays costPrice (wholesale). Price is mapped to costPrice.
+                const costPrice = Number(dbProduct.price) || 0;
+                const sellingPrice = Number(p.sellingPrice) || costPrice;
+                const quantity = Number(p.quantity) || 1;
+                return {
+                    productId: p.productId,
+                    name: dbProduct.productName || "Product",
+                    image: (Array.isArray(dbProduct.images) && dbProduct.images.length > 0) ? dbProduct.images : [],
+                    quantity,
+                    price: costPrice,
+                    costPrice: costPrice,
+                    sellingPrice: sellingPrice,
+                    totalPrice: quantity * sellingPrice,
+                    size: p.size ?? null,
+                    color: p.color ?? null,
+                    weight: p.weight ?? null,
+                };
+            });
         }
         else {
-            const cart = await cart_model_1.CartModel.findOne({ userId }).populate({
+            const cart = await cart_model_1.CartModel.findOne({ userId }).session(session).populate({
                 path: "products.productId",
                 populate: [
-                    { path: "category", model: "Category" },
-                    { path: "subCategory", model: "SubCategory" }
+                    { path: "category" },
+                    { path: "subCategory" }
                 ]
             });
             if (!cart || cart.products.length === 0) {
+                await session.abortTransaction();
+                session.endSession();
                 return res.status(404).json({ success: false, message: "Cart is empty" });
             }
             cartId = cart._id;
@@ -486,8 +576,14 @@ const createManualOrder = async (req, res) => {
                 return product && typeof product === "object" && "_id" in product;
             });
             if (validProducts.length === 0) {
+                await session.abortTransaction();
+                session.endSession();
                 return res.status(400).json({ success: false, message: "No valid products in cart" });
             }
+            // Fetch images directly from DB — populate() + session() does not reliably attach sub-fields
+            const cartProductIds = validProducts.map((item) => item.productId._id);
+            const dbCartImages = await product_model_1.default.find({ _id: { $in: cartProductIds } }).select("images").session(session).lean();
+            const cartImageMap = new Map(dbCartImages.map((p) => [p._id.toString(), p.images || []]));
             orderProducts = validProducts.map((item) => {
                 const product = item.productId;
                 const quantity = Number(item.quantity) || 0;
@@ -495,10 +591,11 @@ const createManualOrder = async (req, res) => {
                 return {
                     productId: product._id,
                     name: product.productName || "Unnamed Product",
-                    image: product.images || [],
+                    image: cartImageMap.get(product._id.toString()) || [],
                     quantity,
                     price,
-                    sellingPrice: price, // Default for manual/B2C
+                    costPrice: price,
+                    sellingPrice: price,
                     totalPrice: quantity * price,
                     size: item.size ?? null,
                     color: item.color ?? null,
@@ -506,41 +603,33 @@ const createManualOrder = async (req, res) => {
                 };
             });
         }
+        // Dropshipper pays wholesale cost price upfront
+        const wholesaleSubTotal = orderProducts.reduce((acc, p) => acc + (p.quantity * (p.costPrice || p.price)), 0);
         // Handle Coupon applying first so that balance check is accurate
         let couponDiscount = 0;
         if (appliedCoupon) {
-            const coupon = await coupon_model_1.default.findOne({ code: appliedCoupon.toUpperCase(), isActive: true });
-            if (coupon) {
-                let subTotalCalc = orderProducts.reduce((acc, p) => acc + p.totalPrice, 0);
-                // Optional checks (same as applyCoupon logic):
-                const now = new Date();
-                const validTime = now >= coupon.validFrom && now <= coupon.validUntil;
-                const withinLimits = (coupon.usageLimit === 0 || coupon.usedCount < coupon.usageLimit);
-                const meetsMinimum = subTotalCalc >= coupon.minOrderAmount;
-                if (validTime && withinLimits && meetsMinimum) {
-                    if (coupon.discountType === "flat") {
-                        couponDiscount = coupon.discountAmount;
-                    }
-                    else if (coupon.discountType === "percentage") {
-                        couponDiscount = subTotalCalc * (coupon.discountAmount / 100);
-                        if (coupon.maxDiscountAmount > 0 && couponDiscount > coupon.maxDiscountAmount) {
-                            couponDiscount = coupon.maxDiscountAmount;
-                        }
-                    }
-                    if (couponDiscount > subTotalCalc)
-                        couponDiscount = subTotalCalc;
-                    // Increment usage
-                    coupon.usedCount += 1;
-                    await coupon.save();
-                }
-                else {
-                    console.warn(`Coupon ${appliedCoupon} failed final checkout validation`);
-                }
-            }
+            // For dropshipping manual orders, the coupon is applied to the wholesale cost (Bug 9)
+            const cartItemsForService = orderProducts.map(p => ({
+                productId: p.productId.toString(),
+                quantity: p.quantity,
+                price: p.costPrice || p.price
+            }));
+            // Validate using Coupon Service
+            const { discountAmount, coupon } = await (0, coupon_service_1.validateAndCalculateDiscount)({
+                code: appliedCoupon,
+                cartItems: cartItemsForService,
+                userId,
+                session
+            });
+            couponDiscount = discountAmount;
+            // Atomically increment usage
+            await coupon_model_1.default.updateOne({ _id: coupon._id }, { $inc: { usedCount: 1 } }, { session });
         }
         // ✅ 4. Payment validation
         if (payment_method === "manual") {
             if (!payment_details || !payment_details.transactionId) {
+                await session.abortTransaction();
+                session.endSession();
                 return res.status(400).json({
                     success: false,
                     message: "Transaction ID is required for manual payment",
@@ -549,8 +638,10 @@ const createManualOrder = async (req, res) => {
             const existingOrder = await order_model_1.default.findOne({
                 payment_method: "manual",
                 "payment_details.manual.transactionId": payment_details.transactionId,
-            });
+            }).session(session);
             if (existingOrder) {
+                await session.abortTransaction();
+                session.endSession();
                 return res.status(400).json({
                     success: false,
                     message: "এই ট্রানজ্যাকশন আইডি ইতিমধ্যেই ব্যবহার হয়েছে!",
@@ -558,27 +649,29 @@ const createManualOrder = async (req, res) => {
             }
         }
         else if (payment_method === "balance") {
-            const user = await user_model_1.default.findById(userId);
+            const user = await user_model_1.default.findById(userId).session(session);
             if (!user) {
+                await session.abortTransaction();
+                session.endSession();
                 return res.status(404).json({ success: false, message: "User not found" });
             }
-            // Calculate total with delivery (Backend should recalculate to be safe)
+            // Calculate total with delivery
             const dhakaDistricts = ["Dhaka", "ঢাকা", "Dhanmondi", "Gulshan", "Mirpur", "Motijheel", "Uttara", "Mohammadpur", "Tejgaon", "Kamrangirchar"];
             let calculatedDeliveryCharge = 130;
             if (delivery_address?.district && dhakaDistricts.some(d => delivery_address.district.includes(d))) {
                 calculatedDeliveryCharge = 80;
             }
-            // Dropshipper pays wholesale cost price upfront
-            const wholesaleSubTotal = orderProducts.reduce((acc, p) => acc + (p.quantity * (p.costPrice || p.price)), 0);
             let totalToPay = payment_type === "delivery" ? calculatedDeliveryCharge : (wholesaleSubTotal + calculatedDeliveryCharge - couponDiscount);
             if (totalToPay < 0)
                 totalToPay = 0;
             if ((user.balance || 0) < totalToPay) {
+                await session.abortTransaction();
+                session.endSession();
                 return res.status(400).json({ success: false, message: "Insufficient balance" });
             }
             // Deduct balance
             user.balance = (user.balance || 0) - totalToPay;
-            await user.save();
+            await user.save({ session });
         }
         // Verify Delivery Charge on Server (Duplicate but kept for logic consistency)
         const dhakaDistricts = [
@@ -593,12 +686,12 @@ const createManualOrder = async (req, res) => {
             }
         }
         // Fetch current financial settings for snapshot
-        const websiteInfo = await websiteinfo_model_1.default.findOne();
-        const referralSettings = await referral_model_1.default.findOne();
+        const websiteInfo = await websiteinfo_model_1.default.findOne().session(session);
+        const referralSettings = await referral_model_1.default.findOne().session(session);
         const referralBonusPerProduct = referralSettings?.referralBonusPerProduct || 0;
         const profitPerProduct = websiteInfo?.profitPerProduct || 0;
         // ✅ 5. Create order
-        order = new order_model_1.default({
+        const orderDoc = new order_model_1.default({
             userId,
             cart: cartId || null,
             orderId: uuidv4(),
@@ -615,33 +708,27 @@ const createManualOrder = async (req, res) => {
             referralBonusPerProduct,
             profitPerProduct,
         });
-        await order.save();
+        await orderDoc.save({ session });
         // ✅ 6. Update user's order history
         await user_model_1.default.findByIdAndUpdate(userId, {
-            $push: { orderHistory: order._id },
-        });
+            $push: { orderHistory: orderDoc._id },
+        }, { session });
         // ✅ 7. Clear user's cart
-        await (0, cart_utils_1.clearUserCart)(userId);
+        await (0, cart_utils_1.clearUserCart)(userId, session);
+        await session.commitTransaction();
+        session.endSession();
         // ✅ 8. Respond success
         return res.status(201).json({
             success: true,
             message: "Manual order placed successfully",
-            data: order,
+            data: orderDoc,
         });
     }
     catch (error) {
+        await session.abortTransaction();
+        session.endSession();
         console.error("Manual Order Creation Error:", error);
-        // ⚠️ Rollback partially created order
-        if (order?._id) {
-            try {
-                await order_model_1.default.findByIdAndDelete(order._id);
-                console.log("Rollback: Deleted partially created order:", order._id);
-            }
-            catch (rollbackError) {
-                console.error("Rollback failed:", rollbackError);
-            }
-        }
-        return res.status(500).json({
+        return res.status(error.message?.includes("কুপন") || error.message?.includes("Coupon") ? 400 : 500).json({
             success: false,
             message: error.message || "Internal Server Error",
         });
@@ -659,8 +746,8 @@ const getAllOrders = async (req, res) => {
             .populate({
             path: "products.productId",
             populate: [
-                { path: "category", model: "Category" },
-                { path: "subCategory", model: "SubCategory" }
+                { path: "category" },
+                { path: "subCategory" }
             ]
         })
             .populate({
@@ -702,8 +789,8 @@ const getOrdersByStatus = async (req, res) => {
             .populate({
             path: "products.productId",
             populate: [
-                { path: "category", model: "Category" },
-                { path: "subCategory", model: "SubCategory" }
+                { path: "category" },
+                { path: "subCategory" }
             ]
         })
             .populate({
@@ -812,16 +899,20 @@ const payDueAmount = async (req, res) => {
         if (order.userId.toString() !== userId) {
             return res.status(403).json({ success: false, message: "Unauthorized" });
         }
-        // Recalculate totals to be sure
-        // (This happens in pre-save, but we need the values now)
-        let subTotal = order.products.reduce((acc, p) => acc + (p.totalPrice || 0), 0);
-        const totalAmt = subTotal + (order.deliveryCharge || 0) - (order.couponDiscount || 0);
-        let amountToPay = 0;
-        if (paymentType === "delivery") {
-            amountToPay = order.deliveryCharge;
+        // Determine the actual amount the user needs to pay (Bugs 9, 21)
+        let amountToPay = order.amount_due ?? 0;
+        // Check if dropshipping order (sellingPrice > costPrice / price)
+        const isDropshipping = order.products.some(p => p.sellingPrice && p.sellingPrice > 0 && p.sellingPrice !== (p.costPrice || p.price));
+        if (isDropshipping && paymentMethod === "balance") {
+            const wholesaleSubTotal = order.products.reduce((acc, p) => acc + (p.quantity * (p.costPrice || p.price || 0)), 0);
+            const totalWholesaleAmt = wholesaleSubTotal + (order.deliveryCharge || 0) - (order.couponDiscount || 0);
+            // Amount paid so far by the dropshipper (e.g. delivery charge)
+            amountToPay = totalWholesaleAmt - (order.amount_paid || 0);
+            if (amountToPay < 0)
+                amountToPay = 0;
         }
-        else {
-            amountToPay = totalAmt;
+        if (amountToPay <= 0) {
+            return res.status(400).json({ success: false, message: "No due amount remaining" });
         }
         if (paymentMethod === "balance") {
             const user = await user_model_1.default.findById(userId);
@@ -837,9 +928,13 @@ const payDueAmount = async (req, res) => {
             // Update Order
             order.payment_method = "balance";
             order.payment_type = paymentType;
+            // If paying off full remaining on a delivery-type order, switch to "full"
+            // so the pre-save hook correctly sets amount_paid = totalAmt, amount_due = 0
+            if (order.payment_type === "delivery" && amountToPay >= (order.amount_due ?? 0)) {
+                order.payment_type = "full";
+            }
             order.payment_status = "paid";
             order.order_status = "processing";
-            // amount_paid and amount_due will be updated in pre-save hook
             await order.save();
             return res.json({
                 success: true,

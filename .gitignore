@@ -18,6 +18,8 @@
 
 # production
 /build
+/docs
+/scratch
 
 # misc
 .DS_Store

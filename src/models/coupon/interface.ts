@@ -16,4 +16,5 @@ export interface ICoupon extends Document {
     applicableSubCategory: mongoose.Types.ObjectId | null;
     applicableProduct: mongoose.Types.ObjectId | null;
     isForNewUserOnly: boolean;
+    perUserLimit: number;
 }

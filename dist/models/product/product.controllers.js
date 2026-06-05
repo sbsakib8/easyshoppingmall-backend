@@ -32,7 +32,7 @@ const createProductController = async (req, res) => {
             }
             return [val];
         };
-        const { productName, description, category, subCategory, featured, brand, productWeight, productSize, color, price, productStock, productRank, discount, ratings, tags, more_details, publish, isBoost, video_link, gender, } = req.body;
+        const { productName, description, category, subCategory, featured, brand, productWeight, productSize, color, price, productStock, productRank, discount, ratings, tags, productStatus, more_details, publish, isBoost, video_link, gender, } = req.body;
         // Validation
         if (!productName) {
             res.status(400).json({
@@ -81,6 +81,7 @@ const createProductController = async (req, res) => {
             discount: discount ? parseFloat(discount) : null,
             ratings: ratings ? parseFloat(ratings) : 5,
             tags: normalizeArray(tags),
+            productStatus: normalizeArray(productStatus).filter((s) => ['hot', 'cold'].includes(s)),
             images: imageUrls,
             video: videoUrls,
             video_link: video_link,

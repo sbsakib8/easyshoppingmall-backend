@@ -57,7 +57,27 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
 // ✅ Get All SubCategories
 export const getSubCategories = async (req: Request, res: Response): Promise<void> => {
   try {
-    const subCategories = await SubCategoryModel.find({ isActive: true })
+    const { filterType } = req.query;
+    const filter: any = { isActive: true };
+
+    if (filterType === "new-products" || filterType === "boost-products") {
+      const productFilter: any = { publish: true };
+      
+      if (filterType === "new-products") {
+        // Products created in the last 30 days are considered new
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        productFilter.createdAt = { $gte: thirtyDaysAgo };
+      } else if (filterType === "boost-products") {
+        productFilter.isBoost = true;
+      }
+
+      // Fetch distinct subcategory IDs having matching products
+      const subCategoryIds = await ProductModel.distinct("subCategory", productFilter);
+      filter._id = { $in: subCategoryIds };
+    }
+
+    const subCategories = await SubCategoryModel.find(filter)
       .select("name image slug icon isActive category")
       .populate("category", "name slug")
       .sort({ createdAt: -1 })

@@ -13,6 +13,7 @@ const couponSchema = new Schema<ICoupon>(
         description: {
             type: String,
             default: "",
+            maxlength: [500, "Description cannot exceed 500 characters"],
         },
         discountType: {
             type: String,
@@ -22,15 +23,18 @@ const couponSchema = new Schema<ICoupon>(
         discountAmount: {
             type: Number,
             required: true,
+            min: [0, "Discount amount cannot be negative"],
         },
         maxDiscountAmount: {
             type: Number,
-            default: 0, // 0 means no limit for percentage, or unused for flat
+            default: 0,
+            min: [0, "Max discount amount cannot be negative"],
         },
         minOrderAmount: {
             type: Number,
             required: true,
             default: 0,
+            min: [0, "Min order amount cannot be negative"],
         },
         validFrom: {
             type: Date,
@@ -39,14 +43,22 @@ const couponSchema = new Schema<ICoupon>(
         validUntil: {
             type: Date,
             required: true,
+            validate: {
+                validator: function (this: any, val: Date) {
+                    return !this.validFrom || val >= this.validFrom;
+                },
+                message: "validUntil must be greater than or equal to validFrom",
+            },
         },
         usageLimit: {
             type: Number,
-            default: 0, // 0 means unlimited
+            default: 0,
+            min: [0, "Usage limit cannot be negative"],
         },
         usedCount: {
             type: Number,
             default: 0,
+            min: [0, "Used count cannot be negative"],
         },
         isActive: {
             type: Boolean,
@@ -64,12 +76,17 @@ const couponSchema = new Schema<ICoupon>(
         },
         applicableProduct: {
             type: Schema.Types.ObjectId,
-            ref: "Product", // Assuming the product model is "Product"
+            ref: "Product", // Confirmed product model is "Product"
             default: null,
         },
         isForNewUserOnly: {
             type: Boolean,
             default: false,
+        },
+        perUserLimit: {
+            type: Number,
+            default: 0,
+            min: [0, "Per-user limit cannot be negative"],
         },
     },
     { timestamps: true }

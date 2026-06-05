@@ -86,7 +86,7 @@ export interface AuthUser {
   _id: string;
   name?: string;
   email?: string;
-  role?: "user" | "admin";
+  role?: string;
   roles?: string[];
   mobile?: string;
   balance?: number;
