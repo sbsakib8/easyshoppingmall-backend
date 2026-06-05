@@ -63,6 +63,10 @@ const createOrder = async (req, res) => {
             session.endSession();
             return res.status(400).json({ success: false, message: "No valid products in cart" });
         }
+        // Fetch images directly from DB — populate() + session() does not reliably attach sub-fields
+        const productIds = validProducts.map((item) => item.productId._id);
+        const dbProductImages = await product_model_1.default.find({ _id: { $in: productIds } }).select("images").session(session).lean();
+        const imageMap = new Map(dbProductImages.map((p) => [p._id.toString(), p.images || []]));
         const orderProducts = validProducts.map((item) => {
             const product = item.productId;
             const productPrice = Number(product.price) || 0;
@@ -70,11 +74,11 @@ const createOrder = async (req, res) => {
             return {
                 productId: product._id,
                 name: product.productName || "Unnamed Product",
-                image: product.images || [],
+                image: imageMap.get(product._id.toString()) || [],
                 quantity: quantity,
                 price: productPrice,
-                costPrice: productPrice, // Explicitly set costPrice to align with pre-save hook (Bug 10)
-                sellingPrice: productPrice, // Explicitly set sellingPrice to align with pre-save hook (Bug 10)
+                costPrice: productPrice,
+                sellingPrice: productPrice,
                 totalPrice: quantity * productPrice,
                 size: item.size,
                 color: item.color,
@@ -204,11 +208,24 @@ const getMyOrders = async (req, res) => {
                 { path: "subCategory" }
             ]
         })
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
+        // Enrich products: if stored image[] is empty, fall back to populated productId.images
+        const enrichedOrders = orders.map((order) => ({
+            ...order,
+            products: (order.products || []).map((p) => {
+                const productImages = p.productId?.images;
+                const hasStoredImage = Array.isArray(p.image) ? p.image.length > 0 : !!p.image;
+                return {
+                    ...p,
+                    image: hasStoredImage ? p.image : (Array.isArray(productImages) && productImages.length > 0 ? productImages : []),
+                };
+            }),
+        }));
         res.json({
             success: true,
             message: "User orders fetched successfully",
-            data: orders,
+            data: enrichedOrders,
         });
     }
     catch (error) {
@@ -230,7 +247,8 @@ const getOrderDetails = async (req, res) => {
                 { path: "subCategory" }
             ]
         })
-            .populate("userId", "name email mobile");
+            .populate("userId", "name email mobile")
+            .lean();
         if (!order) {
             res.status(404).json({ success: false, message: "Order not found" });
             return;
@@ -242,7 +260,19 @@ const getOrderDetails = async (req, res) => {
             res.status(403).json({ success: false, message: "Unauthorized: Not your order" });
             return;
         }
-        res.json({ success: true, data: order });
+        // Enrich products: if stored image[] is empty, fall back to populated productId.images
+        const enrichedOrder = {
+            ...order,
+            products: (order.products || []).map((p) => {
+                const productImages = p.productId?.images;
+                const hasStoredImage = Array.isArray(p.image) ? p.image.length > 0 : !!p.image;
+                return {
+                    ...p,
+                    image: hasStoredImage ? p.image : (Array.isArray(productImages) && productImages.length > 0 ? productImages : []),
+                };
+            }),
+        };
+        res.json({ success: true, data: enrichedOrder });
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -515,7 +545,7 @@ const createManualOrder = async (req, res) => {
                 return {
                     productId: p.productId,
                     name: dbProduct.productName || "Product",
-                    image: dbProduct.images || [],
+                    image: (Array.isArray(dbProduct.images) && dbProduct.images.length > 0) ? dbProduct.images : [],
                     quantity,
                     price: costPrice,
                     costPrice: costPrice,
@@ -550,6 +580,10 @@ const createManualOrder = async (req, res) => {
                 session.endSession();
                 return res.status(400).json({ success: false, message: "No valid products in cart" });
             }
+            // Fetch images directly from DB — populate() + session() does not reliably attach sub-fields
+            const cartProductIds = validProducts.map((item) => item.productId._id);
+            const dbCartImages = await product_model_1.default.find({ _id: { $in: cartProductIds } }).select("images").session(session).lean();
+            const cartImageMap = new Map(dbCartImages.map((p) => [p._id.toString(), p.images || []]));
             orderProducts = validProducts.map((item) => {
                 const product = item.productId;
                 const quantity = Number(item.quantity) || 0;
@@ -557,11 +591,11 @@ const createManualOrder = async (req, res) => {
                 return {
                     productId: product._id,
                     name: product.productName || "Unnamed Product",
-                    image: product.images || [],
+                    image: cartImageMap.get(product._id.toString()) || [],
                     quantity,
                     price,
                     costPrice: price,
-                    sellingPrice: price, // Default for manual/B2C
+                    sellingPrice: price,
                     totalPrice: quantity * price,
                     size: item.size ?? null,
                     color: item.color ?? null,
