@@ -129,7 +129,7 @@ const orderSchema = new mongoose_1.Schema({
     // Order Status
     order_status: {
         type: String,
-        enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed"],
+        enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed", "return"],
         default: "pending",
     },
     referralBonusGiven: {
@@ -157,6 +157,21 @@ const orderSchema = new mongoose_1.Schema({
         default: false,
     },
     profitAmount: {
+        type: Number,
+        default: 0,
+    },
+    // COD return deduction: when admin marks a COD dropshipping order as
+    // "return" (customer rejected / did not pay delivery), the delivery charge
+    // is deducted from the dropshipper's balance (may go negative).
+    deliveryChargeDeducted: {
+        type: Boolean,
+        default: false,
+    },
+    deliveryChargeDeductedAt: {
+        type: Date,
+        default: null,
+    },
+    deliveryChargeDeductedAmount: {
         type: Number,
         default: 0,
     },
