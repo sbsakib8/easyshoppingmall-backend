@@ -336,7 +336,7 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const allowedStatuses = ["pending", "processing", "shipped", "delivered", "cancelled", "completed"];
+    const allowedStatuses = ["pending", "processing", "shipped", "delivered", "cancelled", "completed", "return"];
     if (!allowedStatuses.includes(status)) {
       res.status(400).json({
         success: false,
@@ -416,6 +416,7 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
         // 2. Profit Logic for DROPSHIPPING (Order Owner)
         if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
           let totalProfit = 0;
+          const couponCompensation = Number(order.couponDiscount) || 0;
 
           // Priority 1: Snapshotted Fixed per Product Profit
           if ((order.profitPerProduct ?? 0) > 0) {
@@ -431,6 +432,10 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
             }, 0);
           }
 
+          // Compensate the dropshipper for any coupon discount applied to the
+          // product price, so their effective profit is preserved.
+          totalProfit += couponCompensation;
+
           if (totalProfit > 0) {
             await UserModel.findByIdAndUpdate(user._id, {
               $inc: { balance: totalProfit }
@@ -439,6 +444,33 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
             order.profitAmount = totalProfit;
           }
         }
+      }
+    }
+
+    // COD Return Deduction: when admin marks a dropshipping order as "return"
+    // (customer didn't receive / didn't pay the delivery charge on a COD order),
+    // deduct the deliveryCharge from the dropshipper's balance (may go negative).
+    // Idempotent: uses `deliveryChargeDeducted` flag so repeat clicks don't double-deduct.
+    if (status === "return") {
+      const isCod = order.payment_method === "cod" || order.payment_type === "cod";
+      const isDropshipper = user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING");
+      const deductionAmount = Number(order.deliveryCharge) || 0;
+
+      if (!isCod) {
+        console.warn(`[Order Update] Return-status set on non-COD order ${id}. No deduction applied.`);
+      } else if (!isDropshipper) {
+        console.warn(`[Order Update] Return-status set on non-dropshipper COD order ${id}. No deduction applied.`);
+      } else if (order.deliveryChargeDeducted) {
+        console.log(`[Order Update] Return-status: delivery charge already deducted for order ${id}. Skipping.`);
+      } else if (deductionAmount > 0) {
+        // Atomic balance deduction (may result in negative balance)
+        await UserModel.findByIdAndUpdate(user._id, {
+          $inc: { balance: -deductionAmount }
+        });
+        order.deliveryChargeDeducted = true;
+        order.deliveryChargeDeductedAt = new Date();
+        order.deliveryChargeDeductedAmount = deductionAmount;
+        console.log(`[Order Update] Return-status: deducted ৳${deductionAmount} from dropshipper ${user._id} (order ${id}).`);
       }
     }
 

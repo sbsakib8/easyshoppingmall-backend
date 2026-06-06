@@ -1,6 +1,7 @@
 import mongoose, { ClientSession } from "mongoose";
 import CouponModel from "./coupon.model";
 import OrderModel from "../order/order.model";
+import SubCategoryModel from "../subcategory/subcategory.model";
 
 export interface ICartItemForDiscount {
     productId: string | mongoose.Types.ObjectId;
@@ -93,12 +94,26 @@ export const validateAndCalculateDiscount = async (params: {
     const couponSubCatId = coupon.applicableSubCategory ? coupon.applicableSubCategory.toString() : null;
     const isScoped = couponProdId || couponCatId || couponSubCatId;
 
+    // Resolve category → subcategories for category-level coupons.
+    // A product only matches a category coupon if it has a subcategory that
+    // belongs to the coupon's category. Products tagged with the category
+    // but no relevant subcategory (or a subcategory from another category)
+    // do not get the discount.
+    let couponCategorySubCatIds: Set<string> | null = null;
+    if (couponCatId && !couponSubCatId && !couponProdId) {
+        const subs = await SubCategoryModel.find({ category: couponCatId })
+            .select("_id")
+            .session(session || null)
+            .lean();
+        couponCategorySubCatIds = new Set(subs.map((s: any) => s._id.toString()));
+    }
+
     for (const item of cartItems) {
         const productIdStr = item.productId.toString();
         const dbProduct = productMap.get(productIdStr);
 
         if (!dbProduct) {
-            throw new Error(`পণ্যটি পাওয়া যায়নি / Product not found: ${productIdStr}`);
+            throw new Error(`পণ্যটি পাওয়া যায়নি / Product not found: ${productIdStr}`);
         }
 
         // Calculate item total using the price passed in (selling price / cost price based on order type)
@@ -113,13 +128,16 @@ export const validateAndCalculateDiscount = async (params: {
                     matches = true;
                 }
             } else {
-                const productCategories = (dbProduct.category || []).map((c: any) => (c._id || c).toString());
                 const productSubCategories = (dbProduct.subCategory || []).map((s: any) => (s._id || s).toString());
 
-                if (couponCatId && productCategories.includes(couponCatId)) {
-                    matches = true;
-                } else if (couponSubCatId && productSubCategories.includes(couponSubCatId)) {
-                    matches = true;
+                if (couponSubCatId) {
+                    if (productSubCategories.includes(couponSubCatId)) {
+                        matches = true;
+                    }
+                } else if (couponCatId && couponCategorySubCatIds) {
+                    if (productSubCategories.some((sc: string) => couponCategorySubCatIds!.has(sc))) {
+                        matches = true;
+                    }
                 }
             }
 
