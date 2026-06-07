@@ -415,26 +415,15 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
 
         // 2. Profit Logic for DROPSHIPPING (Order Owner)
         if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
-          let totalProfit = 0;
-          const couponCompensation = Number(order.couponDiscount) || 0;
-
-          // Priority 1: Snapshotted Fixed per Product Profit
-          if ((order.profitPerProduct ?? 0) > 0) {
-            totalProfit = (order.profitPerProduct ?? 0) * orderItemCount;
-          }
-          else {
-            // Priority 2: (Selling - Cost) Calculation
-            totalProfit = order.products.reduce((sum, p) => {
-              const cost = Number(p.costPrice || p.price) || 0;
-              const selling = Number(p.sellingPrice) || 0;
-              const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
-              return sum + itemProfit;
-            }, 0);
-          }
-
-          // Compensate the dropshipper for any coupon discount applied to the
-          // product price, so their effective profit is preserved.
-          totalProfit += couponCompensation;
+          // Dropshipper profit = sum of (sellingPrice - costPrice) * quantity.
+          // No coupon compensation and no website-default fallback: a dropshipper
+          // who buys at the same price they paid (no markup) earns 0 profit.
+          const totalProfit = order.products.reduce((sum, p) => {
+            const cost = Number(p.costPrice ?? p.price) || 0;
+            const selling = Number(p.sellingPrice) || cost;
+            const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
+            return sum + itemProfit;
+          }, 0);
 
           if (totalProfit > 0) {
             await UserModel.findByIdAndUpdate(user._id, {
@@ -646,8 +635,8 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
         if (!dbProduct) {
           throw new Error(`Product not found: ${p.productId}`);
         }
-        // Dropshipper pays costPrice (wholesale). Price is mapped to costPrice.
-        const costPrice = Number(dbProduct.price) || 0;
+        // Dropshipper pays costPrice (wholesale = product.dropshippingPrice, fallback to price).
+        const costPrice = Number(dbProduct.dropshippingPrice ?? dbProduct.price) || 0;
         const sellingPrice = Number(p.sellingPrice) || costPrice;
         const quantity = Number(p.quantity) || 1;
         return {
@@ -697,7 +686,7 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       orderProducts = validProducts.map((item: any) => {
         const product = item.productId;
         const quantity = Number(item.quantity) || 0;
-        const price = Number(product.price) || 0;
+        const price = Number(product.dropshippingPrice ?? product.price) || 0;
 
         return {
           productId: product._id,

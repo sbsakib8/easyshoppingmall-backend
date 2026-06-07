@@ -32,7 +32,7 @@ const createProductController = async (req, res) => {
             }
             return [val];
         };
-        const { productName, description, category, subCategory, featured, brand, productWeight, productSize, color, price, productStock, productRank, discount, ratings, tags, productStatus, more_details, publish, isBoost, video_link, gender, } = req.body;
+        const { productName, description, category, subCategory, featured, brand, productWeight, productSize, color, price, dropshippingPrice, productStock, productRank, discount, ratings, tags, productStatus, more_details, publish, isBoost, video_link, gender, } = req.body;
         // Validation
         if (!productName) {
             res.status(400).json({
@@ -76,6 +76,7 @@ const createProductController = async (req, res) => {
             productSize: normalizeArray(productSize),
             color: normalizeArray(color),
             price: price ? parseFloat(price) : null,
+            dropshippingPrice: dropshippingPrice !== undefined && dropshippingPrice !== "" ? parseFloat(dropshippingPrice) : null,
             productStock: productStock ? parseInt(productStock) : null,
             productRank: productRank ? parseInt(productRank) : 0,
             discount: discount ? parseFloat(discount) : null,
@@ -213,7 +214,7 @@ const getProductController = async (req, res) => {
         const isQueryEmpty = Object.keys(query).length === 1 && query.publish === true;
         const [data, totalCount] = await Promise.all([
             product_model_1.default.find(query)
-                .select("productName description brand price productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory")
+                .select("productName description brand price dropshippingPrice productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory")
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
@@ -358,6 +359,15 @@ const updateProductDetails = async (req, res) => {
             updateData.productSize = normalizeArray(updateData.productSize);
         if (updateData.color)
             updateData.color = normalizeArray(updateData.color);
+        if (updateData.dropshippingPrice !== undefined) {
+            updateData.dropshippingPrice =
+                updateData.dropshippingPrice === "" || updateData.dropshippingPrice === null
+                    ? null
+                    : parseFloat(updateData.dropshippingPrice);
+        }
+        if (updateData.price !== undefined && updateData.price !== "") {
+            updateData.price = parseFloat(updateData.price);
+        }
         const updateProduct = await product_model_1.default.findByIdAndUpdate(_id, { $set: updateData }, { new: true });
         res.json({ message: "Updated successfully", data: updateProduct, error: false, success: true });
     }

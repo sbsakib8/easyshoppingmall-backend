@@ -140,10 +140,11 @@ const applyDropshippingCoupon = async (req, res) => {
                 message: "কার্টে কোনো বৈধ পণ্য নেই / No valid products in cart"
             });
         }
-        // Fetch real prices from DB to prevent client-side price tampering
+        // Fetch real prices from DB to prevent client-side price tampering.
+        // For DS orders, the dropshipper's cost is product.dropshippingPrice (fallback to price).
         const productIds = validItems.map((i) => new mongoose_1.default.Types.ObjectId(i.productId));
-        const dbProducts = await product_model_1.default.find({ _id: { $in: productIds } }).select("price").lean();
-        const priceMap = new Map(dbProducts.map((p) => [p._id.toString(), Number(p.price) || 0]));
+        const dbProducts = await product_model_1.default.find({ _id: { $in: productIds } }).select("price dropshippingPrice").lean();
+        const priceMap = new Map(dbProducts.map((p) => [p._id.toString(), Number(p.dropshippingPrice ?? p.price) || 0]));
         const safeCartItems = validItems.map((item) => ({
             productId: item.productId,
             quantity: Number(item.quantity) || 1,

@@ -80,6 +80,10 @@ const productSchema = new mongoose_1.default.Schema({
         type: Number,
         default: null,
     },
+    dropshippingPrice: {
+        type: Number,
+        default: null,
+    },
     productStock: {
         type: Number,
         default: null,
