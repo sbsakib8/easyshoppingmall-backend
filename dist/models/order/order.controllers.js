@@ -570,8 +570,8 @@ const createManualOrder = async (req, res) => {
                 if (!dbProduct) {
                     throw new Error(`Product not found: ${p.productId}`);
                 }
-                // Dropshipper pays costPrice (wholesale). Price is mapped to costPrice.
-                const costPrice = Number(dbProduct.price) || 0;
+                // Dropshipper pays costPrice (wholesale = product.dropshippingPrice, fallback to price).
+                const costPrice = Number(dbProduct.dropshippingPrice ?? dbProduct.price) || 0;
                 const sellingPrice = Number(p.sellingPrice) || costPrice;
                 const quantity = Number(p.quantity) || 1;
                 return {

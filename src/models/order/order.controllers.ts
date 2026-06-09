@@ -415,26 +415,15 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
 
         // 2. Profit Logic for DROPSHIPPING (Order Owner)
         if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
-          let totalProfit = 0;
-          const couponCompensation = Number(order.couponDiscount) || 0;
-
-          // Priority 1: Snapshotted Fixed per Product Profit
-          if ((order.profitPerProduct ?? 0) > 0) {
-            totalProfit = (order.profitPerProduct ?? 0) * orderItemCount;
-          }
-          else {
-            // Priority 2: (Selling - Cost) Calculation
-            totalProfit = order.products.reduce((sum, p) => {
-              const cost = Number(p.costPrice || p.price) || 0;
-              const selling = Number(p.sellingPrice) || 0;
-              const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
-              return sum + itemProfit;
-            }, 0);
-          }
-
-          // Compensate the dropshipper for any coupon discount applied to the
-          // product price, so their effective profit is preserved.
-          totalProfit += couponCompensation;
+          // Dropshipper profit = sum of (sellingPrice - costPrice) * quantity.
+          // No coupon compensation and no website-default fallback: a dropshipper
+          // who buys at the same price they paid (no markup) earns 0 profit.
+          const totalProfit = order.products.reduce((sum, p) => {
+            const cost = Number(p.costPrice ?? p.price) || 0;
+            const selling = Number(p.sellingPrice) || cost;
+            const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
+            return sum + itemProfit;
+          }, 0);
 
           if (totalProfit > 0) {
             await UserModel.findByIdAndUpdate(user._id, {
@@ -631,6 +620,15 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // ✅ 2b. Detect user role for pricing
+    const orderUser = await UserModel.findById(userId).session(session);
+    if (!orderUser) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    const isDropshipper = orderUser.roles?.includes("DROPSHIPPING") || orderUser.role === "DROPSHIPPING";
+
     // ✅ 3. Validate products (Priority: req.body.products > database cart)
     let orderProducts: any[] = [];
     let cartId: any = null;
@@ -646,23 +644,43 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
         if (!dbProduct) {
           throw new Error(`Product not found: ${p.productId}`);
         }
-        // Dropshipper pays costPrice (wholesale). Price is mapped to costPrice.
-        const costPrice = Number(dbProduct.price) || 0;
-        const sellingPrice = Number(p.sellingPrice) || costPrice;
-        const quantity = Number(p.quantity) || 1;
-        return {
-          productId: p.productId,
-          name: dbProduct.productName || "Product",
-          image: (Array.isArray(dbProduct.images) && dbProduct.images.length > 0) ? dbProduct.images : [],
-          quantity,
-          price: costPrice,
-          costPrice: costPrice,
-          sellingPrice: sellingPrice,
-          totalPrice: quantity * sellingPrice,
-          size: p.size ?? null,
-          color: p.color ?? null,
-          weight: p.weight ?? null,
-        };
+
+        if (isDropshipper) {
+          // DS user: costPrice = wholesale (dropshippingPrice), sellingPrice = what customer pays
+          const costPrice = Number(dbProduct.dropshippingPrice ?? dbProduct.price) || 0;
+          const sellingPrice = Number(p.sellingPrice) || costPrice;
+          const quantity = Number(p.quantity) || 1;
+          return {
+            productId: p.productId,
+            name: dbProduct.productName || "Product",
+            image: (Array.isArray(dbProduct.images) && dbProduct.images.length > 0) ? dbProduct.images : [],
+            quantity,
+            price: costPrice,
+            costPrice: costPrice,
+            sellingPrice: sellingPrice,
+            totalPrice: quantity * sellingPrice,
+            size: p.size ?? null,
+            color: p.color ?? null,
+            weight: p.weight ?? null,
+          };
+        } else {
+          // Normal user / admin: price = retail price (product.price)
+          const retailPrice = Number(dbProduct.price) || 0;
+          const quantity = Number(p.quantity) || 1;
+          return {
+            productId: p.productId,
+            name: dbProduct.productName || "Product",
+            image: (Array.isArray(dbProduct.images) && dbProduct.images.length > 0) ? dbProduct.images : [],
+            quantity,
+            price: retailPrice,
+            costPrice: retailPrice,
+            sellingPrice: retailPrice,
+            totalPrice: quantity * retailPrice,
+            size: p.size ?? null,
+            color: p.color ?? null,
+            weight: p.weight ?? null,
+          };
+        }
       });
     } else {
       const cart = await CartModel.findOne({ userId }).session(session).populate({
@@ -697,21 +715,40 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       orderProducts = validProducts.map((item: any) => {
         const product = item.productId;
         const quantity = Number(item.quantity) || 0;
-        const price = Number(product.price) || 0;
 
-        return {
-          productId: product._id,
-          name: product.productName || "Unnamed Product",
-          image: cartImageMap.get(product._id.toString()) || [],
-          quantity,
-          price,
-          costPrice: price,
-          sellingPrice: price,
-          totalPrice: quantity * price,
-          size: item.size ?? null,
-          color: item.color ?? null,
-          weight: item.weight ?? null,
-        };
+        if (isDropshipper) {
+          // DS user: costPrice = wholesale (dropshippingPrice), sellingPrice = same (no margin from cart)
+          const price = Number(product.dropshippingPrice ?? product.price) || 0;
+          return {
+            productId: product._id,
+            name: product.productName || "Unnamed Product",
+            image: cartImageMap.get(product._id.toString()) || [],
+            quantity,
+            price,
+            costPrice: price,
+            sellingPrice: price,
+            totalPrice: quantity * price,
+            size: item.size ?? null,
+            color: item.color ?? null,
+            weight: item.weight ?? null,
+          };
+        } else {
+          // Normal user / admin: price = retail price (product.price)
+          const price = Number(product.price) || 0;
+          return {
+            productId: product._id,
+            name: product.productName || "Unnamed Product",
+            image: cartImageMap.get(product._id.toString()) || [],
+            quantity,
+            price,
+            costPrice: price,
+            sellingPrice: price,
+            totalPrice: quantity * price,
+            size: item.size ?? null,
+            color: item.color ?? null,
+            weight: item.weight ?? null,
+          };
+        }
       });
     }
 
@@ -771,8 +808,8 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
         });
       }
     } else if (payment_method === "balance") {
-      const user = await UserModel.findById(userId).session(session);
-      if (!user) {
+      // Reuse orderUser fetched earlier (line 624)
+      if (!orderUser) {
         await session.abortTransaction();
         session.endSession();
         return res.status(404).json({ success: false, message: "User not found" });
@@ -788,15 +825,15 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
       let totalToPay = payment_type === "delivery" ? calculatedDeliveryCharge : (wholesaleSubTotal + calculatedDeliveryCharge - couponDiscount);
       if (totalToPay < 0) totalToPay = 0;
 
-      if ((user.balance || 0) < totalToPay) {
+      if ((orderUser.balance || 0) < totalToPay) {
         await session.abortTransaction();
         session.endSession();
         return res.status(400).json({ success: false, message: "Insufficient balance" });
       }
 
       // Deduct balance
-      user.balance = (user.balance || 0) - totalToPay;
-      await user.save({ session });
+      orderUser.balance = (orderUser.balance || 0) - totalToPay;
+      await orderUser.save({ session });
     }
 
     // Verify Delivery Charge on Server (Duplicate but kept for logic consistency)

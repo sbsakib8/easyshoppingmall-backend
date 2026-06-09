@@ -149,13 +149,13 @@ export const paymentSuccess = async (req: Request, res: Response) => {
     order.payment_details = req.body;
 
     // Calculate amount_paid and amount_due based on payment type
-    if (order.payment_type === "delivery") {
-      order.amount_paid = order.deliveryCharge;
-      order.amount_due = order.subTotalAmt;
-    } else {
-      order.amount_paid = order.totalAmt;
-      order.amount_due = 0;
-    }
+      if (order.payment_type === "delivery") {
+        order.amount_paid = order.deliveryCharge;
+        order.amount_due = order.totalAmt - order.deliveryCharge;
+      } else {
+        order.amount_paid = order.totalAmt;
+        order.amount_due = 0;
+      }
 
     await order.save();
 
@@ -257,7 +257,7 @@ export const paymentIpn = async (req: Request, res: Response) => {
 
       if (order.payment_type === "delivery") {
         order.amount_paid = order.deliveryCharge;
-        order.amount_due = order.subTotalAmt;
+        order.amount_due = order.totalAmt - order.deliveryCharge;
       } else {
         order.amount_paid = order.totalAmt;
         order.amount_due = 0;

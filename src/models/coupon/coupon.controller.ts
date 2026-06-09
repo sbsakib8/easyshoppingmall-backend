@@ -120,10 +120,11 @@ export const applyDropshippingCoupon = async (req: AuthRequest, res: Response) =
             });
         }
 
-        // Fetch real prices from DB to prevent client-side price tampering
+        // Fetch real prices from DB to prevent client-side price tampering.
+        // For DS orders, the dropshipper's cost is product.dropshippingPrice (fallback to price).
         const productIds = validItems.map((i: any) => new mongoose.Types.ObjectId(i.productId));
-        const dbProducts = await productModel.find({ _id: { $in: productIds } }).select("price").lean();
-        const priceMap = new Map<string, number>(dbProducts.map((p: any) => [p._id.toString(), Number(p.price) || 0]));
+        const dbProducts = await productModel.find({ _id: { $in: productIds } }).select("price dropshippingPrice").lean();
+        const priceMap = new Map<string, number>(dbProducts.map((p: any) => [p._id.toString(), Number(p.dropshippingPrice ?? p.price) || 0]));
 
         const safeCartItems = validItems.map((item: any) => ({
             productId: item.productId,
