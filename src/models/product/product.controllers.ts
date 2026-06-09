@@ -34,6 +34,7 @@ interface PaginationRequest extends Request {
     productSize?: string[];
     color?: string[];
     price?: number;
+    dropshippingPrice?: number;
     productStock?: number;
     productRank?: number;
     discount?: number;
@@ -77,6 +78,7 @@ export const createProductController = async (
       productSize,
       color,
       price,
+      dropshippingPrice,
       productStock,
       productRank,
       discount,
@@ -138,6 +140,7 @@ export const createProductController = async (
       productSize: normalizeArray(productSize),
       color: normalizeArray(color),
       price: price ? parseFloat(price) : null,
+      dropshippingPrice: dropshippingPrice !== undefined && dropshippingPrice !== "" ? parseFloat(dropshippingPrice) : null,
       productStock: productStock ? parseInt(productStock) : null,
       productRank: productRank ? parseInt(productRank) : 0,
       discount: discount ? parseFloat(discount) : null,
@@ -292,7 +295,7 @@ export const getProductController = async (
 
     const [data, totalCount] = await Promise.all([
       productModel.find(query)
-        .select("productName description brand price productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory")
+        .select("productName description brand price dropshippingPrice productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory")
         .sort(sort as any)
         .skip(skip)
         .limit(limit)
@@ -339,7 +342,7 @@ export const getProductByCategory = async (
     }
 
     const data = await productModel.find({ category: { $in: [finalId] }, publish: true })
-      .select("productName description brand price productStock productRank discount ratings images")
+      .select("productName description brand price dropshippingPrice productStock productRank discount ratings images")
       .limit(15)
       .populate("category subCategory", "name slug")
       .lean();
@@ -381,7 +384,7 @@ export const getProductByCategoryAndSubCategory = async (
 
     const [data, totalCount] = await Promise.all([
       productModel.find(query)
-        .select("productName description brand price productStock productRank discount ratings images")
+        .select("productName description brand price dropshippingPrice productStock productRank discount ratings images")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -441,6 +444,15 @@ export const updateProductDetails = async (
     if (updateData.productWeight) updateData.productWeight = normalizeArray(updateData.productWeight);
     if (updateData.productSize) updateData.productSize = normalizeArray(updateData.productSize);
     if (updateData.color) updateData.color = normalizeArray(updateData.color);
+    if (updateData.dropshippingPrice !== undefined) {
+      updateData.dropshippingPrice =
+        updateData.dropshippingPrice === "" || updateData.dropshippingPrice === null
+          ? null
+          : parseFloat(updateData.dropshippingPrice);
+    }
+    if (updateData.price !== undefined && updateData.price !== "") {
+      updateData.price = parseFloat(updateData.price);
+    }
 
     const updateProduct = await productModel.findByIdAndUpdate(_id, { $set: updateData }, { new: true });
     res.json({ message: "Updated successfully", data: updateProduct, error: false, success: true });

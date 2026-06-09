@@ -56,7 +56,24 @@ exports.createSubCategory = createSubCategory;
 // ✅ Get All SubCategories
 const getSubCategories = async (req, res) => {
     try {
-        const subCategories = await subcategory_model_1.default.find({ isActive: true })
+        const { filterType } = req.query;
+        const filter = { isActive: true };
+        if (filterType === "new-products" || filterType === "boost-products") {
+            const productFilter = { publish: true };
+            if (filterType === "new-products") {
+                // Products created in the last 30 days are considered new
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                productFilter.createdAt = { $gte: thirtyDaysAgo };
+            }
+            else if (filterType === "boost-products") {
+                productFilter.isBoost = true;
+            }
+            // Fetch distinct subcategory IDs having matching products
+            const subCategoryIds = await product_model_1.default.distinct("subCategory", productFilter);
+            filter._id = { $in: subCategoryIds };
+        }
+        const subCategories = await subcategory_model_1.default.find(filter)
             .select("name image slug icon isActive category")
             .populate("category", "name slug")
             .sort({ createdAt: -1 })

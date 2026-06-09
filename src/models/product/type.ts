@@ -11,6 +11,7 @@ export interface IProduct extends Document {
     productSize: string[];
     color: string[];
     price: number | null;
+    dropshippingPrice?: number | null;
     productStock: number | null;
     productRank: number;
     discount: number | null;

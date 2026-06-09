@@ -6,7 +6,7 @@ import fs from "fs";
 // Create Home Banner
 export const createHomeBanner = async (req: Request, res: Response) => {
   try {
-    const { title, Description, Link_URL, active } = req.body;
+    const { title, Description, Link_URL, active, sliderFor } = req.body;
     const files = req.files as Express.Multer.File[];
 
     let imageUrls: string[] = [];
@@ -25,6 +25,7 @@ export const createHomeBanner = async (req: Request, res: Response) => {
       Description,
       Link_URL,
       active,
+      sliderFor: sliderFor || "USER",
       images: imageUrls,
     });
 
@@ -42,7 +43,18 @@ export const createHomeBanner = async (req: Request, res: Response) => {
 //  Get All Banners
 export const getAllHomeBanners = async (req: Request, res: Response) => {
   try {
-    const banners = await HomeBanner.find().sort({ createdAt: -1 });
+    const { sliderFor, active } = req.query;
+    const filter: any = {};
+
+    if (sliderFor) {
+      filter.sliderFor = sliderFor;
+    }
+
+    if (active !== undefined) {
+      filter.active = active === "true";
+    }
+
+    const banners = await HomeBanner.find(filter).sort({ createdAt: -1 });
     return res.status(200).json({ success: true, data: banners });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
@@ -65,7 +77,7 @@ export const getSingleHomeBanner = async (req: Request, res: Response) => {
 //  Update Banner
 export const updateHomeBanner = async (req: Request, res: Response) => {
   try {
-    const { title, Description, Link_URL, active } = req.body;
+    const { title, Description, Link_URL, active, sliderFor } = req.body;
     const files = req.files as Express.Multer.File[];
 
     let imageUrls: string[] = [];
@@ -87,6 +99,7 @@ export const updateHomeBanner = async (req: Request, res: Response) => {
         Description,
         Link_URL,
         active,
+        sliderFor,
         ...(imageUrls.length > 0 && { images: imageUrls }),
       },
       { new: true }

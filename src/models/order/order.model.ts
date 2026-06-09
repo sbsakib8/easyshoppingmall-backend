@@ -1,5 +1,6 @@
 import mongoose, { Document, Model, Schema } from "mongoose";
 import { IOrder } from "./interface";
+import { validateAndCalculateDiscount } from "../coupon/coupon.service";
 
 const orderSchema = new Schema<IOrder>(
   {
@@ -94,7 +95,7 @@ const orderSchema = new Schema<IOrder>(
       },
     },
     paymentId: { type: String, default: "" },
-    tran_id: { type: String, unique: true, sparse: true },
+    tran_id: { type: String, default: undefined, unique: true, sparse: true },
     invoice_receipt: { type: String, default: "" },
 
     appliedCoupon: { type: String, default: null },
@@ -103,7 +104,7 @@ const orderSchema = new Schema<IOrder>(
     // Order Status
     order_status: {
       type: String,
-      enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed"],
+      enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed", "return"],
       default: "pending",
     },
     referralBonusGiven: {
@@ -135,6 +136,22 @@ const orderSchema = new Schema<IOrder>(
       type: Number,
       default: 0,
     },
+
+    // COD return deduction: when admin marks a COD dropshipping order as
+    // "return" (customer rejected / did not pay delivery), the delivery charge
+    // is deducted from the dropshipper's balance (may go negative).
+    deliveryChargeDeducted: {
+      type: Boolean,
+      default: false,
+    },
+    deliveryChargeDeductedAt: {
+      type: Date,
+      default: null,
+    },
+    deliveryChargeDeductedAmount: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
@@ -143,26 +160,65 @@ orderSchema.index({ createdAt: -1 });
 orderSchema.index({ userId: 1, createdAt: -1 });
 
 // FIX PRE-HOOK TYPES
-orderSchema.pre<IOrder & Document>("save", function (next) {
+orderSchema.pre<IOrder & Document>("save", async function (next) {
   let subTotal = 0;
 
   this.products.forEach((p) => {
     const quantity = Number(p.quantity) || 0;
-    const cost = Number(p.price) || 0;
     const selling = Number(p.sellingPrice && p.sellingPrice > 0 ? p.sellingPrice : p.price) || 0;
     
-    p.totalPrice = quantity * selling; // This is what the CUSTOMER pays
+    p.totalPrice = quantity * selling; // sellingPrice for DS orders, retail price for normal orders
     subTotal += p.totalPrice;
   });
 
   this.subTotalAmt = subTotal;
+
+  // Re-validate and recalculate coupon discount if applied (Bug 32)
+  if (this.appliedCoupon) {
+    try {
+      const isDropshipper = this.products.some(p => p.sellingPrice && p.sellingPrice > 0 && p.sellingPrice !== (p.costPrice || p.price));
+      const formattedItems = this.products.map(p => ({
+        productId: p.productId.toString(),
+        quantity: Number(p.quantity) || 0,
+        price: isDropshipper ? Number(p.costPrice || p.price) || 0 : Number(p.sellingPrice || p.price) || 0,
+      }));
+
+      const { discountAmount } = await validateAndCalculateDiscount({
+        code: this.appliedCoupon,
+        cartItems: formattedItems,
+        userId: this.userId.toString(),
+        isNew: this.isNew
+      });
+
+      this.couponDiscount = discountAmount;
+    } catch (err: any) {
+      if (this.isNew) {
+        return next(err);
+      }
+      console.warn(`Coupon validation failed during save of existing order ${this.orderId}: ${err.message}`);
+    }
+  } else {
+    this.couponDiscount = 0;
+  }
+
   this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0) - (Number(this.couponDiscount) || 0);
   if (this.totalAmt < 0) this.totalAmt = 0;
 
   // Payment amount calculation
   if (this.payment_status === "paid" || this.order_status === "completed" || this.order_status === "delivered") {
-    this.amount_paid = this.totalAmt;
-    this.amount_due = 0;
+    if (this.payment_type === "delivery") {
+      const existingPaid = Number(this.amount_paid) || 0;
+      if (existingPaid >= this.totalAmt) {
+        this.amount_paid = this.totalAmt;
+        this.amount_due = 0;
+      } else {
+        this.amount_paid = Number(this.deliveryCharge) || 0;
+        this.amount_due = this.totalAmt - this.amount_paid;
+      }
+    } else {
+      this.amount_paid = this.totalAmt;
+      this.amount_due = 0;
+    }
     this.payment_status = "paid";
   } else {
     if (this.payment_type === "full") {

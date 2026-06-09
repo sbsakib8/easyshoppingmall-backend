@@ -48,6 +48,10 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    dropshippingPrice: {
+      type: Number,
+      default: null,
+    },
     productStock: {
       type: Number,
       default: null,

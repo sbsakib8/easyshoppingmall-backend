@@ -7,6 +7,7 @@ export interface IHomeBanner {
   images: string[];
   Link_URL?: string;
   active: boolean;
+  sliderFor: "USER" | "DROPSHIPPING";
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -10,7 +10,7 @@ const fs_1 = __importDefault(require("fs"));
 // Create Home Banner
 const createHomeBanner = async (req, res) => {
     try {
-        const { title, Description, Link_URL, active } = req.body;
+        const { title, Description, Link_URL, active, sliderFor } = req.body;
         const files = req.files;
         let imageUrls = [];
         if (files && files.length > 0) {
@@ -25,6 +25,7 @@ const createHomeBanner = async (req, res) => {
             Description,
             Link_URL,
             active,
+            sliderFor: sliderFor || "USER",
             images: imageUrls,
         });
         return res.status(201).json({
@@ -42,7 +43,15 @@ exports.createHomeBanner = createHomeBanner;
 //  Get All Banners
 const getAllHomeBanners = async (req, res) => {
     try {
-        const banners = await homeBanner_model_1.default.find().sort({ createdAt: -1 });
+        const { sliderFor, active } = req.query;
+        const filter = {};
+        if (sliderFor) {
+            filter.sliderFor = sliderFor;
+        }
+        if (active !== undefined) {
+            filter.active = active === "true";
+        }
+        const banners = await homeBanner_model_1.default.find(filter).sort({ createdAt: -1 });
         return res.status(200).json({ success: true, data: banners });
     }
     catch (error) {
@@ -67,7 +76,7 @@ exports.getSingleHomeBanner = getSingleHomeBanner;
 //  Update Banner
 const updateHomeBanner = async (req, res) => {
     try {
-        const { title, Description, Link_URL, active } = req.body;
+        const { title, Description, Link_URL, active, sliderFor } = req.body;
         const files = req.files;
         let imageUrls = [];
         if (files && files.length > 0) {
@@ -84,6 +93,7 @@ const updateHomeBanner = async (req, res) => {
             Description,
             Link_URL,
             active,
+            sliderFor,
             ...(imageUrls.length > 0 && { images: imageUrls }),
         }, { new: true });
         if (!updatedBanner) {

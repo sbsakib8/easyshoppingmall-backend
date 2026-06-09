@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
+const coupon_service_1 = require("../coupon/coupon.service");
 const orderSchema = new mongoose_1.Schema({
     userId: {
         type: mongoose_1.Schema.Types.ObjectId,
@@ -121,14 +122,14 @@ const orderSchema = new mongoose_1.Schema({
         },
     },
     paymentId: { type: String, default: "" },
-    tran_id: { type: String, index: true, unique: true },
+    tran_id: { type: String, default: undefined, unique: true, sparse: true },
     invoice_receipt: { type: String, default: "" },
     appliedCoupon: { type: String, default: null },
     couponDiscount: { type: Number, default: 0 },
     // Order Status
     order_status: {
         type: String,
-        enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed"],
+        enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed", "return"],
         default: "pending",
     },
     referralBonusGiven: {
@@ -159,11 +160,26 @@ const orderSchema = new mongoose_1.Schema({
         type: Number,
         default: 0,
     },
+    // COD return deduction: when admin marks a COD dropshipping order as
+    // "return" (customer rejected / did not pay delivery), the delivery charge
+    // is deducted from the dropshipper's balance (may go negative).
+    deliveryChargeDeducted: {
+        type: Boolean,
+        default: false,
+    },
+    deliveryChargeDeductedAt: {
+        type: Date,
+        default: null,
+    },
+    deliveryChargeDeductedAmount: {
+        type: Number,
+        default: 0,
+    },
 }, { timestamps: true });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ userId: 1, createdAt: -1 });
 // FIX PRE-HOOK TYPES
-orderSchema.pre("save", function (next) {
+orderSchema.pre("save", async function (next) {
     let subTotal = 0;
     this.products.forEach((p) => {
         const quantity = Number(p.quantity) || 0;
@@ -173,13 +189,53 @@ orderSchema.pre("save", function (next) {
         subTotal += p.totalPrice;
     });
     this.subTotalAmt = subTotal;
+    // Re-validate and recalculate coupon discount if applied (Bug 32)
+    if (this.appliedCoupon) {
+        try {
+            const isDropshipper = this.products.some(p => p.sellingPrice && p.sellingPrice > 0 && p.sellingPrice !== (p.costPrice || p.price));
+            const formattedItems = this.products.map(p => ({
+                productId: p.productId.toString(),
+                quantity: Number(p.quantity) || 0,
+                price: isDropshipper ? Number(p.costPrice || p.price) || 0 : Number(p.sellingPrice || p.price) || 0,
+            }));
+            const { discountAmount } = await (0, coupon_service_1.validateAndCalculateDiscount)({
+                code: this.appliedCoupon,
+                cartItems: formattedItems,
+                userId: this.userId.toString(),
+                isNew: this.isNew
+            });
+            this.couponDiscount = discountAmount;
+        }
+        catch (err) {
+            if (this.isNew) {
+                return next(err);
+            }
+            console.warn(`Coupon validation failed during save of existing order ${this.orderId}: ${err.message}`);
+        }
+    }
+    else {
+        this.couponDiscount = 0;
+    }
     this.totalAmt = subTotal + (Number(this.deliveryCharge) || 0) - (Number(this.couponDiscount) || 0);
     if (this.totalAmt < 0)
         this.totalAmt = 0;
     // Payment amount calculation
     if (this.payment_status === "paid" || this.order_status === "completed" || this.order_status === "delivered") {
-        this.amount_paid = this.totalAmt;
-        this.amount_due = 0;
+        if (this.payment_type === "delivery") {
+            const existingPaid = Number(this.amount_paid) || 0;
+            if (existingPaid >= this.totalAmt) {
+                this.amount_paid = this.totalAmt;
+                this.amount_due = 0;
+            }
+            else {
+                this.amount_paid = Number(this.deliveryCharge) || 0;
+                this.amount_due = this.totalAmt - this.amount_paid;
+            }
+        }
+        else {
+            this.amount_paid = this.totalAmt;
+            this.amount_due = 0;
+        }
         this.payment_status = "paid";
     }
     else {

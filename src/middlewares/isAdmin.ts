@@ -1,5 +1,4 @@
 import { Response, NextFunction } from "express";
-import UserModel, { IUser } from "../models/user/user.model";
 import { AuthRequest } from "./isAuth";
 
 export const isAdmin = async (
@@ -8,27 +7,22 @@ export const isAdmin = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (!req.userId) {
+    if (!req.userId || !req.user) {
       res.status(401).json({
-        message: "Unauthorized: No userId found",
+        message: "Unauthorized: No authenticated user found",
         error: true,
         success: false,
       });
       return;
     }
 
-    const user: IUser | null = await UserModel.findById(req.userId).select("role");
+    const userRole = req.user.role || "";
+    const userRoles = req.user.roles || [];
 
-    if (!user) {
-      res.status(404).json({
-        message: "User not found",
-        error: true,
-        success: false,
-      });
-      return;
-    }
+    const isUserAdmin = userRole.toUpperCase() === "ADMIN" || 
+                        userRoles.some((r: string) => r.toUpperCase() === "ADMIN");
 
-    if (user.role !== "ADMIN") {
+    if (!isUserAdmin) {
       res.status(403).json({
         message: "Permission denied: Admins only",
         error: true,
