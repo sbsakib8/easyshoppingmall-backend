@@ -296,7 +296,7 @@ const updateOrderStatus = async (req, res) => {
             res.status(400).json({ success: false, message: "Invalid order ID" });
             return;
         }
-        const allowedStatuses = ["pending", "processing", "shipped", "delivered", "cancelled", "completed"];
+        const allowedStatuses = ["pending", "processing", "shipped", "delivered", "cancelled", "completed", "return"];
         if (!allowedStatuses.includes(status)) {
             res.status(400).json({
                 success: false,
@@ -364,6 +364,7 @@ const updateOrderStatus = async (req, res) => {
                 // 2. Profit Logic for DROPSHIPPING (Order Owner)
                 if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
                     let totalProfit = 0;
+                    const couponCompensation = Number(order.couponDiscount) || 0;
                     // Priority 1: Snapshotted Fixed per Product Profit
                     if ((order.profitPerProduct ?? 0) > 0) {
                         totalProfit = (order.profitPerProduct ?? 0) * orderItemCount;
@@ -377,6 +378,9 @@ const updateOrderStatus = async (req, res) => {
                             return sum + itemProfit;
                         }, 0);
                     }
+                    // Compensate the dropshipper for any coupon discount applied to the
+                    // product price, so their effective profit is preserved.
+                    totalProfit += couponCompensation;
                     if (totalProfit > 0) {
                         await user_model_1.default.findByIdAndUpdate(user._id, {
                             $inc: { balance: totalProfit }
@@ -385,6 +389,34 @@ const updateOrderStatus = async (req, res) => {
                         order.profitAmount = totalProfit;
                     }
                 }
+            }
+        }
+        // COD Return Deduction: when admin marks a dropshipping order as "return"
+        // (customer didn't receive / didn't pay the delivery charge on a COD order),
+        // deduct the deliveryCharge from the dropshipper's balance (may go negative).
+        // Idempotent: uses `deliveryChargeDeducted` flag so repeat clicks don't double-deduct.
+        if (status === "return") {
+            const isCod = order.payment_method === "cod" || order.payment_type === "cod";
+            const isDropshipper = user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING");
+            const deductionAmount = Number(order.deliveryCharge) || 0;
+            if (!isCod) {
+                console.warn(`[Order Update] Return-status set on non-COD order ${id}. No deduction applied.`);
+            }
+            else if (!isDropshipper) {
+                console.warn(`[Order Update] Return-status set on non-dropshipper COD order ${id}. No deduction applied.`);
+            }
+            else if (order.deliveryChargeDeducted) {
+                console.log(`[Order Update] Return-status: delivery charge already deducted for order ${id}. Skipping.`);
+            }
+            else if (deductionAmount > 0) {
+                // Atomic balance deduction (may result in negative balance)
+                await user_model_1.default.findByIdAndUpdate(user._id, {
+                    $inc: { balance: -deductionAmount }
+                });
+                order.deliveryChargeDeducted = true;
+                order.deliveryChargeDeductedAt = new Date();
+                order.deliveryChargeDeductedAmount = deductionAmount;
+                console.log(`[Order Update] Return-status: deducted ৳${deductionAmount} from dropshipper ${user._id} (order ${id}).`);
             }
         }
         await order.save();
@@ -538,8 +570,8 @@ const createManualOrder = async (req, res) => {
                 if (!dbProduct) {
                     throw new Error(`Product not found: ${p.productId}`);
                 }
-                // Dropshipper pays costPrice (wholesale). Price is mapped to costPrice.
-                const costPrice = Number(dbProduct.price) || 0;
+                // Dropshipper pays costPrice (wholesale = product.dropshippingPrice, fallback to price).
+                const costPrice = Number(dbProduct.dropshippingPrice ?? dbProduct.price) || 0;
                 const sellingPrice = Number(p.sellingPrice) || costPrice;
                 const quantity = Number(p.quantity) || 1;
                 return {

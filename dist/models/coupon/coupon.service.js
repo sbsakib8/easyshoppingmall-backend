@@ -7,6 +7,7 @@ exports.validateAndCalculateDiscount = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const coupon_model_1 = __importDefault(require("./coupon.model"));
 const order_model_1 = __importDefault(require("../order/order.model"));
+const subcategory_model_1 = __importDefault(require("../subcategory/subcategory.model"));
 /**
  * Validates a coupon and calculates the applicable discount amount.
  * Throws an error with a bilingual message if validation fails.
@@ -72,11 +73,24 @@ const validateAndCalculateDiscount = async (params) => {
     const couponCatId = coupon.applicableCategory ? coupon.applicableCategory.toString() : null;
     const couponSubCatId = coupon.applicableSubCategory ? coupon.applicableSubCategory.toString() : null;
     const isScoped = couponProdId || couponCatId || couponSubCatId;
+    // Resolve category → subcategories for category-level coupons.
+    // A product only matches a category coupon if it has a subcategory that
+    // belongs to the coupon's category. Products tagged with the category
+    // but no relevant subcategory (or a subcategory from another category)
+    // do not get the discount.
+    let couponCategorySubCatIds = null;
+    if (couponCatId && !couponSubCatId && !couponProdId) {
+        const subs = await subcategory_model_1.default.find({ category: couponCatId })
+            .select("_id")
+            .session(session || null)
+            .lean();
+        couponCategorySubCatIds = new Set(subs.map((s) => s._id.toString()));
+    }
     for (const item of cartItems) {
         const productIdStr = item.productId.toString();
         const dbProduct = productMap.get(productIdStr);
         if (!dbProduct) {
-            throw new Error(`পণ্যটি পাওয়া যায়নি / Product not found: ${productIdStr}`);
+            throw new Error(`পণ্যটি পাওয়া যায়নি / Product not found: ${productIdStr}`);
         }
         // Calculate item total using the price passed in (selling price / cost price based on order type)
         const itemTotal = item.price * item.quantity;
@@ -89,13 +103,16 @@ const validateAndCalculateDiscount = async (params) => {
                 }
             }
             else {
-                const productCategories = (dbProduct.category || []).map((c) => (c._id || c).toString());
                 const productSubCategories = (dbProduct.subCategory || []).map((s) => (s._id || s).toString());
-                if (couponCatId && productCategories.includes(couponCatId)) {
-                    matches = true;
+                if (couponSubCatId) {
+                    if (productSubCategories.includes(couponSubCatId)) {
+                        matches = true;
+                    }
                 }
-                else if (couponSubCatId && productSubCategories.includes(couponSubCatId)) {
-                    matches = true;
+                else if (couponCatId && couponCategorySubCatIds) {
+                    if (productSubCategories.some((sc) => couponCategorySubCatIds.has(sc))) {
+                        matches = true;
+                    }
                 }
             }
             if (matches) {

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -107,10 +140,11 @@ const applyDropshippingCoupon = async (req, res) => {
                 message: "কার্টে কোনো বৈধ পণ্য নেই / No valid products in cart"
             });
         }
-        // Fetch real prices from DB to prevent client-side price tampering
+        // Fetch real prices from DB to prevent client-side price tampering.
+        // For DS orders, the dropshipper's cost is product.dropshippingPrice (fallback to price).
         const productIds = validItems.map((i) => new mongoose_1.default.Types.ObjectId(i.productId));
-        const dbProducts = await product_model_1.default.find({ _id: { $in: productIds } }).select("price").lean();
-        const priceMap = new Map(dbProducts.map((p) => [p._id.toString(), Number(p.price) || 0]));
+        const dbProducts = await product_model_1.default.find({ _id: { $in: productIds } }).select("price dropshippingPrice").lean();
+        const priceMap = new Map(dbProducts.map((p) => [p._id.toString(), Number(p.dropshippingPrice ?? p.price) || 0]));
         const safeCartItems = validItems.map((item) => ({
             productId: item.productId,
             quantity: Number(item.quantity) || 1,
@@ -155,10 +189,30 @@ const getProductCoupons = async (req, res) => {
         const now = new Date();
         const categoryIds = (product.category || []).map((c) => c._id || c);
         const subCategoryIds = (product.subCategory || []).map((s) => s._id || s);
+        const productSubCatSet = new Set(subCategoryIds.map((s) => s.toString()));
+        // Build a map of categoryId → subcategory IDs (subcategories that belong
+        // to each of the product's categories). A category-level coupon only
+        // matches if the product has a subcategory whose parent category is the
+        // coupon's category.
+        const subCategoriesByCategory = new Map();
+        if (categoryIds.length > 0) {
+            const SubCategoryModel = (await Promise.resolve().then(() => __importStar(require("../subcategory/subcategory.model")))).default;
+            const subDocs = await SubCategoryModel.find({ category: { $in: categoryIds } })
+                .select("_id category")
+                .lean();
+            for (const sub of subDocs) {
+                const catId = (sub.category?._id || sub.category).toString();
+                if (!subCategoriesByCategory.has(catId)) {
+                    subCategoriesByCategory.set(catId, []);
+                }
+                subCategoriesByCategory.get(catId).push(sub._id.toString());
+            }
+        }
         // Find active, non-expired coupons that are:
         // 1. Applicable to this specific product, OR
-        // 2. Applicable to its category, OR
-        // 3. Applicable to its subcategory, OR
+        // 2. Applicable to a subcategory the product has, OR
+        // 3. Applicable to a category the product belongs to (category-only
+        //    coupon — filtered further below to require a subcategory match), OR
         // 4. Global (no specific applicability filter)
         // Uses $in: [null, undefined] to make it less strict and handle missing fields (Bug 16)
         const coupons = await coupon_model_1.default.find({
@@ -169,11 +223,12 @@ const getProductCoupons = async (req, res) => {
                 { applicableProduct: productId },
                 {
                     applicableProduct: { $in: [null, undefined] },
-                    applicableCategory: { $in: categoryIds }
+                    applicableSubCategory: { $in: subCategoryIds }
                 },
                 {
                     applicableProduct: { $in: [null, undefined] },
-                    applicableSubCategory: { $in: subCategoryIds }
+                    applicableCategory: { $in: categoryIds },
+                    applicableSubCategory: { $in: [null, undefined] }
                 },
                 {
                     applicableProduct: { $in: [null, undefined] },
@@ -185,7 +240,18 @@ const getProductCoupons = async (req, res) => {
             .select("code description discountType discountAmount maxDiscountAmount minOrderAmount validUntil usageLimit usedCount isActive")
             .sort({ createdAt: -1 })
             .lean();
-        res.status(200).json({ success: true, data: coupons });
+        // Filter category-only coupons: only keep if product has a subcategory
+        // whose parent category is the coupon's category.
+        const validCoupons = coupons.filter((c) => {
+            if (!c.applicableCategory)
+                return true;
+            if (c.applicableSubCategory)
+                return true;
+            const couponCatId = c.applicableCategory.toString();
+            const categorySubCats = subCategoriesByCategory.get(couponCatId) || [];
+            return categorySubCats.some(subId => productSubCatSet.has(subId));
+        });
+        res.status(200).json({ success: true, data: validCoupons });
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });

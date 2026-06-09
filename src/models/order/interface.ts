@@ -78,6 +78,13 @@ export interface IOrder {
   profitGiven?: boolean;
   profitAmount?: number;
 
+  // Set when admin marks a COD dropshipping order as "return"
+  // (customer rejected / did not pay delivery charge).
+  // Used to deduct deliveryCharge from the dropshipper's balance.
+  deliveryChargeDeducted?: boolean;
+  deliveryChargeDeductedAt?: Date | null;
+  deliveryChargeDeductedAmount?: number;
+
   createdAt: Date;
   updatedAt: Date;
 }

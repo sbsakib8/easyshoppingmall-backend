@@ -104,7 +104,7 @@ const orderSchema = new Schema<IOrder>(
     // Order Status
     order_status: {
       type: String,
-      enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed"],
+      enum: ["pending", "processing", "shipped", "delivered", "cancelled", "completed", "return"],
       default: "pending",
     },
     referralBonusGiven: {
@@ -136,6 +136,22 @@ const orderSchema = new Schema<IOrder>(
       type: Number,
       default: 0,
     },
+
+    // COD return deduction: when admin marks a COD dropshipping order as
+    // "return" (customer rejected / did not pay delivery), the delivery charge
+    // is deducted from the dropshipper's balance (may go negative).
+    deliveryChargeDeducted: {
+      type: Boolean,
+      default: false,
+    },
+    deliveryChargeDeductedAt: {
+      type: Date,
+      default: null,
+    },
+    deliveryChargeDeductedAmount: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
@@ -149,10 +165,9 @@ orderSchema.pre<IOrder & Document>("save", async function (next) {
 
   this.products.forEach((p) => {
     const quantity = Number(p.quantity) || 0;
-    const cost = Number(p.price) || 0;
     const selling = Number(p.sellingPrice && p.sellingPrice > 0 ? p.sellingPrice : p.price) || 0;
     
-    p.totalPrice = quantity * selling; // This is what the CUSTOMER pays
+    p.totalPrice = quantity * selling; // sellingPrice for DS orders, retail price for normal orders
     subTotal += p.totalPrice;
   });
 
