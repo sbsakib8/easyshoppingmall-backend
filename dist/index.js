@@ -49,7 +49,7 @@ app.use((0, cors_1.default)({
         "http://localhost:3000",
         "https://easyshoppingmallbd.com",
         "https://www.easyshoppingmallbd.com",
-        "https://easyshoppingmallbd.vercel.app"
+        "https://easyshoppingmallbd.vercel.app",
     ],
     credentials: true,
 }));
@@ -65,6 +65,7 @@ app.use(async (req, res, next) => {
 });
 //  route
 const analytics_routes_1 = __importDefault(require("./models/analytics/analytics.routes"));
+const teamSystem_routes_1 = __importDefault(require("./models/teamSystem/teamSystem.routes"));
 app.use("/api/users", user_routes_1.default);
 app.use("/api/products", product_routes_1.default);
 app.use("/api/address", address_routes_1.default);
@@ -83,7 +84,7 @@ app.use("/api/cart", cart_routes_1.default);
 app.use("/api/orders", order_routes_1.default);
 app.use("/api/wishlist", wishlist_routes_1.default);
 app.use("/api/payment", payment_route_1.default);
-app.use('/api/review', review_routes_1.default);
+app.use("/api/review", review_routes_1.default);
 app.use("/api/coupon", coupon_routes_1.default);
 app.use("/api/analytics", analytics_routes_1.default);
 app.use("/api/payment-request", paymentRequest_routes_1.default);
@@ -92,6 +93,7 @@ app.use("/api/video-access", videoAccess_routes_1.default);
 app.use("/api/video-content", videoContent_routes_1.default);
 app.use("/api/video-module", videoModule_routes_1.default);
 app.use("/api/video-request", videoRequest_routes_1.default);
+app.use("/api/team-system", teamSystem_routes_1.default);
 app.use("/api/admin", admin_route_1.default);
 app.get("/", (req, res) => {
     res.send("APi  is running...");

@@ -257,7 +257,7 @@ const getProductByCategory = async (req, res) => {
                 finalId = category._id.toString();
         }
         const data = await product_model_1.default.find({ category: { $in: [finalId] }, publish: true })
-            .select("productName description brand price productStock productRank discount ratings images")
+            .select("productName description brand price dropshippingPrice productStock productRank discount ratings images")
             .limit(15)
             .populate("category subCategory", "name slug")
             .lean();
@@ -294,7 +294,7 @@ const getProductByCategoryAndSubCategory = async (req, res) => {
         const skip = (page - 1) * limit;
         const [data, totalCount] = await Promise.all([
             product_model_1.default.find(query)
-                .select("productName description brand price productStock productRank discount ratings images")
+                .select("productName description brand price dropshippingPrice productStock productRank discount ratings images")
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)

@@ -119,7 +119,7 @@ const paymentSuccess = async (req, res) => {
         // Calculate amount_paid and amount_due based on payment type
         if (order.payment_type === "delivery") {
             order.amount_paid = order.deliveryCharge;
-            order.amount_due = order.subTotalAmt;
+            order.amount_due = order.totalAmt - order.deliveryCharge;
         }
         else {
             order.amount_paid = order.totalAmt;
@@ -201,7 +201,7 @@ const paymentIpn = async (req, res) => {
             order.payment_details = ipnData;
             if (order.payment_type === "delivery") {
                 order.amount_paid = order.deliveryCharge;
-                order.amount_due = order.subTotalAmt;
+                order.amount_due = order.totalAmt - order.deliveryCharge;
             }
             else {
                 order.amount_paid = order.totalAmt;
