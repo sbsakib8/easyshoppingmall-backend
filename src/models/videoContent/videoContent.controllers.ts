@@ -4,6 +4,7 @@ import VideoContent from "./videoContent.model";
 import { AuthRequest } from "../../middlewares/isAuth";
 import VideoAccess from "../videoAccess/videoAccess.model";
 import VideoModuleModel from "../videoModule/videoModule.model";
+import VideoCourseModel from "../videoCourse/videoCourse.model";
 
 const STANDALONE_VIDEO_TYPES = ["standard", "demo"] as const;
 
@@ -30,7 +31,14 @@ const resolveModuleRequirement = async (
         return { error: "Module not found" };
     }
 
-    const isFreeModule = (module.price ?? 0) === 0;
+    let isFreeModule = (module.price ?? 0) === 0;
+    if (isFreeModule && module.courseId) {
+        const course = await VideoCourseModel.findById(module.courseId);
+        if (course && (course.price ?? 0) > 0) {
+            isFreeModule = false;
+        }
+    }
+
     if (videoType === "free" && !isFreeModule) {
         return { error: "Free videos must be attached to a free module (price = 0)" };
     }
