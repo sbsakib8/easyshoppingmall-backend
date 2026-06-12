@@ -35,6 +35,7 @@ import videoContentRouter from './models/videoContent/videoContent.routes';
 import videoModuleRouter from './models/videoModule/videoModule.routes';
 import videoCourseRouter from './models/videoCourse/videoCourse.routes';
 import videoRequestRouter from './models/videoRequest/videoRequest.routes';
+import teamSystemRouter from './models/teamSystem/teamSystem.routes';
 
 // middleware
 const app: Application = express();
@@ -103,6 +104,7 @@ app.use("/api/video-module", videoModuleRouter);
 app.use("/api/video-request", videoRequestRouter);
 
 app.use("/api/admin", adminRoutes)
+app.use("/api/team-system", teamSystemRouter)
 
 
 app.get("/", (req: Request, res: Response) => {
