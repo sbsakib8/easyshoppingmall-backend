@@ -6,6 +6,7 @@ import { WishlistModel } from "../wishlist/wishlist.model";
 import productModel from "./product.model";
 import CategoryModel from "../category/category.model";
 import SubCategoryModel from "../subcategory/subcategory.model";
+import { memoryCache } from "../../utils/cache";
 
 interface PaginationRequest extends Request {
   body: {
@@ -163,6 +164,7 @@ export const createProductController = async (
       error: false,
       success: true,
     });
+    memoryCache.clear();
   } catch (error: any) {
     // Duplicate SKU handle
     if (error.code === 11000) {
@@ -182,16 +184,16 @@ export const createProductController = async (
   }
 };
 
-// Helper to build product query
-const buildProductQuery = (body: any) => {
-  const { search, categoryId, subCategoryId, brand, gender, minPrice, maxPrice, rating, publish } = body;
+// Helper to build product query (works with both req.query and req.body)
+const buildProductQuery = (params: any) => {
+  const { search, categoryId, subCategoryId, brand, gender, minPrice, maxPrice, rating, publish } = params;
   let query: any = {};
 
   // For public endpoints, only show published products
   if (publish === undefined) {
     query.publish = true;
   } else {
-    query.publish = publish;
+    query.publish = publish === 'true' || publish === true;
   }
 
   if (search) {
@@ -265,6 +267,15 @@ export const getProductController = async (
     page = Number(page) || 1;
     limit = Number(limit) || 10;
 
+    // Build cache key from body params
+    const cacheKey = `products:${JSON.stringify(req.body)}`;
+    const cached = memoryCache.get(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
+      res.json(cached);
+      return;
+    }
+
     // Resolve category slug to ID if needed
     if (categoryId && categoryId !== "all" && !isObjectId(categoryId)) {
       const category = await CategoryModel.findOne({ $or: [{ slug: categoryId }, { name: categoryId }] });
@@ -304,7 +315,7 @@ export const getProductController = async (
       isQueryEmpty ? productModel.estimatedDocumentCount() : productModel.countDocuments(query),
     ]);
 
-    res.json({
+    const response = {
       message: "Product data retrieved successfully",
       error: false,
       success: true,
@@ -313,7 +324,12 @@ export const getProductController = async (
       totalPages: Math.ceil(totalCount / limit),
       page,
       limit,
-    });
+    };
+
+    // Cache for 60 seconds
+    memoryCache.set(cacheKey, response, 60);
+    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
+    res.json(response);
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Server Error",
@@ -335,9 +351,17 @@ export const getProductByCategory = async (
       return;
     }
 
+    const cacheKey = `products:category:${id}`;
+    const cached = memoryCache.get(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
+      res.json(cached);
+      return;
+    }
+
     let finalId = id;
-    if (!isObjectId(id)) {
-      const category = await CategoryModel.findOne({ $or: [{ slug: id }, { name: id }] });
+    if (!isObjectId(finalId)) {
+      const category = await CategoryModel.findOne({ $or: [{ slug: finalId }, { name: finalId }] });
       if (category) finalId = category._id.toString();
     }
 
@@ -347,7 +371,10 @@ export const getProductByCategory = async (
       .populate("category subCategory", "name slug")
       .lean();
 
-    res.json({ message: "Category product list", data, error: false, success: true });
+    const response = { message: "Category product list", data, error: false, success: true };
+    memoryCache.set(cacheKey, response, 120);
+    res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
+    res.json(response);
   } catch (error: any) {
     res.status(500).json({ message: error.message || error, error: true, success: false });
   }
@@ -366,6 +393,14 @@ export const getProductByCategoryAndSubCategory = async (
     }
     page = Number(page) || 1;
     limit = Number(limit) || 10;
+
+    const cacheKey = `products:cat:${categoryId}:sub:${subCategoryId}:p${page}:l${limit}`;
+    const cached = memoryCache.get(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
+      res.json(cached);
+      return;
+    }
 
     let finalCatId = categoryId;
     if (!isObjectId(categoryId)) {
@@ -393,7 +428,7 @@ export const getProductByCategoryAndSubCategory = async (
       productModel.countDocuments(query),
     ]);
 
-    res.json({
+    const response = {
       message: "Product list retrieved successfully",
       data,
       totalCount,
@@ -402,7 +437,11 @@ export const getProductByCategoryAndSubCategory = async (
       limit,
       success: true,
       error: false,
-    });
+    };
+
+    memoryCache.set(cacheKey, response, 120);
+    res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
+    res.json(response);
   } catch (error: any) {
     res.status(500).json({ message: error.message || error, error: true, success: false });
   }
@@ -411,10 +450,23 @@ export const getProductByCategoryAndSubCategory = async (
 export const getProductDetails = async (req: Request, res: Response) => {
   try {
     const { productId } = req.params;
+
+    const cacheKey = `product:${productId}`;
+    const cached = memoryCache.get(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+      res.json(cached);
+      return;
+    }
+
     const product = await productModel.findOne({ _id: productId })
       .populate("category subCategory", "name slug")
       .lean();
-    res.json({ message: "Product details", data: product, error: false, success: true });
+
+    const response = { message: "Product details", data: product, error: false, success: true };
+    memoryCache.set(cacheKey, response, 300);
+    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+    res.json(response);
   } catch (error: any) {
     res.status(500).json({ message: error.message || error, error: true, success: false });
   }
@@ -456,6 +508,7 @@ export const updateProductDetails = async (
 
     const updateProduct = await productModel.findByIdAndUpdate(_id, { $set: updateData }, { new: true });
     res.json({ message: "Updated successfully", data: updateProduct, error: false, success: true });
+    memoryCache.clear();
   } catch (error: any) {
     res.status(500).json({ message: error.message || error, error: true, success: false });
   }
@@ -478,6 +531,7 @@ export const deleteProductDetails = async (
       productModel.deleteOne({ _id })
     ]);
     res.json({ message: "Delete successfully", error: false, success: true });
+    memoryCache.clear();
   } catch (error: any) {
     res.status(500).json({ message: error.message || error, error: true, success: false });
   }
