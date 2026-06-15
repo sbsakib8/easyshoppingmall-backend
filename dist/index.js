@@ -3,6 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const node_dns_1 = __importDefault(require("node:dns")); // or const dns = require('node:dns');
+node_dns_1.default.setServers(["1.1.1.1", "8.8.8.8"]); // Cloudflare + Google
 const compression_1 = __importDefault(require("compression"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const cors_1 = __importDefault(require("cors"));
@@ -36,7 +38,6 @@ const videoContent_routes_1 = __importDefault(require("./models/videoContent/vid
 const videoModule_routes_1 = __importDefault(require("./models/videoModule/videoModule.routes"));
 const videoCourse_routes_1 = __importDefault(require("./models/videoCourse/videoCourse.routes"));
 const videoRequest_routes_1 = __importDefault(require("./models/videoRequest/videoRequest.routes"));
-const teamSystem_routes_1 = __importDefault(require("./models/teamSystem/teamSystem.routes"));
 // middleware
 const app = (0, express_1.default)();
 app.set("trust proxy", 1);
@@ -96,7 +97,6 @@ app.use("/api/video-module", videoModule_routes_1.default);
 app.use("/api/video-request", videoRequest_routes_1.default);
 app.use("/api/team-system", teamSystem_routes_1.default);
 app.use("/api/admin", admin_route_1.default);
-app.use("/api/team-system", teamSystem_routes_1.default);
 app.get("/", (req, res) => {
     res.send("APi  is running...");
 });
