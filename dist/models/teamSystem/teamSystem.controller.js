@@ -14,18 +14,15 @@ const getTeamSystem = async (req, res, _next) => {
                 .status(400)
                 .send({ success: false, message: "User ID not found!" });
         }
-        // Get current user basic info
         const currentUser = await user_model_1.default
             .findById(userId)
             .select("name email referralCode referralCount balance role deliveredItemsCount");
-        // Pipeline to get direct referrals with enriched data
         const pipeline = [
             {
                 $match: {
                     referredBy: new mongoose_1.default.Types.ObjectId(currentUser?._id),
                 },
             },
-            // Lookup orders for each referred user
             {
                 $lookup: {
                     from: "orders",
@@ -34,7 +31,6 @@ const getTeamSystem = async (req, res, _next) => {
                     as: "orders",
                 },
             },
-            // Project relevant fields
             {
                 $project: {
                     _id: 1,
@@ -71,7 +67,6 @@ const getTeamSystem = async (req, res, _next) => {
             { $sort: { createdAt: -1 } },
         ];
         const referredUsers = await user_model_1.default.aggregate(pipeline);
-        // Calculate statistics
         let totalTeamOrders = 0;
         let totalRevenue = 0;
         let last7DaysOrders = 0;
@@ -81,7 +76,6 @@ const getTeamSystem = async (req, res, _next) => {
             const last7DaysUserOrders = userOrders.filter((order) => new Date(order.createdAt) >= sevenDaysAgo);
             totalTeamOrders += userOrders.length;
             last7DaysOrders += last7DaysUserOrders.length;
-            // Calculate total revenue from this member's orders
             const userRevenue = userOrders.reduce((sum, order) => {
                 return sum + (order.totalAmt || 0);
             }, 0);
@@ -96,7 +90,6 @@ const getTeamSystem = async (req, res, _next) => {
                 revenue: userRevenue,
             };
         });
-        // Get total downline count (direct + their referrals)
         const totalDownline = await user_model_1.default.countDocuments({
             $or: [
                 { referredBy: userId },
