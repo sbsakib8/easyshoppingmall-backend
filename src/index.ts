@@ -1,3 +1,6 @@
+import dns from "node:dns"; // or const dns = require('node:dns');
+dns.setServers(["1.1.1.1", "8.8.8.8"]); // Cloudflare + Google
+
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
@@ -101,7 +104,7 @@ app.use("/api/video-content", videoContentRouter);
 app.use("/api/video-module", videoModuleRouter);
 app.use("/api/video-request", videoRequestRouter);
 
-app.use("/api/team-system", teamSystemRoutes)
+app.use("/api/team-system", teamSystemRoutes);
 
 app.use("/api/admin", adminRoutes);
 
