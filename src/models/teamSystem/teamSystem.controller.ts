@@ -278,6 +278,7 @@ export const getTeamSystem = async (
       return {
         _id: user._id,
         name: user.name,
+        email: user.email,
         joinedAt: user.createdAt,
         totalOrder: user.orders.length,
         totalCourse: user.videoAccess.length,
