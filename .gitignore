@@ -11,6 +11,10 @@
 
 # testing
 /coverage
+/__tests__
+src/__tests__
+jest.config.ts
+/test-referral-flow.sh
 
 # next.js
 /.next/
