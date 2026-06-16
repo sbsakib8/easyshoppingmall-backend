@@ -183,9 +183,8 @@ orderSchema.pre("save", async function (next) {
     let subTotal = 0;
     this.products.forEach((p) => {
         const quantity = Number(p.quantity) || 0;
-        const cost = Number(p.price) || 0;
         const selling = Number(p.sellingPrice && p.sellingPrice > 0 ? p.sellingPrice : p.price) || 0;
-        p.totalPrice = quantity * selling; // This is what the CUSTOMER pays
+        p.totalPrice = quantity * selling; // sellingPrice for DS orders, retail price for normal orders
         subTotal += p.totalPrice;
     });
     this.subTotalAmt = subTotal;
