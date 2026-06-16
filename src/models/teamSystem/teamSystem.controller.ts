@@ -2,7 +2,6 @@ import { NextFunction, Request, Response } from "express";
 import mongoose, { PipelineStage } from "mongoose";
 import { IOrder } from "../order/interface";
 import userModel, { IUser } from "../user/user.model";
-import { IVideoAccess } from "../videoAccess/videoAccess.model";
 import { IVideoCourse } from "../videoCourse/videoCourse.model";
 
 export const getTeamSystem = async (
@@ -216,6 +215,8 @@ export const getTeamSystem = async (
 
     const allReferredUsers = await userModel.aggregate(summaryPipeline);
 
+    // console.log(allReferredUsers);
+
     let totalOrderReferralBonus = 0;
     let totalCourseReferralBonus = 0;
     let totalOrders = 0;
@@ -223,7 +224,7 @@ export const getTeamSystem = async (
 
     allReferredUsers.forEach((user) => {
       // Calculate order bonuses
-      const orderReferralBonus = user.orders.reduce(
+      const orderReferralBonus: number = user.orders.reduce(
         (sum: number, order: IOrder) => {
           return sum + (order.referralBonusAmount || 0);
         },
@@ -231,17 +232,9 @@ export const getTeamSystem = async (
       );
 
       // Calculate course bonuses
-      const courseReferralBonus = user.videoAccess.reduce(
-        (sum: number, video: IVideoAccess) => {
-          const courseDetail = user.courseDetails?.find(
-            (course: IVideoCourse) => course._id === video.courseId,
-          );
-
-          if (courseDetail && courseDetail.referralBonus) {
-            return sum + (courseDetail.referralBonus || 0);
-          }
-
-          return sum;
+      const courseReferralBonus: number = user.courseDetails.reduce(
+        (sum: number, course: IVideoCourse) => {
+          return sum + (course.referralBonus || 0);
         },
         0,
       );
@@ -261,16 +254,9 @@ export const getTeamSystem = async (
         0,
       );
 
-      const courseReferralBonus = user.videoAccess.reduce(
-        (sum: number, video: IVideoAccess) => {
-          const courseDetail = user.courseDetails?.find(
-            (course: IVideoCourse) => course._id === video.courseId,
-          );
-
-          if (courseDetail && courseDetail.referralBonus) {
-            return sum + (courseDetail.referralBonus || 0);
-          }
-          return sum;
+      const courseReferralBonus = user.courseDetails.reduce(
+        (sum: number, video: IVideoCourse) => {
+          return sum + (video.referralBonus || 0);
         },
         0,
       );
