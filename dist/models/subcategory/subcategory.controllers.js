@@ -8,6 +8,7 @@ const product_model_1 = __importDefault(require("../product/product.model"));
 const subcategory_model_1 = __importDefault(require("./subcategory.model"));
 const category_model_1 = __importDefault(require("../category/category.model"));
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
+const cache_1 = require("../../utils/cache");
 // ✅ Create SubCategory
 const createSubCategory = async (req, res) => {
     try {
@@ -47,6 +48,7 @@ const createSubCategory = async (req, res) => {
             message: "SubCategory created successfully",
             data: subCategory,
         });
+        cache_1.memoryCache.clear();
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -57,6 +59,13 @@ exports.createSubCategory = createSubCategory;
 const getSubCategories = async (req, res) => {
     try {
         const { filterType } = req.query;
+        const cacheKey = `subcategories:${filterType || 'all'}`;
+        const cached = cache_1.memoryCache.get(cacheKey);
+        if (cached) {
+            res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+            res.json(cached);
+            return;
+        }
         const filter = { isActive: true };
         if (filterType === "new-products" || filterType === "boost-products") {
             const productFilter = { publish: true };
@@ -78,7 +87,10 @@ const getSubCategories = async (req, res) => {
             .populate("category", "name slug")
             .sort({ createdAt: -1 })
             .lean();
-        res.status(200).json({ success: true, data: subCategories });
+        const response = { success: true, data: subCategories };
+        cache_1.memoryCache.set(cacheKey, response, 300);
+        res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+        res.status(200).json(response);
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -129,6 +141,7 @@ const updateSubCategory = async (req, res) => {
             message: "SubCategory updated successfully",
             data: updatedSubCategory,
         });
+        cache_1.memoryCache.clear();
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -146,6 +159,7 @@ const deleteSubCategory = async (req, res) => {
             return;
         }
         res.status(200).json({ success: true, message: "SubCategory deleted successfully" });
+        cache_1.memoryCache.clear();
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });

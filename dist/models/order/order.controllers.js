@@ -346,19 +346,27 @@ const updateOrderStatus = async (req, res) => {
                                     bonusAmount = Math.floor(order.totalAmt / 500) * 10;
                                 }
                                 else {
-                                    referrer.deliveredItemsCount = (referrer.deliveredItemsCount || 0) + orderItemCount;
-                                    if (referrer.deliveredItemsCount > 10) {
+                                    const updatedReferrer = await user_model_1.default.findByIdAndUpdate(user.referredBy, { $inc: { deliveredItemsCount: orderItemCount } }, { new: true });
+                                    if ((updatedReferrer?.deliveredItemsCount || 0) > 10) {
                                         bonusAmount = 10;
                                     }
                                 }
                             }
                         }
                         if (bonusAmount > 0) {
-                            referrer.balance = (referrer.balance || 0) + bonusAmount;
+                            await user_model_1.default.findByIdAndUpdate(user.referredBy, {
+                                $inc: { balance: bonusAmount }
+                            });
                             order.referralBonusGiven = true;
                             order.referralBonusAmount = bonusAmount;
-                            await referrer.save();
+                            console.log(`[Referral Bonus] Credited ৳${bonusAmount} to referrer ${user.referredBy} for order ${id}`);
                         }
+                        else {
+                            console.log(`[Referral Bonus] Skipped for order ${id}: bonusAmount=0`);
+                        }
+                    }
+                    else {
+                        console.log(`[Referral Bonus] Skipped for order ${id}: referrer not found or not DROPSHIPPING`);
                     }
                 }
                 // 2. Profit Logic for DROPSHIPPING (Order Owner)
