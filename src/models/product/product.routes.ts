@@ -2,7 +2,17 @@ import { Router } from 'express'
 import { isAdmin } from '../../middlewares/isAdmin'
 import { isAuth } from '../../middlewares/isAuth'
 import { upload } from '../../middlewares/multer'
-import { createProductController, deleteProductDetails, getProductByCategory, getProductByCategoryAndSubCategory, getProductController, getProductDetails, searchProduct, updateProductDetails } from './product.controllers'
+import {
+  createProductController,
+  deleteProductDetails,
+  getProductByCategory,
+  getProductByCategoryAndSubCategory,
+  getProductController,
+  getProductDetails,
+  imageSearchProduct,
+  searchProduct,
+  updateProductDetails,
+} from './product.controllers'
 
 const productRouter = Router()
 
@@ -15,13 +25,16 @@ productRouter.post("/get-product-by-category", getProductByCategory)
 productRouter.post('/get-pruduct-by-category-and-subcategory', getProductByCategoryAndSubCategory)
 productRouter.post('/get-product-details/:productId', getProductDetails)
 
-//update product
+// update product
 productRouter.put('/update-product-details', isAuth, isAdmin, updateProductDetails)
 
-//delete product
+// delete product
 productRouter.delete('/delete-product', isAuth, isAdmin, deleteProductDetails)
 
-//search product 
+// text / sky-title search
 productRouter.post('/search-product', searchProduct)
+
+// image search (uses sharp locally – no Cloudinary)
+productRouter.post('/image-search', upload.single('searchImage'), imageSearchProduct)
 
 export default productRouter

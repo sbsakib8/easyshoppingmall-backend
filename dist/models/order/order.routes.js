@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const isAdmin_1 = require("../../middlewares/isAdmin");
 const isAuth_1 = require("../../middlewares/isAuth");
+const decryptBody_1 = require("../../middlewares/decryptBody");
 const order_controllers_1 = require("../order/order.controllers");
 const router = express_1.default.Router();
 /**
@@ -19,7 +20,7 @@ router.post("/create", isAuth_1.isAuth, order_controllers_1.createOrder);
  * @desc    Create a new manual order from user's cart
  * @access  Private (User)
  */
-router.post("/manual", isAuth_1.isAuth, order_controllers_1.createManualOrder);
+router.post("/manual", isAuth_1.isAuth, decryptBody_1.decryptBody, order_controllers_1.createManualOrder);
 /**
  * @route   GET /api/orders/my-orders
  * @desc    Get all orders of logged-in user
@@ -27,7 +28,7 @@ router.post("/manual", isAuth_1.isAuth, order_controllers_1.createManualOrder);
  */
 router.get("/my-orders", isAuth_1.isAuth, order_controllers_1.getMyOrders);
 router.get("/:id", isAuth_1.isAuth, order_controllers_1.getOrderDetails);
-router.post("/manual-payment", isAuth_1.isAuth, order_controllers_1.ManualPayment);
+router.post("/manual-payment", isAuth_1.isAuth, decryptBody_1.decryptBody, order_controllers_1.ManualPayment);
 router.post("/:id/pay-due", isAuth_1.isAuth, order_controllers_1.payDueAmount);
 /**
  * @route   GET /api/orders/admin/all

@@ -1,4 +1,6 @@
+import mongoose from "mongoose";
 import { Request, Response } from "express";
+import sharp from "sharp";
 import uploadClouinary from "../../utils/cloudinary";
 import { CartModel } from "../cart/cart.model";
 import { Review } from "../review/review.model";
@@ -13,6 +15,9 @@ interface PaginationRequest extends Request {
     page?: number;
     limit?: number;
     search?: string;
+    skyTitle?: string;
+    q?: string;
+    keyword?: string;
     id?: string;
     categoryId?: string;
     subCategoryId?: string;
@@ -186,7 +191,8 @@ export const createProductController = async (
 
 // Helper to build product query (works with both req.query and req.body)
 const buildProductQuery = (params: any) => {
-  const { search, categoryId, subCategoryId, brand, gender, minPrice, maxPrice, rating, publish } = params;
+  const { search: rawSearch, skyTitle, q, keyword, query: searchQuery, categoryId, subCategoryId, brand, gender, minPrice, maxPrice, rating, publish } = params;
+  const search = rawSearch || skyTitle || q || keyword || searchQuery;
   let query: any = {};
 
   // For public endpoints, only show published products
@@ -197,8 +203,15 @@ const buildProductQuery = (params: any) => {
   }
 
   if (search) {
-    // Use MongoDB Text Index for much faster full-text search
-    query.$text = { $search: search };
+    const escapeRegex = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#]/g, '\\$&');
+    const regex = new RegExp(escapeRegex(search), 'i');
+    query.$or = [
+      { productName: regex },
+      { description: regex },
+      { brand: regex },
+      { tags: regex },
+      { sku: regex },
+    ];
   }
 
   if (categoryId && categoryId !== "all") {
@@ -267,13 +280,20 @@ export const getProductController = async (
     page = Number(page) || 1;
     limit = Number(limit) || 10;
 
+    const search = req.body.search || req.body.skyTitle || req.body.q || req.body.keyword;
+    const isSearch = !!search;
+
     // Build cache key from body params
     const cacheKey = `products:${JSON.stringify(req.body)}`;
-    const cached = memoryCache.get(cacheKey);
-    if (cached) {
-      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
-      res.json(cached);
-      return;
+    const skipCache = isSearch;
+    
+    if (!skipCache) {
+      const cached = memoryCache.get(cacheKey);
+      if (cached) {
+        res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
+        res.json(cached);
+        return;
+      }
     }
 
     // Resolve category slug to ID if needed
@@ -296,17 +316,90 @@ export const getProductController = async (
       }
     }
 
-    const query = buildProductQuery(req.body);
     const sort = getSortOption(sortBy);
     const skip = (page - 1) * limit;
+    const selectFields = "productName description brand price dropshippingPrice productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory color tags";
 
-    // Use estimatedDocumentCount for the root "/" or "/shop" page with no filters
-    // to avoid a full collection scan which can take >300ms on large datasets.
+    if (isSearch) {
+      // Phase 1: Find direct search matches
+      const searchQuery = buildProductQuery(req.body);
+      const directMatches = await productModel
+        .find(searchQuery)
+        .select(selectFields)
+        .lean();
+
+      const directIds = new Set(directMatches.map((p: any) => String(p._id)));
+
+      // Collect subcategory IDs from matched products
+      const relatedSubCatIds: any[] = [];
+      for (const p of directMatches) {
+        if (Array.isArray(p.subCategory)) {
+          for (const sc of p.subCategory) {
+            const scId = typeof sc === 'object' ? String(sc._id || sc) : String(sc);
+            if (!relatedSubCatIds.some((id) => String(id) === scId)) {
+              relatedSubCatIds.push(scId);
+            }
+          }
+        }
+      }
+
+      let relatedProducts: any[] = [];
+      if (relatedSubCatIds.length > 0) {
+        // Phase 2: Find related products from same subcategories (excluding direct matches)
+        const relatedQuery: any = {
+          publish: true,
+          subCategory: { $in: relatedSubCatIds.map((id) => new mongoose.Types.ObjectId(id)) },
+          _id: { $nin: [...directIds].map((id) => new mongoose.Types.ObjectId(id)) },
+        };
+
+        // Apply same category/gender/price filters if present
+        if (searchQuery.category) relatedQuery.category = searchQuery.category;
+        if (searchQuery.gender) relatedQuery.gender = searchQuery.gender;
+
+        relatedProducts = await productModel
+          .find(relatedQuery)
+          .select(selectFields)
+          .sort({ productRank: -1, ratings: -1 })
+          .limit(Math.ceil(limit / 2))
+          .populate("category subCategory", "name slug")
+          .lean();
+      }
+
+      // Populate category/subCategory on direct matches
+      const populatedDirect = await productModel
+        .find({ _id: { $in: [...directIds].map((id) => new mongoose.Types.ObjectId(id)) } })
+        .select(selectFields)
+        .sort(sort as any)
+        .populate("category subCategory", "name slug")
+        .lean();
+
+      // Merge: direct matches first, then related products
+      const data = [...populatedDirect, ...relatedProducts].slice(0, limit);
+      const totalCount = populatedDirect.length + relatedProducts.length;
+
+      const response = {
+        message: "Product data retrieved successfully",
+        error: false,
+        success: true,
+        data,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        page,
+        limit,
+      };
+
+      res.set('Cache-Control', 'no-store');
+      res.json(response);
+      return;
+    }
+
+    // Non-search: normal paginated listing
+    const query = buildProductQuery(req.body);
     const isQueryEmpty = Object.keys(query).length === 1 && query.publish === true;
 
     const [data, totalCount] = await Promise.all([
       productModel.find(query)
-        .select("productName description brand price dropshippingPrice productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory")
+        .select(selectFields)
         .sort(sort as any)
         .skip(skip)
         .limit(limit)
@@ -326,9 +419,10 @@ export const getProductController = async (
       limit,
     };
 
-    // Cache for 60 seconds
-    memoryCache.set(cacheKey, response, 60);
-    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
+    if (!skipCache) {
+      memoryCache.set(cacheKey, response, 60);
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
+    }
     res.json(response);
   } catch (error: any) {
     res.status(500).json({
@@ -537,10 +631,183 @@ export const deleteProductDetails = async (
   }
 };
 
-// Search Product
+// Search Product (text / sky-title search)
 export const searchProduct = async (
   req: PaginationRequest,
   res: Response
 ): Promise<void> => {
+  // Support 'skyTitle' as an alias for 'search'
+  if (req.body.skyTitle && !req.body.search) {
+    req.body.search = req.body.skyTitle;
+  }
   return getProductController(req, res);
+};
+
+// ─── Helpers for image search ────────────────────────────────────────────────
+
+/**
+ * Map an average RGB value to a human-readable color name.
+ * This list mirrors common values stored in the product `color` array.
+ */
+const rgbToColorName = (r: number, g: number, b: number): string => {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lightness = (max + min) / 2;
+  const saturation = max === min ? 0 : (max - min) / (lightness > 127 ? 510 - max - min : max + min);
+
+  if (saturation < 0.12) {
+    if (lightness > 220) return "white";
+    if (lightness < 45)  return "black";
+    return "gray";
+  }
+
+  // Hue
+  const rn = (r - min) / (max - min + 1e-6);
+  const gn = (g - min) / (max - min + 1e-6);
+  const bn = (b - min) / (max - min + 1e-6);
+
+  let hue: number;
+  if (max === r)       hue = 60 * ((gn - bn) % 6);
+  else if (max === g)  hue = 60 * ((bn - rn) + 2);
+  else                 hue = 60 * ((rn - gn) + 4);
+  if (hue < 0) hue += 360;
+
+  if (hue < 15 || hue >= 345)   return "red";
+  if (hue < 40)                  return "orange";
+  if (hue < 70)                  return "yellow";
+  if (hue < 155)                 return "green";
+  if (hue < 200)                 return "cyan";
+  if (hue < 260)                 return "blue";
+  if (hue < 290)                 return "purple";
+  if (hue < 345)                 return "pink";
+  return "red";
+};
+
+/** Return 1-3 candidate color names (primary + secondary) from image stats */
+const extractColorsFromBuffer = async (buffer: Buffer): Promise<string[]> => {
+  const metadata = await sharp(buffer).metadata();
+  const width = metadata.width || 100;
+  const height = metadata.height || 100;
+
+  // Crop the center 50% of the image to avoid white backgrounds dominating the color average
+  const { channels } = await sharp(buffer)
+    .extract({
+      left: Math.floor(width * 0.25),
+      top: Math.floor(height * 0.25),
+      width: Math.floor(width * 0.5),
+      height: Math.floor(height * 0.5),
+    })
+    .resize(50, 50, { fit: "fill" })
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+    .then(({ data, info }) => {
+      const pixelCount = info.width * info.height;
+      const ch = info.channels;
+      let sumR = 0, sumG = 0, sumB = 0;
+      for (let i = 0; i < pixelCount; i++) {
+        sumR += data[i * ch];
+        sumG += data[i * ch + 1];
+        sumB += data[i * ch + 2];
+      }
+      return {
+        channels: {
+          r: sumR / pixelCount,
+          g: sumG / pixelCount,
+          b: sumB / pixelCount,
+        },
+      };
+    });
+
+  const primary = rgbToColorName(channels.r, channels.g, channels.b);
+
+  // Derive a rough secondary by boosting the dominant channel
+  const boosted = {
+    r: Math.min(255, channels.r * 1.3),
+    g: Math.min(255, channels.g * 1.3),
+    b: Math.min(255, channels.b * 1.3),
+  };
+  const secondary = rgbToColorName(boosted.r, boosted.g, boosted.b);
+
+  const colors = [primary];
+  if (secondary !== primary) colors.push(secondary);
+  return colors;
+};
+
+// Image Search Product
+export const imageSearchProduct = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const file = req.file as Express.Multer.File | undefined;
+    if (!file || !file.buffer) {
+      res.status(400).json({
+        message: "Please upload an image file (field: searchImage)",
+        error: true,
+        success: false,
+      });
+      return;
+    }
+
+    // Extract dominant colors from the uploaded image buffer
+    const colorNames = await extractColorsFromBuffer(file.buffer);
+
+    // Build MongoDB query: products whose color, tags, or name matches the detected colors
+    const regexColors = colorNames.map((c) => new RegExp(c, "i"));
+    const colorQuery = {
+      publish: true,
+      $or: [
+        { color: { $in: regexColors } },
+        { tags: { $in: regexColors } },
+        { productName: { $in: regexColors } }
+      ]
+    };
+
+    const [colorMatches, totalByColor] = await Promise.all([
+      productModel
+        .find(colorQuery)
+        .select(
+          "productName description brand price dropshippingPrice productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory color tags"
+        )
+        .sort({ productRank: -1, ratings: -1 })
+        .limit(30)
+        .populate("category subCategory", "name slug")
+        .lean(),
+      productModel.countDocuments(colorQuery),
+    ]);
+
+    // If we got fewer than 5 results, also run a broad fallback (recent products)
+    let results = colorMatches;
+    if (colorMatches.length < 5) {
+      const fallback = await productModel
+        .find({ publish: true })
+        .select(
+          "productName description brand price dropshippingPrice productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory color tags"
+        )
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .populate("category subCategory", "name slug")
+        .lean();
+
+      // Merge without duplicates
+      const seenIds = new Set(colorMatches.map((p: any) => String(p._id)));
+      const extra = fallback.filter((p: any) => !seenIds.has(String(p._id)));
+      results = [...colorMatches, ...extra].slice(0, 30);
+    }
+
+    res.json({
+      message: "Image search results",
+      detectedColors: colorNames,
+      data: results,
+      totalCount: results.length,
+      error: false,
+      success: true,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Image search failed",
+      error: true,
+      success: false,
+    });
+  }
 };

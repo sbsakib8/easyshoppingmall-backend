@@ -2,18 +2,19 @@ import express from "express";
 import { isAdmin } from "../../middlewares/isAdmin";
 import { isAuth } from "../../middlewares/isAuth";
 import { upload } from "../../middlewares/multer";
+import { decryptBody } from "../../middlewares/decryptBody";
 import { deleteUser, getAllUsers, getUserProfile, googleAuth, resetpassword, sendotp, signIn, signOut, signUp, updateUserProfile, userImage, verifyotp } from "./user.controllers";
 
 const router = express.Router();
 
-router.post("/signup", signUp);
-router.post("/signin", signIn);
+router.post("/signup", decryptBody, signUp);
+router.post("/signin", decryptBody, signIn);
 router.get("/signout", signOut);
 
 // reset password
-router.post("/send-otp", sendotp);
-router.post("/verify-otp", verifyotp);
-router.post("/reset-password", resetpassword);
+router.post("/send-otp", decryptBody, sendotp);
+router.post("/verify-otp", decryptBody, verifyotp);
+router.post("/reset-password", decryptBody, resetpassword);
 
 // google auth
 router.post("/google-auth", googleAuth);
