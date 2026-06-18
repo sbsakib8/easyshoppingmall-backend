@@ -9,10 +9,13 @@ const user_model_1 = __importDefault(require("../user/user.model"));
 const getTeamSystem = async (req, res, _next) => {
     try {
         const userId = req?.user?._id;
+<<<<<<< HEAD
+=======
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const search = req.query.search || "";
         const skip = (page - 1) * limit;
+>>>>>>> 972e5dd19b66d3c94ac982b20208f2e664595833
         if (!userId) {
             return res
                 .status(400)
@@ -20,6 +23,15 @@ const getTeamSystem = async (req, res, _next) => {
         }
         const currentUser = await user_model_1.default
             .findById(userId)
+<<<<<<< HEAD
+            .select("name email referralCode referralCount balance role deliveredItemsCount");
+        const pipeline = [
+            {
+                $match: {
+                    referredBy: new mongoose_1.default.Types.ObjectId(currentUser?._id),
+                },
+            },
+=======
             .select("name referralCode referralCount balance");
         if (!currentUser) {
             return res
@@ -28,6 +40,7 @@ const getTeamSystem = async (req, res, _next) => {
         }
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const ordersLookup = [
+>>>>>>> 972e5dd19b66d3c94ac982b20208f2e664595833
             {
                 $lookup: {
                     from: "orders",
@@ -37,6 +50,8 @@ const getTeamSystem = async (req, res, _next) => {
                 },
             },
             {
+<<<<<<< HEAD
+=======
                 $addFields: {
                     orders: {
                         $filter: {
@@ -109,10 +124,21 @@ const getTeamSystem = async (req, res, _next) => {
                 },
             },
             {
+>>>>>>> 972e5dd19b66d3c94ac982b20208f2e664595833
                 $project: {
                     _id: 1,
                     name: 1,
                     email: 1,
+<<<<<<< HEAD
+                    mobile: 1,
+                    referralCode: 1,
+                    referralCount: 1,
+                    balance: 1,
+                    deliveredItemsCount: 1,
+                    customerstatus: 1,
+                    role: 1,
+=======
+>>>>>>> 972e5dd19b66d3c94ac982b20208f2e664595833
                     createdAt: 1,
                     orders: {
                         $map: {
@@ -121,6 +147,19 @@ const getTeamSystem = async (req, res, _next) => {
                             in: {
                                 _id: "$$order._id",
                                 orderId: "$$order.orderId",
+<<<<<<< HEAD
+                                totalAmt: "$$order.totalAmt",
+                                order_status: "$$order.order_status",
+                                payment_status: "$$order.payment_status",
+                                payment_type: "$$order.payment_type",
+                                createdAt: "$$order.createdAt",
+                                products: "$$order.products",
+                                referralBonusGiven: "$$order.referralBonusGiven",
+                                referralBonusAmount: "$$order.referralBonusAmount",
+                            },
+                        },
+                    },
+=======
                                 referralBonusAmount: "$$order.referralBonusAmount",
                                 createdAt: "$$order.createdAt",
                             },
@@ -139,10 +178,57 @@ const getTeamSystem = async (req, res, _next) => {
                         },
                     },
                     courseDetails: 1,
+>>>>>>> 972e5dd19b66d3c94ac982b20208f2e664595833
                 },
             },
             { $sort: { createdAt: -1 } },
         ];
+<<<<<<< HEAD
+        const referredUsers = await user_model_1.default.aggregate(pipeline);
+        let totalTeamOrders = 0;
+        let totalRevenue = 0;
+        let last7DaysOrders = 0;
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const enrichedReferredUsers = referredUsers.map((user) => {
+            const userOrders = user.orders || [];
+            const last7DaysUserOrders = userOrders.filter((order) => new Date(order.createdAt) >= sevenDaysAgo);
+            totalTeamOrders += userOrders.length;
+            last7DaysOrders += last7DaysUserOrders.length;
+            const userRevenue = userOrders.reduce((sum, order) => {
+                return sum + (order.totalAmt || 0);
+            }, 0);
+            totalRevenue += userRevenue;
+            return {
+                ...user,
+                totalOrders: userOrders.length,
+                last7DaysOrders: last7DaysUserOrders.length,
+                last7DaysRevenue: last7DaysUserOrders.reduce((sum, order) => {
+                    return sum + (order.totalAmt || 0);
+                }, 0),
+                revenue: userRevenue,
+            };
+        });
+        const totalDownline = await user_model_1.default.countDocuments({
+            $or: [
+                { referredBy: userId },
+                { referredBy: { $in: referredUsers.map((u) => u._id) } },
+            ],
+        });
+        const responseData = {
+            currentUser: {
+                _id: currentUser?._id,
+                name: currentUser?.name,
+                referralCode: currentUser?.referralCode,
+                referralCount: currentUser?.referralCount,
+                balance: currentUser?.balance,
+                deliveredItemsCount: currentUser?.deliveredItemsCount,
+            },
+            directReferralsCount: referredUsers.length,
+            totalDownlineCount: totalDownline,
+            totalTeamOrders,
+            totalRevenue,
+            last7DaysOrders,
+=======
         const paginatedPipeline = [
             ...basePipeline,
             { $skip: skip },
@@ -272,11 +358,16 @@ const getTeamSystem = async (req, res, _next) => {
                 hasNextPage: page < totalPages,
                 hasPrevPage: page > 1,
             },
+>>>>>>> 972e5dd19b66d3c94ac982b20208f2e664595833
             members: enrichedReferredUsers,
         };
         res.send({
             success: true,
+<<<<<<< HEAD
+            message: "Team system data retrieved successfully",
+=======
             message: "Team system data retrieved successfully for last 30 days!",
+>>>>>>> 972e5dd19b66d3c94ac982b20208f2e664595833
             data: responseData,
         });
     }

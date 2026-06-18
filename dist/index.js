@@ -38,6 +38,7 @@ const videoContent_routes_1 = __importDefault(require("./models/videoContent/vid
 const videoModule_routes_1 = __importDefault(require("./models/videoModule/videoModule.routes"));
 const videoCourse_routes_1 = __importDefault(require("./models/videoCourse/videoCourse.routes"));
 const videoRequest_routes_1 = __importDefault(require("./models/videoRequest/videoRequest.routes"));
+const teamSystem_routes_1 = __importDefault(require("./models/teamSystem/teamSystem.routes"));
 // middleware
 const app = (0, express_1.default)();
 app.set("trust proxy", 1);
@@ -97,6 +98,7 @@ app.use("/api/video-module", videoModule_routes_1.default);
 app.use("/api/video-request", videoRequest_routes_1.default);
 app.use("/api/team-system", teamSystem_routes_1.default);
 app.use("/api/admin", admin_route_1.default);
+app.use("/api/team-system", teamSystem_routes_1.default);
 app.get("/", (req, res) => {
     res.send("APi  is running...");
 });
