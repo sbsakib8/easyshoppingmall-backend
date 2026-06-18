@@ -1,6 +1,7 @@
 import express from "express";
 import { isAdmin } from "../../middlewares/isAdmin";
 import { isAuth } from "../../middlewares/isAuth";
+import { decryptBody } from "../../middlewares/decryptBody";
 import {
   confirmManualPayment,
   createManualOrder,
@@ -29,7 +30,7 @@ router.post("/create", isAuth, createOrder);
  * @desc    Create a new manual order from user's cart
  * @access  Private (User)
  */
-router.post("/manual", isAuth, createManualOrder);
+router.post("/manual", isAuth, decryptBody, createManualOrder);
 
 /**
  * @route   GET /api/orders/my-orders
@@ -38,7 +39,7 @@ router.post("/manual", isAuth, createManualOrder);
  */
 router.get("/my-orders", isAuth, getMyOrders);
 router.get("/:id", isAuth, getOrderDetails);
-router.post("/manual-payment", isAuth, ManualPayment);
+router.post("/manual-payment", isAuth, decryptBody, ManualPayment);
 router.post("/:id/pay-due", isAuth, payDueAmount);
 
 /**
