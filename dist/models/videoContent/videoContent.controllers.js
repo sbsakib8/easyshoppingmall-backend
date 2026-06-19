@@ -8,6 +8,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const videoContent_model_1 = __importDefault(require("./videoContent.model"));
 const videoAccess_model_1 = __importDefault(require("../videoAccess/videoAccess.model"));
 const videoModule_model_1 = __importDefault(require("../videoModule/videoModule.model"));
+const videoCourse_model_1 = __importDefault(require("../videoCourse/videoCourse.model"));
 const STANDALONE_VIDEO_TYPES = ["standard", "demo"];
 const resolveModuleRequirement = async (videoType, moduleId) => {
     const isStandalone = !videoType || STANDALONE_VIDEO_TYPES.includes(videoType);
@@ -24,7 +25,13 @@ const resolveModuleRequirement = async (videoType, moduleId) => {
     if (!module) {
         return { error: "Module not found" };
     }
-    const isFreeModule = (module.price ?? 0) === 0;
+    let isFreeModule = (module.price ?? 0) === 0;
+    if (isFreeModule && module.courseId) {
+        const course = await videoCourse_model_1.default.findById(module.courseId);
+        if (course && (course.price ?? 0) > 0) {
+            isFreeModule = false;
+        }
+    }
     if (videoType === "free" && !isFreeModule) {
         return { error: "Free videos must be attached to a free module (price = 0)" };
     }

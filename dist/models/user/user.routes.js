@@ -7,15 +7,16 @@ const express_1 = __importDefault(require("express"));
 const isAdmin_1 = require("../../middlewares/isAdmin");
 const isAuth_1 = require("../../middlewares/isAuth");
 const multer_1 = require("../../middlewares/multer");
+const decryptBody_1 = require("../../middlewares/decryptBody");
 const user_controllers_1 = require("./user.controllers");
 const router = express_1.default.Router();
-router.post("/signup", user_controllers_1.signUp);
-router.post("/signin", user_controllers_1.signIn);
+router.post("/signup", decryptBody_1.decryptBody, user_controllers_1.signUp);
+router.post("/signin", decryptBody_1.decryptBody, user_controllers_1.signIn);
 router.get("/signout", user_controllers_1.signOut);
 // reset password
-router.post("/send-otp", user_controllers_1.sendotp);
-router.post("/verify-otp", user_controllers_1.verifyotp);
-router.post("/reset-password", user_controllers_1.resetpassword);
+router.post("/send-otp", decryptBody_1.decryptBody, user_controllers_1.sendotp);
+router.post("/verify-otp", decryptBody_1.decryptBody, user_controllers_1.verifyotp);
+router.post("/reset-password", decryptBody_1.decryptBody, user_controllers_1.resetpassword);
 // google auth
 router.post("/google-auth", user_controllers_1.googleAuth);
 //  user routes
