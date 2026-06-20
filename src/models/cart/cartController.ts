@@ -235,7 +235,7 @@ export const updateCartItem = async (req: Request, res: Response): Promise<Respo
  */
 export const removeFromCart = async (req: Request, res: Response) => {
   try {
-    const { userId, productId } = req.params as Record<string, string>;
+    const { userId, productId } = req.params as { userId: string; productId: string };
     const { color, size, weight } = req.query;
     const authUserId = (req as any).userId;
 
