@@ -323,7 +323,7 @@ export const getOrderDetails = async (req: AuthRequest, res: Response): Promise<
  */
 export const updateOrderStatus = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const { status } = req.body;
 
     if (!status) {
@@ -1202,7 +1202,7 @@ export const payDueAmount = async (req: AuthRequest, res: Response) => {
  */
 export const deleteOrder = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       res.status(400).json({ success: false, message: "Invalid order ID" });

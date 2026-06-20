@@ -40,7 +40,7 @@ export const createReview = async (req: AuthRequest, res: Response) => {
 // Get approved reviews for a product
 export const getProductReviews = async (req: AuthRequest, res: Response) => {
     try {
-        const productId = req.params.productId;
+        const productId = req.params.productId as string;
 
 
         if (!mongoose.Types.ObjectId.isValid(productId)) {
@@ -65,7 +65,7 @@ export const getProductReviews = async (req: AuthRequest, res: Response) => {
 // Approve review (admin)
 export const approveReview = async (req: AuthRequest, res: Response) => {
     try {
-        const reviewId = req.params.id;
+        const reviewId = req.params.id as string;
 
         if (!mongoose.Types.ObjectId.isValid(reviewId)) {
             return res.status(400).json({ message: "Invalid review id" });
@@ -89,7 +89,7 @@ export const approveReview = async (req: AuthRequest, res: Response) => {
 // Reject review (admin)
 export const rejectReview = async (req: AuthRequest, res: Response) => {
     try {
-        const reviewId = req.params.id;
+        const reviewId = req.params.id as string;
 
         if (!mongoose.Types.ObjectId.isValid(reviewId)) {
             return res.status(400).json({ message: "Invalid review id" });
@@ -139,7 +139,7 @@ export const getAllReviews = async (req: AuthRequest, res: Response) => {
 // Delete own review (user)
 export const deleteReview = async (req: AuthRequest, res: Response) => {
     try {
-        const reviewId = req.params.id;
+        const reviewId = req.params.id as string;
         const userId = req.userId;
 
         if (!mongoose.Types.ObjectId.isValid(reviewId)) {
