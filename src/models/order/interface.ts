@@ -85,6 +85,22 @@ export interface IOrder {
   deliveryChargeDeductedAt?: Date | null;
   deliveryChargeDeductedAmount?: number;
 
+  // Dropshipping status history - tracks all status changes with metadata
+  dropshippingStatusHistory?: {
+    type?: "status" | "message";
+    status: string;
+    previousStatus?: string;
+    statusNote?: string;
+    trackingNumber?: string;
+    estimatedDelivery?: string;
+    shippedBy?: string;
+    message?: string;
+    statusUpdatedAt?: Date;
+    updatedBy?: string;
+  }[];
+
+  keyPoints?: string[];
+
   createdAt: Date;
   updatedAt: Date;
 }

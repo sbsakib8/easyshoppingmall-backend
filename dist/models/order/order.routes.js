@@ -4,9 +4,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const isAdmin_1 = require("../../middlewares/isAdmin");
 const isAuth_1 = require("../../middlewares/isAuth");
 const decryptBody_1 = require("../../middlewares/decryptBody");
+const isDashboardAccess_1 = require("../../middlewares/isDashboardAccess");
 const order_controllers_1 = require("../order/order.controllers");
 const router = express_1.default.Router();
 /**
@@ -32,32 +32,56 @@ router.post("/manual-payment", isAuth_1.isAuth, decryptBody_1.decryptBody, order
 router.post("/:id/pay-due", isAuth_1.isAuth, order_controllers_1.payDueAmount);
 /**
  * @route   GET /api/orders/admin/all
- * @desc    Get all orders (admin only)
- * @access  Private (Admin)
+ * @desc    Get all orders (admin, manager, cpo)
+ * @access  Private (Admin/Manager/CPO)
  */
-router.get("/admin/all", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.getAllOrders);
+router.get("/admin/all", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("orders"), order_controllers_1.getAllOrders);
 /**
  * @route   GET /api/orders/admin/status/:status
- * @desc    Get orders by status (admin only)
- * @access  Private (Admin)
+ * @desc    Get orders by status (admin, manager, cpo)
+ * @access  Private (Admin/Manager/CPO)
  */
-router.get("/admin/status/:status", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.getOrdersByStatus);
+router.get("/admin/status/:status", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("orders"), order_controllers_1.getOrdersByStatus);
+/**
+ * @route   GET /api/orders/dropshipping/:id
+ * @desc    Get dropshipping order details with status history (Admin/Manager/CPO)
+ * @access  Private (Admin/Manager/CPO)
+ */
+router.get("/dropshipping/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("orders"), order_controllers_1.getDropshippingOrderDetails);
+/**
+ * @route   PUT /api/orders/dropshipping/:id/status
+ * @desc    Update dropshipping order status with additional details (Admin/Manager/CPO)
+ * @access  Private (Admin/Manager/CPO)
+ */
+router.put("/dropshipping/:id/status", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("orders"), order_controllers_1.updateDropshippingOrderStatus);
+/**
+ * @route   POST /api/orders/dropshipping/:id/message
+ * @desc    Send admin message to dropshipper on specific order (Admin/Manager/CPO)
+ * @access  Private (Admin/Manager/CPO)
+ */
+router.post("/dropshipping/:id/message", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("orders"), order_controllers_1.addOrderMessage);
+/**
+ * @route   PUT /api/orders/dropshipping/:id/keypoints
+ * @desc    Update order key points (Admin/Manager/CPO)
+ * @access  Private (Admin/Manager/CPO)
+ */
+router.put("/dropshipping/:id/keypoints", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("orders"), order_controllers_1.updateOrderKeyPoints);
 /**
  * @route   PUT /api/orders/:id/status
- * @desc    Update order status (admin only)
- * @access  Private (Admin)
+ * @desc    Update order status (Admin/Manager/CPO)
+ * @access  Private (Admin/Manager/CPO)
  */
-router.put("/:id/status", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.updateOrderStatus);
+router.put("/:id/status", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("orders"), order_controllers_1.updateOrderStatus);
 /**
  * @route   PUT /api/orders/admin/:id/verify
- * @desc    Confirm manual payment by admin
- * @access  Private (Admin)
+ * @desc    Confirm manual payment (Admin/Manager/CPO)
+ * @access  Private (Admin/Manager/CPO)
  */
-router.put("/admin/:id/verify", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.confirmManualPayment);
+router.put("/admin/:id/verify", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("orders"), order_controllers_1.confirmManualPayment);
 /**
  * @route   DELETE /api/orders/:id
- * @desc    Delete an order by ID (Admin only)
- * @access  Private (Admin)
+ * @desc    Delete an order by ID (Admin/Manager/CPO)
+ * @access  Private (Admin/Manager/CPO)
  */
-router.delete("/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, order_controllers_1.deleteOrder);
+router.delete("/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("orders"), order_controllers_1.deleteOrder);
 exports.default = router;

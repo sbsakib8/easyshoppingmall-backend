@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { isAdmin } from '../../middlewares/isAdmin'
 import { isAuth } from '../../middlewares/isAuth'
+import { isDashboardAccess } from '../../middlewares/isDashboardAccess'
 import { upload } from '../../middlewares/multer'
 import {
   createProductController,
@@ -16,7 +17,7 @@ import {
 
 const productRouter = Router()
 
-productRouter.post("/create", isAuth, isAdmin, upload.fields([
+productRouter.post("/create", isAuth, isDashboardAccess("products"), upload.fields([
     { name: 'images', maxCount: 4 },
     { name: 'video', maxCount: 1 }
 ]), createProductController)
@@ -26,10 +27,10 @@ productRouter.post('/get-pruduct-by-category-and-subcategory', getProductByCateg
 productRouter.post('/get-product-details/:productId', getProductDetails)
 
 // update product
-productRouter.put('/update-product-details', isAuth, isAdmin, updateProductDetails)
+productRouter.put('/update-product-details', isAuth, isDashboardAccess("products"), updateProductDetails)
 
 // delete product
-productRouter.delete('/delete-product', isAuth, isAdmin, deleteProductDetails)
+productRouter.delete('/delete-product', isAuth, isDashboardAccess("products"), deleteProductDetails)
 
 // text / sky-title search
 productRouter.post('/search-product', searchProduct)

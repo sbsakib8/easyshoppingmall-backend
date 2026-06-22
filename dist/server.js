@@ -31,6 +31,9 @@ io.on("connection", (socket) => {
     socket.on("subscribe", (room) => {
         socket.join(room);
     });
+    socket.on("subscribe:user", (userId) => {
+        socket.join(`user:${userId}`);
+    });
 });
 //  Database connection and Server start
 async function startServer() {

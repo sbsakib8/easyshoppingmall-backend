@@ -1,6 +1,7 @@
 import express from "express";
 import { isAuth } from "../../middlewares/isAuth";
 import { isAdmin } from "../../middlewares/isAdmin";
+import { isDashboardAccess } from "../../middlewares/isDashboardAccess";
 import { 
     createVideoRequest, 
     getMyVideoRequests, 
@@ -14,8 +15,8 @@ const router = express.Router();
 router.post("/create", isAuth, createVideoRequest);
 router.get("/my-requests", isAuth, getMyVideoRequests);
 
-// Admin routes
-router.get("/all", isAuth, isAdmin, adminGetAllVideoRequests);
-router.patch("/update/:requestId", isAuth, isAdmin, adminUpdateVideoRequestStatus);
+// Admin / Manager routes (dropshipping manage video)
+router.get("/all", isAuth, isDashboardAccess("dropshipping"), adminGetAllVideoRequests);
+router.patch("/update/:requestId", isAuth, isDashboardAccess("dropshipping"), adminUpdateVideoRequestStatus);
 
 export default router;

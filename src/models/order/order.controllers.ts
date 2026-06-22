@@ -11,7 +11,9 @@ import WebsiteInfo from "../content/websiteInfo/websiteinfo.model";
 import Referral from "../referral/referral.model";
 import { validateAndCalculateDiscount } from "../coupon/coupon.service";
 import productModel from "../product/product.model";
-const { v4: uuidv4 } = require('uuid');
+import Notification from "../notification/notification.model";
+import crypto from "crypto";
+const uuidv4 = () => crypto.randomUUID();
 
 /**
  * Extending Express Request to include user
@@ -208,6 +210,31 @@ export const createOrder = async (req: AuthRequest, res: Response) => { // Chang
 
     await session.commitTransaction();
     session.endSession();
+
+    // Send notification to dashboard when order is placed
+    try {
+      const orderUser = await UserModel.findById(userId).select("name email").lean();
+      const notifTitle = "New Order Placed";
+      const notifMessage = `Order #${order.orderId} has been placed by ${orderUser?.name || "Unknown"} (${orderUser?.email || "N/A"}) - Total: ৳${order.totalAmt}`;
+      const notif = await Notification.create({
+        title: notifTitle,
+        message: notifMessage,
+        type: "order",
+        referenceId: order._id.toString(),
+        meta: {
+          orderId: order._id.toString(),
+          orderNumber: order.orderId,
+          userId: userId.toString(),
+          totalAmount: order.totalAmt,
+          paymentMethod: payment_method,
+        },
+      });
+      // Emit socket event for real-time dashboard updates
+      const io = (req as any).app?.get("io");
+      if (io) io.emit("notification:new", notif);
+    } catch (notifErr) {
+      console.error("Failed to send order notification:", notifErr);
+    }
 
     res.status(201).json({
       success: true,
@@ -898,6 +925,32 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
     await session.commitTransaction();
     session.endSession();
 
+    // Send notification to dashboard when manual order is placed
+    try {
+      const orderUser = await UserModel.findById(userId).select("name email").lean();
+      const notifTitle = "New Manual Order Placed";
+      const notifMessage = `Order #${orderDoc.orderId} has been placed by ${orderUser?.name || "Unknown"} (${orderUser?.email || "N/A"}) - Total: ৳${orderDoc.totalAmt}`;
+      const notif = await Notification.create({
+        title: notifTitle,
+        message: notifMessage,
+        type: "order",
+        referenceId: orderDoc._id.toString(),
+        meta: {
+          orderId: orderDoc._id.toString(),
+          orderNumber: orderDoc.orderId,
+          userId: userId.toString(),
+          totalAmount: orderDoc.totalAmt,
+          paymentMethod: payment_method,
+          isManualOrder: true,
+        },
+      });
+      // Emit socket event for real-time dashboard updates
+      const io = (req as any).app?.get("io");
+      if (io) io.emit("notification:new", notif);
+    } catch (notifErr) {
+      console.error("Failed to send manual order notification:", notifErr);
+    }
+
     // ✅ 8. Respond success
     return res.status(201).json({
       success: true,
@@ -1229,6 +1282,388 @@ export const deleteOrder = async (req: Request, res: Response): Promise<void> =>
       message: "Order deleted successfully",
     });
   } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+
+/**
+ * @desc Update dropshipping order status with additional details (Admin only)
+ * @route PUT /api/orders/dropshipping/:id/status
+ * @access Private (Admin)
+ */
+export const updateDropshippingOrderStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params as { id: string };
+    const { status, note, trackingNumber, estimatedDelivery, shippedBy } = req.body;
+
+    if (!status) {
+      res.status(400).json({ success: false, message: "Status is required" });
+      return;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: "Invalid order ID" });
+      return;
+    }
+
+    const allowedStatuses = ["pending", "processing", "shipped", "delivered", "cancelled", "completed", "return"];
+    if (!allowedStatuses.includes(status)) {
+      res.status(400).json({
+        success: false,
+        message: `Invalid status provided. Allowed statuses are: ${allowedStatuses.join(", ")}`,
+      });
+      return;
+    }
+
+    const order = await OrderModel.findById(id).populate("userId");
+
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    const previousStatus = order.order_status;
+    order.order_status = status;
+
+    // Store dropshipping-specific metadata
+    const dropshippingMeta: any = {};
+    if (note) dropshippingMeta.statusNote = note;
+    if (trackingNumber) dropshippingMeta.trackingNumber = trackingNumber;
+    if (estimatedDelivery) dropshippingMeta.estimatedDelivery = estimatedDelivery;
+    if (shippedBy) dropshippingMeta.shippedBy = shippedBy;
+    dropshippingMeta.statusUpdatedAt = new Date();
+    dropshippingMeta.updatedBy = "ADMIN";
+
+    // Merge with existing meta or create new
+    order.set("dropshippingStatusHistory", [
+      ...(order.get("dropshippingStatusHistory") || []),
+      {
+        type: "status",
+        status,
+        previousStatus,
+        ...dropshippingMeta,
+      },
+    ]);
+
+    // Referral/Profit Logic (same as updateOrderStatus)
+    const isFinished = status === "delivered" || status === "completed";
+    const user: any = order.userId;
+
+    if (isFinished) {
+      if (order.payment_type !== "delivery" || (order.amount_due ?? 0) <= 0) {
+        order.payment_status = "paid";
+        order.amount_paid = order.totalAmt;
+        order.amount_due = 0;
+      }
+
+      const orderItemCount = order.products.reduce((acc, p) => acc + (p.quantity || 1), 0);
+      const isFullyPaid = order.payment_type !== "delivery" || (order.amount_due ?? 0) <= 0;
+
+      if (isFullyPaid) {
+        // Referral Bonus Logic for DROPSHIPPING (Referrer)
+        if (!order.referralBonusGiven && user && user.referredBy) {
+          const referrer = await UserModel.findById(user.referredBy);
+          if (referrer && (referrer.roles?.includes("DROPSHIPPING") || referrer.role === "DROPSHIPPING")) {
+            let bonusAmount = 0;
+
+            if ((order.referralBonusPerProduct ?? 0) > 0) {
+              bonusAmount = (order.referralBonusPerProduct ?? 0) * orderItemCount;
+            } else {
+              const referralSettings = await Referral.findOne();
+              const referralBonus = referralSettings?.referralPercentage || 0;
+
+              if (referralBonus > 0) {
+                bonusAmount = referralBonus;
+              } else {
+                if (order.totalAmt >= 500) {
+                  bonusAmount = Math.floor(order.totalAmt / 500) * 10;
+                } else {
+                  const updatedReferrer = await UserModel.findByIdAndUpdate(
+                    user.referredBy,
+                    { $inc: { deliveredItemsCount: orderItemCount } },
+                    { new: true }
+                  );
+                  if ((updatedReferrer?.deliveredItemsCount || 0) > 10) {
+                    bonusAmount = 10;
+                  }
+                }
+              }
+            }
+
+            if (bonusAmount > 0) {
+              await UserModel.findByIdAndUpdate(user.referredBy, {
+                $inc: { balance: bonusAmount }
+              });
+              order.referralBonusGiven = true;
+              order.referralBonusAmount = bonusAmount;
+            }
+          }
+        }
+
+        // Profit Logic for DROPSHIPPING (Order Owner)
+        if (!order.profitGiven && user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING")) {
+          const totalProfit = order.products.reduce((sum, p) => {
+            const cost = Number(p.costPrice ?? p.price) || 0;
+            const selling = Number(p.sellingPrice) || cost;
+            const itemProfit = selling > cost ? (selling - cost) * (p.quantity || 1) : 0;
+            return sum + itemProfit;
+          }, 0);
+
+          if (totalProfit > 0) {
+            await UserModel.findByIdAndUpdate(user._id, {
+              $inc: { balance: totalProfit }
+            });
+            order.profitGiven = true;
+            order.profitAmount = totalProfit;
+          }
+        }
+      }
+    }
+
+    // COD Return Deduction
+    if (status === "return") {
+      const isCod = order.payment_method === "cod" || order.payment_type === "cod";
+      const isDropshipper = user && (user.roles?.includes("DROPSHIPPING") || user.role === "DROPSHIPPING");
+      const deductionAmount = Number(order.deliveryCharge) || 0;
+
+      if (isCod && isDropshipper && !order.deliveryChargeDeducted && deductionAmount > 0) {
+        await UserModel.findByIdAndUpdate(user._id, {
+          $inc: { balance: -deductionAmount }
+        });
+        order.deliveryChargeDeducted = true;
+        order.deliveryChargeDeductedAt = new Date();
+        order.deliveryChargeDeductedAmount = deductionAmount;
+      }
+    }
+
+    await order.save();
+
+    // Send notification to dashboard about status change
+    try {
+      const orderUser = await UserModel.findById(order.userId).select("name email").lean();
+      const notifTitle = `Order Status Updated`;
+      const notifMessage = `Order #${order.orderId} status changed from "${previousStatus}" to "${status}" by Admin${note ? ` - Note: ${note}` : ""}`;
+      const notif = await Notification.create({
+        title: notifTitle,
+        message: notifMessage,
+        type: "order_status",
+        referenceId: order._id.toString(),
+        meta: {
+          orderId: order._id.toString(),
+          orderNumber: order.orderId,
+          previousStatus,
+          newStatus: status,
+          note: note || null,
+          trackingNumber: trackingNumber || null,
+          estimatedDelivery: estimatedDelivery || null,
+          shippedBy: shippedBy || null,
+        },
+      });
+      const io = (req as any).app?.get("io");
+      if (io) io.emit("notification:new", notif);
+    } catch (notifErr) {
+      console.error("Failed to send status update notification:", notifErr);
+    }
+
+    res.json({
+      success: true,
+      message: "Dropshipping order status updated successfully",
+      data: order,
+    });
+  } catch (error: any) {
+    console.error("Update Dropshipping Order Status Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+
+/**
+ * @desc Get dropshipping order details with status history (Admin only)
+ * @route GET /api/orders/dropshipping/:id
+ * @access Private (Admin)
+ */
+export const getDropshippingOrderDetails = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params as { id: string };
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: "Invalid order ID" });
+      return;
+    }
+
+    const order = await OrderModel.findById(id)
+      .populate({
+        path: "products.productId",
+        populate: [
+          { path: "category" },
+          { path: "subCategory" }
+        ]
+      })
+      .populate("userId", "name email mobile role roles shopName")
+      .lean();
+
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    // Enrich products: if stored image[] is empty, fall back to populated productId.images
+    const enrichedOrder = {
+      ...order,
+      products: ((order as any).products || []).map((p: any) => {
+        const productImages = p.productId?.images;
+        const hasStoredImage = Array.isArray(p.image) ? p.image.length > 0 : !!p.image;
+        return {
+          ...p,
+          image: hasStoredImage ? p.image : (Array.isArray(productImages) && productImages.length > 0 ? productImages : []),
+        };
+      }),
+    };
+
+    res.json({
+      success: true,
+      data: enrichedOrder,
+    });
+  } catch (error: any) {
+    console.error("Get Dropshipping Order Details Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+
+/**
+ * @desc Send admin message to dropshipper on a specific order
+ * @route POST /api/orders/dropshipping/:id/message
+ * @access Private (Admin)
+ */
+export const addOrderMessage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params as { id: string };
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      res.status(400).json({ success: false, message: "Message is required" });
+      return;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: "Invalid order ID" });
+      return;
+    }
+
+    const order = await OrderModel.findById(id).populate("userId", "name email");
+
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    const historyEntry = {
+      type: "message",
+      status: order.order_status,
+      message: message.trim(),
+      statusNote: null,
+      trackingNumber: null,
+      estimatedDelivery: null,
+      shippedBy: null,
+      statusUpdatedAt: new Date(),
+      updatedBy: "ADMIN",
+    };
+
+    order.set("dropshippingStatusHistory", [
+      ...(order.get("dropshippingStatusHistory") || []),
+      historyEntry,
+    ]);
+
+    await order.save();
+
+    // Send targeted notification to dropshipper
+    try {
+      const io = (req as any).app?.get("io");
+      const orderUser = order.userId as any;
+
+      // Notify via Socket.IO (targeted room)
+      if (io && orderUser?._id) {
+        io.to(`user:${orderUser._id.toString()}`).emit("order:message", {
+          orderId: order._id,
+          orderIdNumber: order.orderId,
+          message: message.trim(),
+          status: order.order_status,
+          timestamp: new Date(),
+        });
+      }
+
+      // Also broadcast to admin dashboard
+      const notif = await Notification.create({
+        title: `Admin Message - Order #${order.orderId}`,
+        message: message.trim(),
+        type: "order_status",
+        referenceId: order._id.toString(),
+        meta: {
+          orderId: order._id.toString(),
+          orderNumber: order.orderId,
+          type: "admin_message",
+          newStatus: order.order_status,
+        },
+      });
+      if (io) io.emit("notification:new", notif);
+    } catch (notifErr) {
+      console.error("Failed to send order message notification:", notifErr);
+    }
+
+    res.json({
+      success: true,
+      message: "Message sent successfully",
+      data: order,
+    });
+  } catch (error: any) {
+    console.error("Add Order Message Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+
+/**
+ * @desc Update order key points (Admin only)
+ * @route PUT /api/orders/dropshipping/:id/keypoints
+ * @access Private (Admin)
+ */
+export const updateOrderKeyPoints = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params as { id: string };
+    const { keyPoints } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: "Invalid order ID" });
+      return;
+    }
+
+    const order = await OrderModel.findById(id);
+
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    order.set("keyPoints", Array.isArray(keyPoints) ? keyPoints : []);
+    await order.save();
+
+    res.json({
+      success: true,
+      message: "Order key points updated successfully",
+      data: order,
+    });
+  } catch (error: any) {
+    console.error("Update Order Key Points Error:", error);
     res.status(500).json({
       success: false,
       message: error.message || "Internal Server Error",

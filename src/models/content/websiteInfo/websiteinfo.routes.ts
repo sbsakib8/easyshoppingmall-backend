@@ -6,20 +6,20 @@ import {
   deleteWebsiteInfo,
 } from "./websiteinfo.controllers";
 import { isAuth } from "../../../middlewares/isAuth";
-import { isAdmin } from "../../../middlewares/isAdmin";
+import { isDashboardAccess } from "../../../middlewares/isDashboardAccess";
 
 const router = express.Router();
 
 // CREATE
-router.post("/create",isAuth,isAdmin, createWebsiteInfo);
+router.post("/create",isAuth,isDashboardAccess("content"), createWebsiteInfo);
 
 // READ
 router.get("/get", getAllWebsiteInfo);
 
 // UPDATE
-router.put("/:id",isAuth,isAdmin, updateWebsiteInfo);
+router.put("/:id",isAuth,isDashboardAccess("content"), updateWebsiteInfo);
 
 // DELETE
-router.delete("/:id",isAuth,isAdmin, deleteWebsiteInfo);
+router.delete("/:id",isAuth,isDashboardAccess("content"), deleteWebsiteInfo);
 
 export default router;
