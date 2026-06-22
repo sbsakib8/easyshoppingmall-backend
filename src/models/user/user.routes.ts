@@ -1,6 +1,6 @@
 import express from "express";
-import { isAdmin } from "../../middlewares/isAdmin";
 import { isAuth } from "../../middlewares/isAuth";
+import { isDashboardAccess } from "../../middlewares/isDashboardAccess";
 import { upload } from "../../middlewares/multer";
 import { decryptBody } from "../../middlewares/decryptBody";
 import { deleteUser, getAllUsers, getUserProfile, googleAuth, resetpassword, sendotp, signIn, signOut, signUp, updateUserProfile, userImage, verifyotp } from "./user.controllers";
@@ -21,8 +21,8 @@ router.post("/google-auth", googleAuth);
 
 //  user routes
 router.get("/userprofile", isAuth, getUserProfile);
-router.get("/getallusers", isAuth, isAdmin, getAllUsers);
-router.delete("/userdelete/:id", isAuth, isAdmin, deleteUser);
+router.get("/getallusers", isAuth, isDashboardAccess("customers"), getAllUsers);
+router.delete("/userdelete/:id", isAuth, isDashboardAccess("customers"), deleteUser);
 router.put("/userupdate/:id", isAuth, updateUserProfile);
 router.put("/user-image/:id", isAuth, upload.single("image"), userImage);
 

@@ -24,6 +24,7 @@ jest.config.ts
 /build
 /docs
 /scratch
+/scripts
 
 # misc
 .DS_Store

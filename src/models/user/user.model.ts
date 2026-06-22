@@ -19,8 +19,8 @@ export interface IUser extends Document {
     forgot_password_otp?: string | null;
     forgot_password_expiry?: Date | null;
     isotpverified?: boolean;
-    role: "ADMIN" | "USER" | "INVESTMENT" | "SELLERPROGRAM" | "BOXLEADER" | "DROPSHIPPING";
-    roles: ("ADMIN" | "USER" | "INVESTMENT" | "SELLERPROGRAM" | "BOXLEADER" | "DROPSHIPPING")[];
+    role: "ADMIN" | "USER" | "INVESTMENT" | "SELLERPROGRAM" | "BOXLEADER" | "DROPSHIPPING" | "MANAGER" | "CPO";
+    roles: ("ADMIN" | "USER" | "INVESTMENT" | "SELLERPROGRAM" | "BOXLEADER" | "DROPSHIPPING" | "MANAGER" | "CPO")[];
     date_of_birth?: Date | null;
     gender?: "Male" | "Female" | "Other" | null;
     referralCode?: string | null;
@@ -121,12 +121,12 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING"],
+            enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING", "MANAGER", "CPO"],
             default: "USER"
         },
         roles: {
             type: [String],
-            enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING"],
+            enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING", "MANAGER", "CPO"],
             default: ["USER"]
         },
         date_of_birth: {

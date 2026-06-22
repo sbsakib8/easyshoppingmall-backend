@@ -152,6 +152,27 @@ const orderSchema = new Schema<IOrder>(
       type: Number,
       default: 0,
     },
+
+    // Dropshipping status history - tracks all status changes with metadata
+    dropshippingStatusHistory: [
+      {
+        type: { type: String, enum: ["status", "message"], default: "status" },
+        status: { type: String, required: true },
+        previousStatus: { type: String, default: null },
+        statusNote: { type: String, default: null },
+        trackingNumber: { type: String, default: null },
+        estimatedDelivery: { type: String, default: null },
+        shippedBy: { type: String, default: null },
+        message: { type: String, default: null },
+        statusUpdatedAt: { type: Date, default: Date.now },
+        updatedBy: { type: String, default: "ADMIN" },
+      },
+    ],
+
+    keyPoints: {
+      type: [String],
+      default: [],
+    },
   },
   { timestamps: true }
 );

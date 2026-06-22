@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { applyCoupon, applyDropshippingCoupon, createCoupon, getCoupons, deleteCoupon, updateCoupon, getProductCoupons } from "./coupon.controller";
 import { isAuth } from "../../middlewares/isAuth";
 import { isAdmin } from "../../middlewares/isAdmin";
+import { isDashboardAccess } from "../../middlewares/isDashboardAccess";
 
 const couponRouter = Router();
 
@@ -31,7 +32,7 @@ const applyCouponRateLimiter = (req: Request, res: Response, next: NextFunction)
     if (record.count > maxRequests) {
         return res.status(429).json({
             success: false,
-            message: "অতিরিক্ত কুপন ট্রাই করা হয়েছে। অনুগ্রহ করে ১ মিনিট পর আবার চেষ্টা করুন। / Too many coupon application attempts. Please try again after 1 minute."
+            message: "অতিরিক্ত কুপন ট্রাই করা হয়েছে। অনুগ্রহ করে ১ মিনিট পর আবার চেষ্টা করুন। / Too many coupon application attempts. Please try again after 1 minute."
         });
     }
 
@@ -43,11 +44,11 @@ couponRouter.post("/apply", isAuth, applyCouponRateLimiter, applyCoupon);
 couponRouter.post("/apply-ds", isAuth, applyCouponRateLimiter, applyDropshippingCoupon);
 couponRouter.get("/product/:productId", getProductCoupons);
 
-// Admin Routes
-couponRouter.post("/create", isAuth, isAdmin, createCoupon);
-couponRouter.get("/", isAuth, isAdmin, getCoupons);
-couponRouter.delete("/delete/:id", isAuth, isAdmin, deleteCoupon);
-couponRouter.put("/update/:id", isAuth, isAdmin, updateCoupon);
-couponRouter.patch("/update/:id", isAuth, isAdmin, updateCoupon);
+// Admin / CPO Routes
+couponRouter.post("/create", isAuth, isDashboardAccess("coupons"), createCoupon);
+couponRouter.get("/", isAuth, isDashboardAccess("coupons"), getCoupons);
+couponRouter.delete("/delete/:id", isAuth, isDashboardAccess("coupons"), deleteCoupon);
+couponRouter.put("/update/:id", isAuth, isDashboardAccess("coupons"), updateCoupon);
+couponRouter.patch("/update/:id", isAuth, isDashboardAccess("coupons"), updateCoupon);
 
 export default couponRouter;
