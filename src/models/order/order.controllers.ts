@@ -989,7 +989,7 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
       })
       .populate({
         path: "userId",
-        select: "name email role referredBy",
+        select: "name email role mobile referredBy shopName shopAddress",
         populate: {
           path: "referredBy",
           select: "name referralCode"
@@ -1034,7 +1034,7 @@ export const getOrdersByStatus = async (req: Request, res: Response): Promise<vo
       })
       .populate({
         path: "userId",
-        select: "name email role referredBy",
+        select: "name email role mobile referredBy shopName shopAddress",
         populate: {
           path: "referredBy",
           select: "name referralCode"
@@ -1504,7 +1504,7 @@ export const getDropshippingOrderDetails = async (req: Request, res: Response): 
           { path: "subCategory" }
         ]
       })
-      .populate("userId", "name email mobile role roles shopName")
+      .populate("userId", "name email mobile role roles shopName shopAddress")
       .lean();
 
     if (!order) {
