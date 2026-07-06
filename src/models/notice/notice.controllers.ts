@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import Notice from "./notice.model";
+import { cache } from "../../utils/cache";
 
 /**
  * @desc Create a new notice (Admin only)
@@ -94,14 +95,22 @@ export const getAllNoticesAdmin = async (req: Request, res: Response): Promise<v
  */
 export const getActiveNotices = async (req: Request, res: Response): Promise<void> => {
   try {
+    const cacheKey = "notices:active";
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+      res.status(200).json(cached);
+      return;
+    }
+
     const notices = await Notice.find({ isActive: true })
       .sort({ priority: -1, createdAt: -1 })
       .lean();
 
-    res.status(200).json({
-      success: true,
-      data: notices,
-    });
+    const response = { success: true, data: notices };
+    await cache.set(cacheKey, response, 300);
+    res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+    res.status(200).json(response);
   } catch (error: any) {
     console.error("Get Active Notices Error:", error);
     res.status(500).json({

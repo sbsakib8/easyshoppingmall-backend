@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import HomeBanner from "./homeBanner.model";
 import uploadClouinary from "../../../utils/cloudinary"; // your uploader util
 import fs from "fs";
-import { memoryCache } from "../../../utils/cache";
+import { cache } from "../../../utils/cache";
 
 // Create Home Banner
 export const createHomeBanner = async (req: Request, res: Response) => {
@@ -30,7 +30,8 @@ export const createHomeBanner = async (req: Request, res: Response) => {
       images: imageUrls,
     });
 
-    memoryCache.clear();
+    await cache.delByPrefix("banners:home:");
+    await cache.delByPrefix("homepage");
     return res.status(201).json({
       success: true,
       message: "Home banner created successfully",
@@ -47,7 +48,7 @@ export const getAllHomeBanners = async (req: Request, res: Response) => {
   try {
     const { sliderFor, active } = req.query;
     const cacheKey = `banners:home:${sliderFor || 'all'}:${active || 'all'}`;
-    const cached = memoryCache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) {
       res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
       return res.status(200).json(cached);
@@ -65,7 +66,7 @@ export const getAllHomeBanners = async (req: Request, res: Response) => {
 
     const banners = await HomeBanner.find(filter).sort({ createdAt: -1 });
     const response = { success: true, data: banners };
-    memoryCache.set(cacheKey, response, 300);
+    await cache.set(cacheKey, response, 300);
     res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
     return res.status(200).json(response);
   } catch (error: any) {
@@ -121,7 +122,8 @@ export const updateHomeBanner = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
-    memoryCache.clear();
+    await cache.delByPrefix("banners:home:");
+    await cache.delByPrefix("homepage");
     return res.status(200).json({
       success: true,
       message: "Home banner updated successfully",
@@ -140,7 +142,8 @@ export const deleteHomeBanner = async (req: Request, res: Response) => {
     if (!banner) {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
-    memoryCache.clear();
+    await cache.delByPrefix("banners:home:");
+    await cache.delByPrefix("homepage");
     return res.status(200).json({ success: true, message: "Banner deleted successfully" });
   } catch (error: any) {
     console.error("Delete HomeBanner error:", error);

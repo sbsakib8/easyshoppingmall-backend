@@ -28,5 +28,7 @@ const centerBannerSchema = new Schema<ICenterBanner>(
   { timestamps: true }
 );
 
+centerBannerSchema.index({ status: 1 });
+
 export default mongoose.models.CenterBanner ||
   mongoose.model<ICenterBanner>("CenterBanner", centerBannerSchema);

@@ -21,6 +21,9 @@ const BlogSchema = new Schema<IBlog>(
   { timestamps: true }
 );
 
+BlogSchema.index({ createdAt: -1 });
+BlogSchema.index({ status: 1, createdAt: -1 });
+
 BlogSchema.pre("save", function (next) {
   const now = moment().locale("bn");
   this.createdDateBn = now.format("DD MMMM, YYYY");

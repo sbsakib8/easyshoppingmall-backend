@@ -3,6 +3,7 @@ import Blog from "./blogs.model";
 import moment from "moment";
 import "moment/locale/bn";
 import uploadClouinary from "../../../utils/cloudinary";
+import { cache } from "../../../utils/cache";
 
 export const createBlog = async (req: Request, res: Response) => {
   try {
@@ -44,8 +45,19 @@ export const createBlog = async (req: Request, res: Response) => {
 //  Get All Blogs
 export const getAllBlogs = async (_req: Request, res: Response) => {
   try {
-    const blogs = await Blog.find().sort({ createdAt: -1 });
-    res.status(200).json({ success: true, data: blogs });
+    const cacheKey = "blogs:all";
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+      res.status(200).json(cached);
+      return;
+    }
+
+    const blogs = await Blog.find().sort({ createdAt: -1 }).lean();
+    const response = { success: true, data: blogs };
+    await cache.set(cacheKey, response, 300);
+    res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+    res.status(200).json(response);
   } catch (error) {
     console.error("Get Blogs Error:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });

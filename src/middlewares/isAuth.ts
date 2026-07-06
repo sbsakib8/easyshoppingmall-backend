@@ -1,16 +1,18 @@
 import { Request, Response, NextFunction } from "express";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import processdata from "../config";
-import UserModel from "../models/user/user.model"; // Import UserModel
-import { AuthUser } from "../models/order/interface"; // Import AuthUser interface
+import UserModel from "../models/user/user.model";
+import { AuthUser } from "../models/order/interface";
+import { cache } from "../utils/cache";
 
-// Custom interface to extend Request
 export interface AuthRequest extends Request {
   userId?: string;
-  user?: AuthUser; // Add user property to AuthRequest
+  user?: AuthUser;
 }
 
-export const isAuth = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => { // Make function async
+const USER_CACHE_TTL = 300; // 5 minutes
+
+export const isAuth = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const token = req.cookies?.token;
     if (!token) {
@@ -25,14 +27,25 @@ export const isAuth = async (req: AuthRequest, res: Response, next: NextFunction
       return;
     }
 
-    const user = await UserModel.findById(decoded.userId).maxTimeMS(5000); // 5s timeout
+    // Try cache first
+    const cacheKey = `auth:user:${decoded.userId}`;
+    const cachedUser = await cache.get<AuthUser>(cacheKey);
+
+    if (cachedUser) {
+      req.userId = decoded.userId;
+      req.user = cachedUser;
+      next();
+      return;
+    }
+
+    // Cache miss - fetch from DB
+    const user = await UserModel.findById(decoded.userId).maxTimeMS(2000);
     if (!user) {
       res.status(401).json({ message: "Unauthorized: User not found" });
       return;
     }
 
-    req.userId = decoded.userId;
-    req.user = {
+    const authUser: AuthUser = {
       _id: user._id.toString(),
       name: user.name,
       email: user.email,
@@ -41,6 +54,12 @@ export const isAuth = async (req: AuthRequest, res: Response, next: NextFunction
       mobile: user.mobile || undefined,
       balance: user.balance || 0,
     };
+
+    // Cache user data
+    await cache.set(cacheKey, authUser, USER_CACHE_TTL);
+
+    req.userId = decoded.userId;
+    req.user = authUser;
     next();
   } catch (error: any) {
     if (error.name === "TokenExpiredError") {
@@ -55,4 +74,9 @@ export const isAuth = async (req: AuthRequest, res: Response, next: NextFunction
       res.status(401).json({ message: "Unauthorized: Authentication failed" });
     }
   }
+};
+
+// Invalidate user cache (call on profile update, role change, etc.)
+export const invalidateUserCache = async (userId: string): Promise<void> => {
+  await cache.del(`auth:user:${userId}`);
 };

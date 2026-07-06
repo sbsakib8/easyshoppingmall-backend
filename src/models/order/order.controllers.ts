@@ -973,34 +973,49 @@ export const createManualOrder = async (req: AuthRequest, res: Response) => {
 
 
 /**
- * @desc Get all orders for admin
- * @route GET /api/admin/orders/all
+ * @desc Get all orders for admin (paginated)
+ * @route GET /api/admin/orders/all?page=1&limit=20
  * @access Private (Admin)
  */
 export const getAllOrders = async (req: Request, res: Response): Promise<void> => {
   try {
-    const orders = await OrderModel.find()
-      .populate({
-        path: "products.productId",
-        populate: [
-          { path: "category" },
-          { path: "subCategory" }
-        ]
-      })
-      .populate({
-        path: "userId",
-        select: "name email role mobile referredBy shopName shopAddress",
-        populate: {
-          path: "referredBy",
-          select: "name referralCode"
-        }
-      }) // Populate user details including referrer info
-      .sort({ createdAt: -1 });
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+
+    const [orders, totalCount] = await Promise.all([
+      OrderModel.find()
+        .populate({
+          path: "products.productId",
+          populate: [
+            { path: "category" },
+            { path: "subCategory" }
+          ]
+        })
+        .populate({
+          path: "userId",
+          select: "name email role mobile referredBy shopName shopAddress",
+          populate: {
+            path: "referredBy",
+            select: "name referralCode"
+          }
+        })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      OrderModel.countDocuments(),
+    ]);
 
     res.json({
       success: true,
       message: "All orders fetched successfully",
       data: orders,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+        limit,
+      },
     });
   } catch (error: any) {
     res.status(500).json({
@@ -1011,8 +1026,8 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
 };
 
 /**
- * @desc Get orders by status for admin
- * @route GET /api/admin/orders/status/:status
+ * @desc Get orders by status for admin (paginated)
+ * @route GET /api/admin/orders/status/:status?page=1&limit=20
  * @access Private (Admin)
  */
 export const getOrdersByStatus = async (req: Request, res: Response): Promise<void> => {
@@ -1024,28 +1039,45 @@ export const getOrdersByStatus = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const orders = await OrderModel.find({ order_status: status })
-      .populate({
-        path: "products.productId",
-        populate: [
-          { path: "category" },
-          { path: "subCategory" }
-        ]
-      })
-      .populate({
-        path: "userId",
-        select: "name email role mobile referredBy shopName shopAddress",
-        populate: {
-          path: "referredBy",
-          select: "name referralCode"
-        }
-      }) // Populate user details including referrer info
-      .sort({ createdAt: -1 });
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+
+    const query = { order_status: status };
+
+    const [orders, totalCount] = await Promise.all([
+      OrderModel.find(query)
+        .populate({
+          path: "products.productId",
+          populate: [
+            { path: "category" },
+            { path: "subCategory" }
+          ]
+        })
+        .populate({
+          path: "userId",
+          select: "name email role mobile referredBy shopName shopAddress",
+          populate: {
+            path: "referredBy",
+            select: "name referralCode"
+          }
+        })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      OrderModel.countDocuments(query),
+    ]);
 
     res.json({
       success: true,
       message: `Orders with status "${status}" fetched successfully`,
       data: orders,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+        limit,
+      },
     });
   } catch (error: any) {
     res.status(500).json({

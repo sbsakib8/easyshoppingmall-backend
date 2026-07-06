@@ -39,6 +39,8 @@ const cartSchema = new Schema<ICart>(
   { timestamps: true }
 );
 
+cartSchema.index({ userId: 1 });
+
 // Pre-save hook to update totals
 cartSchema.pre("save", function (next) {
   this.subTotalAmt = this.products.reduce(
