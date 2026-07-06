@@ -101,7 +101,9 @@ const createProductController = async (req, res) => {
             error: false,
             success: true,
         });
-        cache_1.memoryCache.clear();
+        await cache_1.cache.delByPrefix("products:");
+        await cache_1.cache.delByPrefix("product:");
+        await cache_1.cache.delByPrefix("homepage");
     }
     catch (error) {
         // Duplicate SKU handle
@@ -134,15 +136,22 @@ const buildProductQuery = (params) => {
         query.publish = publish === 'true' || publish === true;
     }
     if (search) {
-        const escapeRegex = (text) => text.replace(/[-[\]{}()*+?.,\\^$|#]/g, '\\$&');
-        const regex = new RegExp(escapeRegex(search), 'i');
-        query.$or = [
-            { productName: regex },
-            { description: regex },
-            { brand: regex },
-            { tags: regex },
-            { sku: regex },
-        ];
+        // Use $text search for index-backed full-text search (much faster than regex)
+        // For short queries (<3 chars), fall back to regex
+        if (search.length >= 3) {
+            query.$text = { $search: search };
+        }
+        else {
+            const escapeRegex = (text) => text.replace(/[-[\]{}()*+?.,\\^$|#]/g, '\\$&');
+            const regex = new RegExp(escapeRegex(search), 'i');
+            query.$or = [
+                { productName: regex },
+                { description: regex },
+                { brand: regex },
+                { tags: regex },
+                { sku: regex },
+            ];
+        }
     }
     if (categoryId && categoryId !== "all") {
         query.category = { $in: [categoryId] };
@@ -204,7 +213,7 @@ const getProductController = async (req, res) => {
         const cacheKey = `products:${JSON.stringify(req.body)}`;
         const skipCache = isSearch;
         if (!skipCache) {
-            const cached = cache_1.memoryCache.get(cacheKey);
+            const cached = await cache_1.cache.get(cacheKey);
             if (cached) {
                 res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
                 res.json(cached);
@@ -237,9 +246,11 @@ const getProductController = async (req, res) => {
         if (isSearch) {
             // Phase 1: Find direct search matches
             const searchQuery = buildProductQuery(req.body);
+            const isTextSearch = !!searchQuery.$text;
             const directMatches = await product_model_1.default
                 .find(searchQuery)
-                .select(selectFields)
+                .select(isTextSearch ? `${selectFields} score: { $meta: "textScore" }` : selectFields)
+                .sort(isTextSearch ? { score: { $meta: "textScore" } } : undefined)
                 .lean();
             const directIds = new Set(directMatches.map((p) => String(p._id)));
             // Collect subcategory IDs from matched products
@@ -323,7 +334,7 @@ const getProductController = async (req, res) => {
             limit,
         };
         if (!skipCache) {
-            cache_1.memoryCache.set(cacheKey, response, 60);
+            await cache_1.cache.set(cacheKey, response, 60);
             res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
         }
         res.json(response);
@@ -346,7 +357,7 @@ const getProductByCategory = async (req, res) => {
             return;
         }
         const cacheKey = `products:category:${id}`;
-        const cached = cache_1.memoryCache.get(cacheKey);
+        const cached = await cache_1.cache.get(cacheKey);
         if (cached) {
             res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
             res.json(cached);
@@ -364,7 +375,7 @@ const getProductByCategory = async (req, res) => {
             .populate("category subCategory", "name slug")
             .lean();
         const response = { message: "Category product list", data, error: false, success: true };
-        cache_1.memoryCache.set(cacheKey, response, 120);
+        await cache_1.cache.set(cacheKey, response, 120);
         res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
         res.json(response);
     }
@@ -384,7 +395,7 @@ const getProductByCategoryAndSubCategory = async (req, res) => {
         page = Number(page) || 1;
         limit = Number(limit) || 10;
         const cacheKey = `products:cat:${categoryId}:sub:${subCategoryId}:p${page}:l${limit}`;
-        const cached = cache_1.memoryCache.get(cacheKey);
+        const cached = await cache_1.cache.get(cacheKey);
         if (cached) {
             res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
             res.json(cached);
@@ -424,7 +435,7 @@ const getProductByCategoryAndSubCategory = async (req, res) => {
             success: true,
             error: false,
         };
-        cache_1.memoryCache.set(cacheKey, response, 120);
+        await cache_1.cache.set(cacheKey, response, 120);
         res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
         res.json(response);
     }
@@ -437,7 +448,7 @@ const getProductDetails = async (req, res) => {
     try {
         const { productId } = req.params;
         const cacheKey = `product:${productId}`;
-        const cached = cache_1.memoryCache.get(cacheKey);
+        const cached = await cache_1.cache.get(cacheKey);
         if (cached) {
             res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
             res.json(cached);
@@ -447,7 +458,7 @@ const getProductDetails = async (req, res) => {
             .populate("category subCategory", "name slug")
             .lean();
         const response = { message: "Product details", data: product, error: false, success: true };
-        cache_1.memoryCache.set(cacheKey, response, 300);
+        await cache_1.cache.set(cacheKey, response, 300);
         res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
         res.json(response);
     }
@@ -495,7 +506,9 @@ const updateProductDetails = async (req, res) => {
         }
         const updateProduct = await product_model_1.default.findByIdAndUpdate(_id, { $set: updateData }, { new: true });
         res.json({ message: "Updated successfully", data: updateProduct, error: false, success: true });
-        cache_1.memoryCache.clear();
+        await cache_1.cache.delByPrefix("products:");
+        await cache_1.cache.delByPrefix("product:");
+        await cache_1.cache.delByPrefix("homepage");
     }
     catch (error) {
         res.status(500).json({ message: error.message || error, error: true, success: false });
@@ -516,7 +529,9 @@ const deleteProductDetails = async (req, res) => {
             product_model_1.default.deleteOne({ _id })
         ]);
         res.json({ message: "Delete successfully", error: false, success: true });
-        cache_1.memoryCache.clear();
+        await cache_1.cache.delByPrefix("products:");
+        await cache_1.cache.delByPrefix("product:");
+        await cache_1.cache.delByPrefix("homepage");
     }
     catch (error) {
         res.status(500).json({ message: error.message || error, error: true, success: false });

@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.toggleNoticeStatus = exports.deleteNotice = exports.updateNotice = exports.getNoticeById = exports.getActiveNotices = exports.getAllNoticesAdmin = exports.createNotice = void 0;
 const notice_model_1 = __importDefault(require("./notice.model"));
+const cache_1 = require("../../utils/cache");
 /**
  * @desc Create a new notice (Admin only)
  * @route POST /api/notice
@@ -94,13 +95,20 @@ exports.getAllNoticesAdmin = getAllNoticesAdmin;
  */
 const getActiveNotices = async (req, res) => {
     try {
+        const cacheKey = "notices:active";
+        const cached = await cache_1.cache.get(cacheKey);
+        if (cached) {
+            res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+            res.status(200).json(cached);
+            return;
+        }
         const notices = await notice_model_1.default.find({ isActive: true })
             .sort({ priority: -1, createdAt: -1 })
             .lean();
-        res.status(200).json({
-            success: true,
-            data: notices,
-        });
+        const response = { success: true, data: notices };
+        await cache_1.cache.set(cacheKey, response, 300);
+        res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+        res.status(200).json(response);
     }
     catch (error) {
         console.error("Get Active Notices Error:", error);

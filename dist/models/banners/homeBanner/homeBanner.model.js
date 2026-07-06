@@ -60,5 +60,6 @@ const homeBannerSchema = new mongoose_1.Schema({
         default: "USER"
     },
 }, { timestamps: true });
+homeBannerSchema.index({ active: 1, sliderFor: 1 });
 exports.default = mongoose_1.default.models.HomeBanner ||
     mongoose_1.default.model("HomeBanner", homeBannerSchema);

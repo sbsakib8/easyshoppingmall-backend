@@ -69,6 +69,7 @@ const cartSchema = new mongoose_1.Schema({
     subTotalAmt: { type: Number, default: 0 },
     totalAmt: { type: Number, default: 0 },
 }, { timestamps: true });
+cartSchema.index({ userId: 1 });
 // Pre-save hook to update totals
 cartSchema.pre("save", function (next) {
     this.subTotalAmt = this.products.reduce((acc, item) => acc + item.totalPrice, 0);

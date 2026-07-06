@@ -358,11 +358,31 @@ const getUserProfile = async (req, res) => {
     }
 };
 exports.getUserProfile = getUserProfile;
-//  get all users
+//  get all users (paginated)
 const getAllUsers = async (req, res) => {
     try {
-        const users = await user_model_1.default.find().select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified").populate("address_details");
-        res.status(200).json({ success: true, users });
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+        const skip = (page - 1) * limit;
+        const [users, totalCount] = await Promise.all([
+            user_model_1.default.find()
+                .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+                .populate("address_details")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            user_model_1.default.countDocuments(),
+        ]);
+        res.status(200).json({
+            success: true,
+            users,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalCount / limit),
+                totalCount,
+                limit,
+            },
+        });
     }
     catch (error) {
         res.status(500).json({

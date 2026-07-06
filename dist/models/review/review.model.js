@@ -63,4 +63,6 @@ const reviewSchema = new mongoose_1.Schema({
         default: "pending",
     },
 }, { timestamps: true });
+reviewSchema.index({ productId: 1, createdAt: -1 });
+reviewSchema.index({ userId: 1 });
 exports.Review = mongoose_1.default.model("Review", reviewSchema);
