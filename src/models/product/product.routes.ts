@@ -24,7 +24,7 @@ productRouter.post("/create", isAuth, isDashboardAccess("products"), upload.fiel
 productRouter.post('/get', getProductController)
 productRouter.post("/get-product-by-category", getProductByCategory)
 productRouter.post('/get-pruduct-by-category-and-subcategory', getProductByCategoryAndSubCategory)
-productRouter.post('/get-product-details/:productId', getProductDetails)
+productRouter.get('/get-product-details/:productId', getProductDetails)
 
 // update product
 productRouter.put('/update-product-details', isAuth, isDashboardAccess("products"), updateProductDetails)
