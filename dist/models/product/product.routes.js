@@ -13,7 +13,7 @@ productRouter.post("/create", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboa
 productRouter.post('/get', product_controllers_1.getProductController);
 productRouter.post("/get-product-by-category", product_controllers_1.getProductByCategory);
 productRouter.post('/get-pruduct-by-category-and-subcategory', product_controllers_1.getProductByCategoryAndSubCategory);
-productRouter.post('/get-product-details/:productId', product_controllers_1.getProductDetails);
+productRouter.get('/get-product-details/:productId', product_controllers_1.getProductDetails);
 // update product
 productRouter.put('/update-product-details', isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("products"), product_controllers_1.updateProductDetails);
 // delete product

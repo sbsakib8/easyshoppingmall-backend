@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import RightBanner from "./rightBanner.model";
 import uploadClouinary from "../../../utils/cloudinary"; 
+import { cache } from "../../../utils/cache"; 
 import fs from "fs";
 
 // Create Home Banner
@@ -42,8 +43,18 @@ export const createRightBanner = async (req: Request, res: Response) => {
 //  Get All Banners
 export const getAllRightBanners = async (req: Request, res: Response) => {
   try {
-    const banners = await RightBanner.find().sort({ createdAt: -1 });
-    return res.status(200).json({ success: true, data: banners });
+    const cacheKey = "banners:right";
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+      return res.status(200).json(cached);
+    }
+
+    const banners = await RightBanner.find().sort({ createdAt: -1 }).lean();
+    const response = { success: true, data: banners };
+    await cache.set(cacheKey, response, 300);
+    res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+    return res.status(200).json(response);
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }

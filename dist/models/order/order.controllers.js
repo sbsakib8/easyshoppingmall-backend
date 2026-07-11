@@ -870,33 +870,47 @@ const createManualOrder = async (req, res) => {
 };
 exports.createManualOrder = createManualOrder;
 /**
- * @desc Get all orders for admin
- * @route GET /api/admin/orders/all
+ * @desc Get all orders for admin (paginated)
+ * @route GET /api/admin/orders/all?page=1&limit=20
  * @access Private (Admin)
  */
 const getAllOrders = async (req, res) => {
     try {
-        const orders = await order_model_1.default.find()
-            .populate({
-            path: "products.productId",
-            populate: [
-                { path: "category" },
-                { path: "subCategory" }
-            ]
-        })
-            .populate({
-            path: "userId",
-            select: "name email role referredBy",
-            populate: {
-                path: "referredBy",
-                select: "name referralCode"
-            }
-        }) // Populate user details including referrer info
-            .sort({ createdAt: -1 });
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+        const skip = (page - 1) * limit;
+        const [orders, totalCount] = await Promise.all([
+            order_model_1.default.find()
+                .populate({
+                path: "products.productId",
+                populate: [
+                    { path: "category" },
+                    { path: "subCategory" }
+                ]
+            })
+                .populate({
+                path: "userId",
+                select: "name email role mobile referredBy shopName shopAddress",
+                populate: {
+                    path: "referredBy",
+                    select: "name referralCode"
+                }
+            })
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            order_model_1.default.countDocuments(),
+        ]);
         res.json({
             success: true,
             message: "All orders fetched successfully",
             data: orders,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalCount / limit),
+                totalCount,
+                limit,
+            },
         });
     }
     catch (error) {
@@ -908,8 +922,8 @@ const getAllOrders = async (req, res) => {
 };
 exports.getAllOrders = getAllOrders;
 /**
- * @desc Get orders by status for admin
- * @route GET /api/admin/orders/status/:status
+ * @desc Get orders by status for admin (paginated)
+ * @route GET /api/admin/orders/status/:status?page=1&limit=20
  * @access Private (Admin)
  */
 const getOrdersByStatus = async (req, res) => {
@@ -919,27 +933,42 @@ const getOrdersByStatus = async (req, res) => {
             res.status(400).json({ success: false, message: "Order status is required" });
             return;
         }
-        const orders = await order_model_1.default.find({ order_status: status })
-            .populate({
-            path: "products.productId",
-            populate: [
-                { path: "category" },
-                { path: "subCategory" }
-            ]
-        })
-            .populate({
-            path: "userId",
-            select: "name email role referredBy",
-            populate: {
-                path: "referredBy",
-                select: "name referralCode"
-            }
-        }) // Populate user details including referrer info
-            .sort({ createdAt: -1 });
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+        const skip = (page - 1) * limit;
+        const query = { order_status: status };
+        const [orders, totalCount] = await Promise.all([
+            order_model_1.default.find(query)
+                .populate({
+                path: "products.productId",
+                populate: [
+                    { path: "category" },
+                    { path: "subCategory" }
+                ]
+            })
+                .populate({
+                path: "userId",
+                select: "name email role mobile referredBy shopName shopAddress",
+                populate: {
+                    path: "referredBy",
+                    select: "name referralCode"
+                }
+            })
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            order_model_1.default.countDocuments(query),
+        ]);
         res.json({
             success: true,
             message: `Orders with status "${status}" fetched successfully`,
             data: orders,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalCount / limit),
+                totalCount,
+                limit,
+            },
         });
     }
     catch (error) {
@@ -1353,7 +1382,7 @@ const getDropshippingOrderDetails = async (req, res) => {
                 { path: "subCategory" }
             ]
         })
-            .populate("userId", "name email mobile role roles shopName")
+            .populate("userId", "name email mobile role roles shopName shopAddress")
             .lean();
         if (!order) {
             res.status(404).json({ success: false, message: "Order not found" });

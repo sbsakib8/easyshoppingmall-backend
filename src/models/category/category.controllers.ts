@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import ProductModel from "../product/product.model";
 import CategoryModel from "./category.model";
 import uploadClouinary from "../../utils/cloudinary";
-import { memoryCache } from "../../utils/cache";
+import { cache } from "../../utils/cache";
 
 // ✅ Create Category
 export const createCategory = async (req: Request, res: Response): Promise<void> => {
@@ -33,7 +33,11 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
     });
 
     await category.save();
-    memoryCache.clear(); // Clear all category/tree cache
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("subcategories:");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
 
     res.status(201).json({ success: true, message: "Category created successfully", data: category });
   } catch (error: any) {
@@ -45,7 +49,7 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
 export const getCategories = async (req: Request, res: Response): Promise<void> => {
   try {
     const cacheKey = "all_categories";
-    const cachedData = memoryCache.get(cacheKey);
+    const cachedData = await cache.get(cacheKey);
     if (cachedData) {
       res.status(200).json({ success: true, data: cachedData });
       return;
@@ -56,7 +60,7 @@ export const getCategories = async (req: Request, res: Response): Promise<void> 
       .sort({ createdAt: -1 })
       .lean();
 
-    memoryCache.set(cacheKey, categories, 600); // Cache for 10 minutes
+    await cache.set(cacheKey, categories, 600); // Cache for 10 minutes
     res.status(200).json({ success: true, data: categories });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -67,7 +71,7 @@ export const getCategories = async (req: Request, res: Response): Promise<void> 
 export const getCategoryTree = async (req: Request, res: Response): Promise<void> => {
   try {
     const cacheKey = "category_tree";
-    const cachedData = memoryCache.get(cacheKey);
+    const cachedData = await cache.get(cacheKey);
     if (cachedData) {
       res.status(200).json({ success: true, data: cachedData });
       return;
@@ -100,7 +104,7 @@ export const getCategoryTree = async (req: Request, res: Response): Promise<void
       { $sort: { name: 1 } }
     ]);
 
-    memoryCache.set(cacheKey, tree, 600); // Cache for 10 minutes
+    await cache.set(cacheKey, tree, 600); // Cache for 10 minutes
     res.status(200).json({ success: true, data: tree });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -156,7 +160,11 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
       message: "Category updated successfully",
       data: updatedCategory,
     });
-    memoryCache.clear(); // Clear cache
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("subcategories:");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
   } catch (error: any) {
     console.error("Update Category Error:", error);
     res.status(500).json({ success: false, message: error.message });
@@ -181,7 +189,11 @@ export const deleteCategory = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    memoryCache.clear(); // Clear cache
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("subcategories:");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
     res.status(200).json({ success: true, message: "Category deleted successfully" });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

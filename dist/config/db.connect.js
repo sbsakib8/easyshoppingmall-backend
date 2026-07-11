@@ -13,7 +13,11 @@ const connectDB = async () => {
     }
     try {
         await mongoose_1.default.connect(index_1.default.mongodburl, {
-            maxPoolSize: 10,
+            maxPoolSize: 20,
+            minPoolSize: 2,
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 20000,
+            compressors: ["snappy"],
         });
         console.log("✅ MongoDB connected");
     }

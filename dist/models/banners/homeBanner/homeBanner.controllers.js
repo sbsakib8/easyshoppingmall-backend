@@ -29,7 +29,8 @@ const createHomeBanner = async (req, res) => {
             sliderFor: sliderFor || "USER",
             images: imageUrls,
         });
-        cache_1.memoryCache.clear();
+        await cache_1.cache.delByPrefix("banners:home:");
+        await cache_1.cache.delByPrefix("homepage");
         return res.status(201).json({
             success: true,
             message: "Home banner created successfully",
@@ -47,7 +48,7 @@ const getAllHomeBanners = async (req, res) => {
     try {
         const { sliderFor, active } = req.query;
         const cacheKey = `banners:home:${sliderFor || 'all'}:${active || 'all'}`;
-        const cached = cache_1.memoryCache.get(cacheKey);
+        const cached = await cache_1.cache.get(cacheKey);
         if (cached) {
             res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
             return res.status(200).json(cached);
@@ -61,7 +62,7 @@ const getAllHomeBanners = async (req, res) => {
         }
         const banners = await homeBanner_model_1.default.find(filter).sort({ createdAt: -1 });
         const response = { success: true, data: banners };
-        cache_1.memoryCache.set(cacheKey, response, 300);
+        await cache_1.cache.set(cacheKey, response, 300);
         res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
         return res.status(200).json(response);
     }
@@ -110,7 +111,8 @@ const updateHomeBanner = async (req, res) => {
         if (!updatedBanner) {
             return res.status(404).json({ success: false, message: "Banner not found" });
         }
-        cache_1.memoryCache.clear();
+        await cache_1.cache.delByPrefix("banners:home:");
+        await cache_1.cache.delByPrefix("homepage");
         return res.status(200).json({
             success: true,
             message: "Home banner updated successfully",
@@ -130,7 +132,8 @@ const deleteHomeBanner = async (req, res) => {
         if (!banner) {
             return res.status(404).json({ success: false, message: "Banner not found" });
         }
-        cache_1.memoryCache.clear();
+        await cache_1.cache.delByPrefix("banners:home:");
+        await cache_1.cache.delByPrefix("homepage");
         return res.status(200).json({ success: true, message: "Banner deleted successfully" });
     }
     catch (error) {

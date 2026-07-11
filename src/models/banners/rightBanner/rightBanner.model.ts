@@ -29,5 +29,7 @@ const rightBannerSchema = new Schema<IRightBanner>(
   { timestamps: true }
 );
 
+rightBannerSchema.index({ status: 1 });
+
 export default mongoose.models.RightBanner ||
   mongoose.model<IRightBanner>("RightBanner", rightBannerSchema);

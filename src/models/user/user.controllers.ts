@@ -397,15 +397,33 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
 };
 
 
-//  get all users
+//  get all users (paginated)
 export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const users = await User.find().select(
-      "-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified"
-    ).populate("address_details")
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
 
+    const [users, totalCount] = await Promise.all([
+      User.find()
+        .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+        .populate("address_details")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      User.countDocuments(),
+    ]);
 
-    res.status(200).json({ success: true, users });
+    res.status(200).json({
+      success: true,
+      users,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+        limit,
+      },
+    });
   } catch (error) {
     res.status(500).json({
       success: false,

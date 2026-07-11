@@ -16,5 +16,7 @@ const processdata = {
     cloudapisecret: process.env.CLOUD_API_SECRET || " ",
     sslcommerzstoreid: process.env.SSLC_STORE_ID || " ",
     sslcommerzstorepassword: process.env.SSLC_STORE_PASSWORD || " ",
+    upstashRedisUrl: process.env.UPSTASH_REDIS_REST_URL || "",
+    upstashRedisToken: process.env.UPSTASH_REDIS_REST_TOKEN || "",
 };
 exports.default = processdata;
