@@ -31,6 +31,10 @@ jest.config.ts
 .DS_Store
 *.pem
 
+# openspec
+/openspec
+/.opencode
+
 # debug
 npm-debug.log*
 yarn-debug.log*

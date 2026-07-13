@@ -64,7 +64,8 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
 export const getSubCategories = async (req: Request, res: Response): Promise<void> => {
   try {
     const { filterType } = req.query;
-    const cacheKey = `subcategories:${filterType || 'all'}`;
+    const showAll = req.query.status === "all";
+    const cacheKey = `subcategories:${showAll ? "admin:" : ""}${filterType || 'all'}`;
     const cached = await cache.get(cacheKey);
     if (cached) {
       res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
@@ -72,7 +73,7 @@ export const getSubCategories = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const filter: any = { isActive: true };
+    const filter: any = showAll ? {} : { isActive: true };
 
     if (filterType === "new-products" || filterType === "boost-products") {
       const productFilter: any = { publish: true };

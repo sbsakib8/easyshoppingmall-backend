@@ -50,13 +50,15 @@ exports.createCategory = createCategory;
 //  Get All Categories
 const getCategories = async (req, res) => {
     try {
-        const cacheKey = "all_categories";
+        const showAll = req.query.status === "all";
+        const cacheKey = showAll ? "all_categories_admin" : "all_categories";
         const cachedData = await cache_1.cache.get(cacheKey);
         if (cachedData) {
             res.status(200).json({ success: true, data: cachedData });
             return;
         }
-        const categories = await category_model_1.default.find({ isActive: true })
+        const filter = showAll ? {} : { isActive: true };
+        const categories = await category_model_1.default.find(filter)
             .select("name image slug icon isActive")
             .sort({ createdAt: -1 })
             .lean();
@@ -71,14 +73,16 @@ exports.getCategories = getCategories;
 // ✅ Get Categories and Subcategories Tree (Optimized Aggregation)
 const getCategoryTree = async (req, res) => {
     try {
-        const cacheKey = "category_tree";
+        const showAll = req.query.status === "all";
+        const cacheKey = showAll ? "category_tree_admin" : "category_tree";
         const cachedData = await cache_1.cache.get(cacheKey);
         if (cachedData) {
             res.status(200).json({ success: true, data: cachedData });
             return;
         }
+        const matchStage = showAll ? {} : { isActive: true };
         const tree = await category_model_1.default.aggregate([
-            { $match: { isActive: true } },
+            { $match: matchStage },
             {
                 $lookup: {
                     from: "subcategories",

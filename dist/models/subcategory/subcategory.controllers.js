@@ -63,14 +63,15 @@ exports.createSubCategory = createSubCategory;
 const getSubCategories = async (req, res) => {
     try {
         const { filterType } = req.query;
-        const cacheKey = `subcategories:${filterType || 'all'}`;
+        const showAll = req.query.status === "all";
+        const cacheKey = `subcategories:${showAll ? "admin:" : ""}${filterType || 'all'}`;
         const cached = await cache_1.cache.get(cacheKey);
         if (cached) {
             res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
             res.json(cached);
             return;
         }
-        const filter = { isActive: true };
+        const filter = showAll ? {} : { isActive: true };
         if (filterType === "new-products" || filterType === "boost-products") {
             const productFilter = { publish: true };
             if (filterType === "new-products") {

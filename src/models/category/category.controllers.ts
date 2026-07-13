@@ -48,14 +48,16 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
 //  Get All Categories
 export const getCategories = async (req: Request, res: Response): Promise<void> => {
   try {
-    const cacheKey = "all_categories";
+    const showAll = req.query.status === "all";
+    const cacheKey = showAll ? "all_categories_admin" : "all_categories";
     const cachedData = await cache.get(cacheKey);
     if (cachedData) {
       res.status(200).json({ success: true, data: cachedData });
       return;
     }
 
-    const categories = await CategoryModel.find({ isActive: true })
+    const filter: any = showAll ? {} : { isActive: true };
+    const categories = await CategoryModel.find(filter)
       .select("name image slug icon isActive")
       .sort({ createdAt: -1 })
       .lean();
@@ -70,15 +72,17 @@ export const getCategories = async (req: Request, res: Response): Promise<void> 
 // ✅ Get Categories and Subcategories Tree (Optimized Aggregation)
 export const getCategoryTree = async (req: Request, res: Response): Promise<void> => {
   try {
-    const cacheKey = "category_tree";
+    const showAll = req.query.status === "all";
+    const cacheKey = showAll ? "category_tree_admin" : "category_tree";
     const cachedData = await cache.get(cacheKey);
     if (cachedData) {
       res.status(200).json({ success: true, data: cachedData });
       return;
     }
 
+    const matchStage: any = showAll ? {} : { isActive: true };
     const tree = await CategoryModel.aggregate([
-      { $match: { isActive: true } },
+      { $match: matchStage },
       {
         $lookup: {
           from: "subcategories",
