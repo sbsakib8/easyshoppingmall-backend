@@ -29,6 +29,9 @@ export const createRightBanner = async (req: Request, res: Response) => {
       images: imageUrls,
     });
 
+    await cache.del("banners:right");
+    await cache.delByPrefix("homepage");
+
     return res.status(201).json({
       success: true,
       message: "Right banner created successfully",
@@ -106,6 +109,9 @@ export const updateRightBanner = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
+    await cache.del("banners:right");
+    await cache.delByPrefix("homepage");
+
     return res.status(200).json({
       success: true,
       message: "Right banner updated successfully",
@@ -124,6 +130,10 @@ export const deleteRightBanner = async (req: Request, res: Response) => {
     if (!banner) {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
+
+    await cache.del("banners:right");
+    await cache.delByPrefix("homepage");
+
     return res.status(200).json({ success: true, message: "Banner deleted successfully" });
   } catch (error: any) {
     console.error("Delete RightBanner error:", error);

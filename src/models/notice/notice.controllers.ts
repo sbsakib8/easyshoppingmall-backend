@@ -206,9 +206,12 @@ export const updateNotice = async (req: Request, res: Response): Promise<void> =
 
     await notice.save();
 
-    res.status(200).json({
+    await cache.del("notices:active");
+    await cache.delByPrefix("homepage");
+
+    res.status(201).json({
       success: true,
-      message: "Notice updated successfully",
+      message: "Notice created successfully",
       data: notice,
     });
   } catch (error: any) {
@@ -238,6 +241,9 @@ export const deleteNotice = async (req: Request, res: Response): Promise<void> =
       });
       return;
     }
+
+    await cache.del("notices:active");
+    await cache.delByPrefix("homepage");
 
     res.status(200).json({
       success: true,
@@ -274,9 +280,12 @@ export const toggleNoticeStatus = async (req: Request, res: Response): Promise<v
     notice.isActive = !notice.isActive;
     await notice.save();
 
+    await cache.del("notices:active");
+    await cache.delByPrefix("homepage");
+
     res.status(200).json({
       success: true,
-      message: `Notice ${notice.isActive ? "activated" : "deactivated"} successfully`,
+      message: "Notice updated successfully",
       data: notice,
     });
   } catch (error: any) {

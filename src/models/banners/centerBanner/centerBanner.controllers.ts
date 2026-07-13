@@ -28,6 +28,9 @@ export const createCenterBanner = async (req: Request, res: Response) => {
       images: imageUrls,
     });
 
+    await cache.del("banners:center");
+    await cache.delByPrefix("homepage");
+
     return res.status(201).json({
       success: true,
       message: "Center banner created successfully",
@@ -105,6 +108,9 @@ export const updateCenterBanner= async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
+    await cache.del("banners:center");
+    await cache.delByPrefix("homepage");
+
     return res.status(200).json({
       success: true,
       message: "Center banner updated successfully",
@@ -123,6 +129,10 @@ export const deleteCenterBanner = async (req: Request, res: Response) => {
     if (!banner) {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
+
+    await cache.del("banners:center");
+    await cache.delByPrefix("homepage");
+
     return res.status(200).json({ success: true, message: "Banner deleted successfully" });
   } catch (error: any) {
     console.error("Delete CenterBanner error:", error);

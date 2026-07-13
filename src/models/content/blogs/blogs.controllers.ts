@@ -31,6 +31,9 @@ export const createBlog = async (req: Request, res: Response) => {
     });
 
     const savedBlog = await blog.save();
+
+    await cache.del("blogs:all");
+
     res.status(201).json({
       success: true,
       message: "Blog created successfully",
@@ -104,6 +107,8 @@ export const updateBlog = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Blog not found" });
     }
 
+    await cache.del("blogs:all");
+
     res.status(200).json({ success: true, message: "Blog updated", data: updatedBlog });
   } catch (error) {
     console.error("Update Blog Error:", error);
@@ -118,6 +123,9 @@ export const deleteBlog = async (req: Request, res: Response) => {
     if (!deletedBlog) {
       return res.status(404).json({ success: false, message: "Blog not found" });
     }
+
+    await cache.del("blogs:all");
+
     res.status(200).json({ success: true, message: "Blog deleted successfully" });
   } catch (error) {
     console.error("Delete Blog Error:", error);
