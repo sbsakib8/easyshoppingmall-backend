@@ -41,6 +41,7 @@ const videoCourse_routes_1 = __importDefault(require("./models/videoCourse/video
 const videoRequest_routes_1 = __importDefault(require("./models/videoRequest/videoRequest.routes"));
 const notice_routes_1 = __importDefault(require("./models/notice/notice.routes"));
 const homepage_routes_1 = __importDefault(require("./models/homepage/homepage.routes"));
+const homepage_controller_1 = require("./models/homepage/homepage.controller");
 // middleware
 const app = (0, express_1.default)();
 app.set("trust proxy", 1);
@@ -69,6 +70,8 @@ app.use(async (req, res, next) => {
         next(error);
     }
 });
+// Warm homepage cache after DB connection
+(0, db_connect_1.default)().then(() => (0, homepage_controller_1.warmHomepageCache)()).catch(() => { });
 //  route
 const analytics_routes_1 = __importDefault(require("./models/analytics/analytics.routes"));
 const teamSystem_routes_1 = __importDefault(require("./models/teamSystem/teamSystem.routes"));

@@ -45,6 +45,8 @@ const createWebsiteInfo = async (req, res) => {
         }
         const newInfo = new websiteinfo_model_1.default(data);
         const saved = await newInfo.save();
+        await cache_1.cache.del("websiteinfo");
+        await cache_1.cache.delByPrefix("homepage");
         res.status(201).json({ success: true, message: "Website info created", data: saved });
     }
     catch (error) {
@@ -120,6 +122,8 @@ const updateWebsiteInfo = async (req, res) => {
         const updated = await websiteinfo_model_1.default.findByIdAndUpdate(id, data, { new: true });
         if (!updated)
             return res.status(404).json({ success: false, message: "Not found" });
+        await cache_1.cache.del("websiteinfo");
+        await cache_1.cache.delByPrefix("homepage");
         res.status(200).json({ success: true, message: "Updated successfully", data: updated });
     }
     catch (error) {
@@ -134,6 +138,8 @@ const deleteWebsiteInfo = async (req, res) => {
         const deleted = await websiteinfo_model_1.default.findByIdAndDelete(id);
         if (!deleted)
             return res.status(404).json({ success: false, message: "Not found" });
+        await cache_1.cache.del("websiteinfo");
+        await cache_1.cache.delByPrefix("homepage");
         res.status(200).json({ success: true, message: "Deleted successfully" });
     }
     catch (error) {

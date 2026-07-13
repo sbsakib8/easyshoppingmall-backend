@@ -30,6 +30,7 @@ const createBlog = async (req, res) => {
             createdTimeBn: now.format("hh:mm A"),
         });
         const savedBlog = await blog.save();
+        await cache_1.cache.del("blogs:all");
         res.status(201).json({
             success: true,
             message: "Blog created successfully",
@@ -100,6 +101,7 @@ const updateBlog = async (req, res) => {
         if (!updatedBlog) {
             return res.status(404).json({ success: false, message: "Blog not found" });
         }
+        await cache_1.cache.del("blogs:all");
         res.status(200).json({ success: true, message: "Blog updated", data: updatedBlog });
     }
     catch (error) {
@@ -115,6 +117,7 @@ const deleteBlog = async (req, res) => {
         if (!deletedBlog) {
             return res.status(404).json({ success: false, message: "Blog not found" });
         }
+        await cache_1.cache.del("blogs:all");
         res.status(200).json({ success: true, message: "Blog deleted successfully" });
     }
     catch (error) {

@@ -201,9 +201,11 @@ const updateNotice = async (req, res) => {
         if (priority !== undefined)
             notice.priority = priority;
         await notice.save();
-        res.status(200).json({
+        await cache_1.cache.del("notices:active");
+        await cache_1.cache.delByPrefix("homepage");
+        res.status(201).json({
             success: true,
-            message: "Notice updated successfully",
+            message: "Notice created successfully",
             data: notice,
         });
     }
@@ -232,6 +234,8 @@ const deleteNotice = async (req, res) => {
             });
             return;
         }
+        await cache_1.cache.del("notices:active");
+        await cache_1.cache.delByPrefix("homepage");
         res.status(200).json({
             success: true,
             message: "Notice deleted successfully",
@@ -264,9 +268,11 @@ const toggleNoticeStatus = async (req, res) => {
         }
         notice.isActive = !notice.isActive;
         await notice.save();
+        await cache_1.cache.del("notices:active");
+        await cache_1.cache.delByPrefix("homepage");
         res.status(200).json({
             success: true,
-            message: `Notice ${notice.isActive ? "activated" : "deactivated"} successfully`,
+            message: "Notice updated successfully",
             data: notice,
         });
     }
