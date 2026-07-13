@@ -27,6 +27,8 @@ const createCenterBanner = async (req, res) => {
             status,
             images: imageUrls,
         });
+        await cache_1.cache.del("banners:center");
+        await cache_1.cache.delByPrefix("homepage");
         return res.status(201).json({
             success: true,
             message: "Center banner created successfully",
@@ -96,6 +98,8 @@ const updateCenterBanner = async (req, res) => {
         if (!updatedBanner) {
             return res.status(404).json({ success: false, message: "Banner not found" });
         }
+        await cache_1.cache.del("banners:center");
+        await cache_1.cache.delByPrefix("homepage");
         return res.status(200).json({
             success: true,
             message: "Center banner updated successfully",
@@ -115,6 +119,8 @@ const deleteCenterBanner = async (req, res) => {
         if (!banner) {
             return res.status(404).json({ success: false, message: "Banner not found" });
         }
+        await cache_1.cache.del("banners:center");
+        await cache_1.cache.delByPrefix("homepage");
         return res.status(200).json({ success: true, message: "Banner deleted successfully" });
     }
     catch (error) {
