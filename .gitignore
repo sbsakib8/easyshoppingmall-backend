@@ -22,12 +22,18 @@ jest.config.ts
 
 # production
 /build
+/dist
 /docs
 /scratch
+/scripts
 
 # misc
 .DS_Store
 *.pem
+
+# openspec
+/openspec
+/.opencode
 
 # debug
 npm-debug.log*

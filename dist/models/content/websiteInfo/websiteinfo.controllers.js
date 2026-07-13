@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteWebsiteInfo = exports.updateWebsiteInfo = exports.getAllWebsiteInfo = exports.createWebsiteInfo = void 0;
 const websiteinfo_model_1 = __importDefault(require("./websiteinfo.model"));
+const cache_1 = require("../../../utils/cache");
 //  Helper: Countdown calculator
 const calculateCountdown = (targetDate) => {
     const now = new Date().getTime();
@@ -55,6 +56,13 @@ exports.createWebsiteInfo = createWebsiteInfo;
 //  Get All
 const getAllWebsiteInfo = async (_req, res) => {
     try {
+        const cacheKey = "websiteinfo";
+        const cached = await cache_1.cache.get(cacheKey);
+        if (cached) {
+            res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=30");
+            res.status(200).json(cached);
+            return;
+        }
         let info = await websiteinfo_model_1.default.find();
         // Dynamically recalculate countdown for each record to ensure it's not stale
         const updatedInfo = info.map(item => {
@@ -70,7 +78,11 @@ const getAllWebsiteInfo = async (_req, res) => {
             }
             return plainItem;
         });
-        res.status(200).json({ success: true, data: updatedInfo });
+        const response = { success: true, data: updatedInfo };
+        // Short TTL because countdown changes frequently
+        await cache_1.cache.set(cacheKey, response, 60);
+        res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=30");
+        res.status(200).json(response);
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });

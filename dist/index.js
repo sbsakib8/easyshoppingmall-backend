@@ -25,6 +25,7 @@ const notification_routes_1 = __importDefault(require("./models/notification/not
 const order_routes_1 = __importDefault(require("./models/order/order.routes"));
 const payment_route_1 = __importDefault(require("./models/payment/payment.route"));
 const errorHandler_1 = __importDefault(require("./middlewares/errorHandler"));
+const etag_1 = require("./middlewares/etag");
 const admin_route_1 = __importDefault(require("./models/admin/admin.route"));
 const product_routes_1 = __importDefault(require("./models/product/product.routes"));
 const review_routes_1 = __importDefault(require("./models/review/review.routes"));
@@ -38,10 +39,13 @@ const videoContent_routes_1 = __importDefault(require("./models/videoContent/vid
 const videoModule_routes_1 = __importDefault(require("./models/videoModule/videoModule.routes"));
 const videoCourse_routes_1 = __importDefault(require("./models/videoCourse/videoCourse.routes"));
 const videoRequest_routes_1 = __importDefault(require("./models/videoRequest/videoRequest.routes"));
+const notice_routes_1 = __importDefault(require("./models/notice/notice.routes"));
+const homepage_routes_1 = __importDefault(require("./models/homepage/homepage.routes"));
 // middleware
 const app = (0, express_1.default)();
 app.set("trust proxy", 1);
 app.use((0, compression_1.default)()); // Compress all responses
+app.use(etag_1.etagMiddleware); // Add ETag support for conditional requests
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use((0, cookie_parser_1.default)());
@@ -95,6 +99,8 @@ app.use("/api/video-access", videoAccess_routes_1.default);
 app.use("/api/video-content", videoContent_routes_1.default);
 app.use("/api/video-module", videoModule_routes_1.default);
 app.use("/api/video-request", videoRequest_routes_1.default);
+app.use("/api/notice", notice_routes_1.default);
+app.use("/api/homepage", homepage_routes_1.default);
 app.use("/api/team-system", teamSystem_routes_1.default);
 app.use("/api/admin", admin_route_1.default);
 app.get("/", (req, res) => {

@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteLeftBanner = exports.updateLeftBanner = exports.getSingleLeftBanner = exports.getAllLeftBanners = exports.createLeftBanner = void 0;
 const leftBanner_model_1 = __importDefault(require("./leftBanner.model"));
 const cloudinary_1 = __importDefault(require("../../../utils/cloudinary"));
+const cache_1 = require("../../../utils/cache");
 // Create Home Banner
 const createLeftBanner = async (req, res) => {
     try {
@@ -41,8 +42,17 @@ exports.createLeftBanner = createLeftBanner;
 //  Get All Banners
 const getAllLeftBanners = async (req, res) => {
     try {
-        const banners = await leftBanner_model_1.default.find().sort({ createdAt: -1 });
-        return res.status(200).json({ success: true, data: banners });
+        const cacheKey = "banners:left";
+        const cached = await cache_1.cache.get(cacheKey);
+        if (cached) {
+            res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+            return res.status(200).json(cached);
+        }
+        const banners = await leftBanner_model_1.default.find().sort({ createdAt: -1 }).lean();
+        const response = { success: true, data: banners };
+        await cache_1.cache.set(cacheKey, response, 300);
+        res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+        return res.status(200).json(response);
     }
     catch (error) {
         return res.status(500).json({ success: false, message: error.message });

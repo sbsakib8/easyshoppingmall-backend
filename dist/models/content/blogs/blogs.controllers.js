@@ -8,6 +8,7 @@ const blogs_model_1 = __importDefault(require("./blogs.model"));
 const moment_1 = __importDefault(require("moment"));
 require("moment/locale/bn");
 const cloudinary_1 = __importDefault(require("../../../utils/cloudinary"));
+const cache_1 = require("../../../utils/cache");
 const createBlog = async (req, res) => {
     try {
         const { title, author, category, status, excerpt, content } = req.body;
@@ -44,8 +45,18 @@ exports.createBlog = createBlog;
 //  Get All Blogs
 const getAllBlogs = async (_req, res) => {
     try {
-        const blogs = await blogs_model_1.default.find().sort({ createdAt: -1 });
-        res.status(200).json({ success: true, data: blogs });
+        const cacheKey = "blogs:all";
+        const cached = await cache_1.cache.get(cacheKey);
+        if (cached) {
+            res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+            res.status(200).json(cached);
+            return;
+        }
+        const blogs = await blogs_model_1.default.find().sort({ createdAt: -1 }).lean();
+        const response = { success: true, data: blogs };
+        await cache_1.cache.set(cacheKey, response, 300);
+        res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+        res.status(200).json(response);
     }
     catch (error) {
         console.error("Get Blogs Error:", error);

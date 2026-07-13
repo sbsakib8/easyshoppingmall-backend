@@ -3,7 +3,7 @@ import ProductModel from "../product/product.model";
 import SubCategoryModel from "./subcategory.model";
 import CategoryModel from "../category/category.model";
 import uploadClouinary from "../../utils/cloudinary";
-import { memoryCache } from "../../utils/cache";
+import { cache } from "../../utils/cache";
 
 // ✅ Create SubCategory
 export const createSubCategory = async (req: Request, res: Response): Promise<void> => {
@@ -50,7 +50,11 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
       message: "SubCategory created successfully",
       data: subCategory,
     });
-    memoryCache.clear();
+    await cache.delByPrefix("subcategories:");
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -60,15 +64,16 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
 export const getSubCategories = async (req: Request, res: Response): Promise<void> => {
   try {
     const { filterType } = req.query;
-    const cacheKey = `subcategories:${filterType || 'all'}`;
-    const cached = memoryCache.get(cacheKey);
+    const showAll = req.query.status === "all";
+    const cacheKey = `subcategories:${showAll ? "admin:" : ""}${filterType || 'all'}`;
+    const cached = await cache.get(cacheKey);
     if (cached) {
       res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
       res.json(cached);
       return;
     }
 
-    const filter: any = { isActive: true };
+    const filter: any = showAll ? {} : { isActive: true };
 
     if (filterType === "new-products" || filterType === "boost-products") {
       const productFilter: any = { publish: true };
@@ -94,7 +99,7 @@ export const getSubCategories = async (req: Request, res: Response): Promise<voi
       .lean();
 
     const response = { success: true, data: subCategories };
-    memoryCache.set(cacheKey, response, 300);
+    await cache.set(cacheKey, response, 300);
     res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
     res.status(200).json(response);
   } catch (error: any) {
@@ -155,7 +160,11 @@ export const updateSubCategory = async (req: Request, res: Response): Promise<vo
       message: "SubCategory updated successfully",
       data: updatedSubCategory,
     });
-    memoryCache.clear();
+    await cache.delByPrefix("subcategories:");
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -180,7 +189,11 @@ export const deleteSubCategory = async (req: Request, res: Response): Promise<vo
     }
 
     res.status(200).json({ success: true, message: "SubCategory deleted successfully" });
-    memoryCache.clear();
+    await cache.delByPrefix("subcategories:");
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

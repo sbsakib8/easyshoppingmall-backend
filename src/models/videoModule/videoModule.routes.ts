@@ -8,16 +8,17 @@ import {
 } from "./videoModule.controllers";
 import { isAuth } from "../../middlewares/isAuth";
 import { isAdmin } from "../../middlewares/isAdmin";
+import { isDashboardAccess } from "../../middlewares/isDashboardAccess";
 
 const router = express.Router();
 
 // Public / Dropshipper route
 router.get("/all", getActiveModules);
 
-// Admin routes
-router.post("/admin/create", isAuth, isAdmin, createModule);
-router.get("/admin/all", isAuth, isAdmin, getAllModulesAdmin);
-router.put("/admin/:id", isAuth, isAdmin, updateModule);
-router.delete("/admin/:id", isAuth, isAdmin, deleteModule);
+// Admin / Manager routes (dropshipping manage video)
+router.post("/admin/create", isAuth, isDashboardAccess("dropshipping"), createModule);
+router.get("/admin/all", isAuth, isDashboardAccess("dropshipping"), getAllModulesAdmin);
+router.put("/admin/:id", isAuth, isDashboardAccess("dropshipping"), updateModule);
+router.delete("/admin/:id", isAuth, isDashboardAccess("dropshipping"), deleteModule);
 
 export default router;

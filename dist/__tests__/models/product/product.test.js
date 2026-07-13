@@ -51,7 +51,7 @@ afterAll(async () => {
     await mongoServer.stop();
 });
 beforeEach(async () => {
-    cache_1.memoryCache.clear();
+    await cache_1.cache.delByPrefix("");
     const collections = mongoose_1.default.connection.collections;
     for (const key in collections) {
         if (key !== "users" && key !== "categories" && key !== "subcategories") {

@@ -51,6 +51,8 @@ const BlogSchema = new mongoose_1.Schema({
     createdDateBn: { type: String },
     createdTimeBn: { type: String },
 }, { timestamps: true });
+BlogSchema.index({ createdAt: -1 });
+BlogSchema.index({ status: 1, createdAt: -1 });
 BlogSchema.pre("save", function (next) {
     const now = (0, moment_1.default)().locale("bn");
     this.createdDateBn = now.format("DD MMMM, YYYY");

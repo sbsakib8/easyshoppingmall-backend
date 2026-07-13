@@ -4,8 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const isAdmin_1 = require("../../middlewares/isAdmin");
 const isAuth_1 = require("../../middlewares/isAuth");
+const isDashboardAccess_1 = require("../../middlewares/isDashboardAccess");
 const multer_1 = require("../../middlewares/multer");
 const decryptBody_1 = require("../../middlewares/decryptBody");
 const user_controllers_1 = require("./user.controllers");
@@ -21,8 +21,8 @@ router.post("/reset-password", decryptBody_1.decryptBody, user_controllers_1.res
 router.post("/google-auth", user_controllers_1.googleAuth);
 //  user routes
 router.get("/userprofile", isAuth_1.isAuth, user_controllers_1.getUserProfile);
-router.get("/getallusers", isAuth_1.isAuth, isAdmin_1.isAdmin, user_controllers_1.getAllUsers);
-router.delete("/userdelete/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, user_controllers_1.deleteUser);
+router.get("/getallusers", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("customers"), user_controllers_1.getAllUsers);
+router.delete("/userdelete/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("customers"), user_controllers_1.deleteUser);
 router.put("/userupdate/:id", isAuth_1.isAuth, user_controllers_1.updateUserProfile);
 router.put("/user-image/:id", isAuth_1.isAuth, multer_1.upload.single("image"), user_controllers_1.userImage);
 exports.default = router;

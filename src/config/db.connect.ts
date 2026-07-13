@@ -10,7 +10,11 @@ const connectDB = async (): Promise<void> => {
 
   try {
     await mongoose.connect(processdata.mongodburl, {
-      maxPoolSize: 10,
+      maxPoolSize: 20,
+      minPoolSize: 2,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 20000,
+      compressors: ["snappy"],
     });
 
     console.log("✅ MongoDB connected");

@@ -7,13 +7,13 @@ import {
   deleteSubCategory,
 } from "./subcategory.controllers";
 import { isAuth } from "../../middlewares/isAuth";
-import { isAdmin } from "../../middlewares/isAdmin";
+import { isDashboardAccess } from "../../middlewares/isDashboardAccess";
 import { upload } from "../../middlewares/multer";
 
 const router = express.Router();
 
 // Create SubCategory
-router.post("/create",isAuth,isAdmin,upload.single("image"), createSubCategory);
+router.post("/create",isAuth,isDashboardAccess("products"),upload.single("image"), createSubCategory);
 
 // Get All SubCategories
 router.get("/", getSubCategories);
@@ -22,9 +22,9 @@ router.get("/", getSubCategories);
 router.get("/:id", getSubCategoryById);
 
 // Update SubCategory
-router.put("/:id",isAuth,isAdmin,upload.single("image"), updateSubCategory);
+router.put("/:id",isAuth,isDashboardAccess("products"),upload.single("image"), updateSubCategory);
 
 // Delete SubCategory
-router.delete("/:id",isAuth,isAdmin, deleteSubCategory);
+router.delete("/:id",isAuth,isDashboardAccess("products"), deleteSubCategory);
 
 export default router;

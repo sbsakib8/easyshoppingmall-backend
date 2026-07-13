@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import WebsiteInfo from "./websiteinfo.model";
+import { cache } from "../../../utils/cache";
 
 //  Helper: Countdown calculator
 const calculateCountdown = (targetDate: Date) => {
@@ -47,6 +48,9 @@ export const createWebsiteInfo = async (req: Request, res: Response) => {
     const newInfo = new WebsiteInfo(data);
     const saved = await newInfo.save();
 
+    await cache.del("websiteinfo");
+    await cache.delByPrefix("homepage");
+
     res.status(201).json({ success: true, message: "Website info created", data: saved });
   } catch (error: any) {
     console.error(error);
@@ -57,6 +61,14 @@ export const createWebsiteInfo = async (req: Request, res: Response) => {
 //  Get All
 export const getAllWebsiteInfo = async (_req: Request, res: Response) => {
   try {
+    const cacheKey = "websiteinfo";
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=30");
+      res.status(200).json(cached);
+      return;
+    }
+
     let info = await WebsiteInfo.find();
 
     // Dynamically recalculate countdown for each record to ensure it's not stale
@@ -74,7 +86,11 @@ export const getAllWebsiteInfo = async (_req: Request, res: Response) => {
       return plainItem;
     });
 
-    res.status(200).json({ success: true, data: updatedInfo });
+    const response = { success: true, data: updatedInfo };
+    // Short TTL because countdown changes frequently
+    await cache.set(cacheKey, response, 60);
+    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=30");
+    res.status(200).json(response);
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -115,6 +131,9 @@ export const updateWebsiteInfo = async (req: Request, res: Response) => {
     const updated = await WebsiteInfo.findByIdAndUpdate(id, data, { new: true });
     if (!updated) return res.status(404).json({ success: false, message: "Not found" });
 
+    await cache.del("websiteinfo");
+    await cache.delByPrefix("homepage");
+
     res.status(200).json({ success: true, message: "Updated successfully", data: updated });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -127,6 +146,9 @@ export const deleteWebsiteInfo = async (req: Request, res: Response) => {
     const { id } = req.params;
     const deleted = await WebsiteInfo.findByIdAndDelete(id);
     if (!deleted) return res.status(404).json({ success: false, message: "Not found" });
+
+    await cache.del("websiteinfo");
+    await cache.delByPrefix("homepage");
 
     res.status(200).json({ success: true, message: "Deleted successfully" });
   } catch (error: any) {

@@ -24,6 +24,7 @@ import orderRoute from "./models/order/order.routes";
 import paymentRouter from "./models/payment/payment.route";
 
 import errorHandler from "./middlewares/errorHandler";
+import { etagMiddleware } from "./middlewares/etag";
 import adminRoutes from "./models/admin/admin.route";
 import productRouter from "./models/product/product.routes";
 import reviewRouter from "./models/review/review.routes";
@@ -37,6 +38,9 @@ import videoContentRouter from "./models/videoContent/videoContent.routes";
 import videoModuleRouter from "./models/videoModule/videoModule.routes";
 import videoCourseRouter from "./models/videoCourse/videoCourse.routes";
 import videoRequestRouter from "./models/videoRequest/videoRequest.routes";
+import noticeRouter from "./models/notice/notice.routes";
+import homepageRoutes from "./models/homepage/homepage.routes";
+import { warmHomepageCache } from "./models/homepage/homepage.controller";
 
 // middleware
 const app: Application = express();
@@ -44,6 +48,7 @@ const app: Application = express();
 app.set("trust proxy", 1);
 
 app.use(compression()); // Compress all responses
+app.use(etagMiddleware); // Add ETag support for conditional requests
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -70,6 +75,9 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
     next(error);
   }
 });
+
+// Warm homepage cache after DB connection
+connectDB().then(() => warmHomepageCache()).catch(() => {});
 
 //  route
 import analyticsRoutes from "./models/analytics/analytics.routes";
@@ -103,6 +111,8 @@ app.use("/api/video-access", videoAccessRouter);
 app.use("/api/video-content", videoContentRouter);
 app.use("/api/video-module", videoModuleRouter);
 app.use("/api/video-request", videoRequestRouter);
+app.use("/api/notice", noticeRouter);
+app.use("/api/homepage", homepageRoutes);
 
 app.use("/api/team-system", teamSystemRoutes);
 

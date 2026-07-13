@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const coupon_controller_1 = require("./coupon.controller");
 const isAuth_1 = require("../../middlewares/isAuth");
-const isAdmin_1 = require("../../middlewares/isAdmin");
+const isDashboardAccess_1 = require("../../middlewares/isDashboardAccess");
 const couponRouter = (0, express_1.Router)();
 // In-memory store for rate limiting (Bug 18)
 const rateLimitMap = new Map();
@@ -27,7 +27,7 @@ const applyCouponRateLimiter = (req, res, next) => {
     if (record.count > maxRequests) {
         return res.status(429).json({
             success: false,
-            message: "অতিরিক্ত কুপন ট্রাই করা হয়েছে। অনুগ্রহ করে ১ মিনিট পর আবার চেষ্টা করুন। / Too many coupon application attempts. Please try again after 1 minute."
+            message: "অতিরিক্ত কুপন ট্রাই করা হয়েছে। অনুগ্রহ করে ১ মিনিট পর আবার চেষ্টা করুন। / Too many coupon application attempts. Please try again after 1 minute."
         });
     }
     next();
@@ -36,10 +36,10 @@ const applyCouponRateLimiter = (req, res, next) => {
 couponRouter.post("/apply", isAuth_1.isAuth, applyCouponRateLimiter, coupon_controller_1.applyCoupon);
 couponRouter.post("/apply-ds", isAuth_1.isAuth, applyCouponRateLimiter, coupon_controller_1.applyDropshippingCoupon);
 couponRouter.get("/product/:productId", coupon_controller_1.getProductCoupons);
-// Admin Routes
-couponRouter.post("/create", isAuth_1.isAuth, isAdmin_1.isAdmin, coupon_controller_1.createCoupon);
-couponRouter.get("/", isAuth_1.isAuth, isAdmin_1.isAdmin, coupon_controller_1.getCoupons);
-couponRouter.delete("/delete/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, coupon_controller_1.deleteCoupon);
-couponRouter.put("/update/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, coupon_controller_1.updateCoupon);
-couponRouter.patch("/update/:id", isAuth_1.isAuth, isAdmin_1.isAdmin, coupon_controller_1.updateCoupon);
+// Admin / CPO Routes
+couponRouter.post("/create", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("coupons"), coupon_controller_1.createCoupon);
+couponRouter.get("/", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("coupons"), coupon_controller_1.getCoupons);
+couponRouter.delete("/delete/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("coupons"), coupon_controller_1.deleteCoupon);
+couponRouter.put("/update/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("coupons"), coupon_controller_1.updateCoupon);
+couponRouter.patch("/update/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("coupons"), coupon_controller_1.updateCoupon);
 exports.default = couponRouter;

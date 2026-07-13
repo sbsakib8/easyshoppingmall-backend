@@ -8,13 +8,13 @@ import {
   deleteCategory,
 } from "./category.controllers";
 import { isAuth } from "../../middlewares/isAuth";
-import { isAdmin } from "../../middlewares/isAdmin";
+import { isDashboardAccess } from "../../middlewares/isDashboardAccess";
 import { upload } from "../../middlewares/multer";
 
 const router = express.Router();
 
 // Create Category
-router.post("/create", isAuth, isAdmin, upload.single("image"), createCategory);
+router.post("/create", isAuth, isDashboardAccess("products"), upload.single("image"), createCategory);
 
 // Get All Categories
 router.get("/", getCategories);
@@ -26,9 +26,9 @@ router.get("/get-tree", getCategoryTree);
 router.get("/:id", getCategoryById);
 
 // Update Category
-router.put("/:id", isAuth, isAdmin, upload.single("image"), updateCategory);
+router.put("/:id", isAuth, isDashboardAccess("products"), upload.single("image"), updateCategory);
 
 // Delete Category
-router.delete("/:id", isAuth, isAdmin, deleteCategory);
+router.delete("/:id", isAuth, isDashboardAccess("products"), deleteCategory);
 
 export default router;

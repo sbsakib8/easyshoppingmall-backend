@@ -33,5 +33,7 @@ const homeBannerSchema = new Schema<IHomeBanner>(
   { timestamps: true }
 );
 
+homeBannerSchema.index({ active: 1, sliderFor: 1 });
+
 export default mongoose.models.HomeBanner ||
   mongoose.model<IHomeBanner>("HomeBanner", homeBannerSchema);

@@ -56,5 +56,6 @@ const leftBannerSchema = new mongoose_1.Schema({
         default: 'active'
     }
 }, { timestamps: true });
+leftBannerSchema.index({ status: 1 });
 exports.default = mongoose_1.default.models.LeftBanner ||
     mongoose_1.default.model("LeftBanner", leftBannerSchema);

@@ -3,10 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isAuth = void 0;
+exports.invalidateUserCache = exports.isAuth = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const config_1 = __importDefault(require("../config"));
-const user_model_1 = __importDefault(require("../models/user/user.model")); // Import UserModel
+const user_model_1 = __importDefault(require("../models/user/user.model"));
+const cache_1 = require("../utils/cache");
+const USER_CACHE_TTL = 300; // 5 minutes
 const isAuth = async (req, res, next) => {
     try {
         const token = req.cookies?.token;
@@ -19,13 +21,22 @@ const isAuth = async (req, res, next) => {
             res.status(401).json({ message: "Unauthorized: Invalid token" });
             return;
         }
-        const user = await user_model_1.default.findById(decoded.userId).maxTimeMS(5000); // 5s timeout
+        // Try cache first
+        const cacheKey = `auth:user:${decoded.userId}`;
+        const cachedUser = await cache_1.cache.get(cacheKey);
+        if (cachedUser) {
+            req.userId = decoded.userId;
+            req.user = cachedUser;
+            next();
+            return;
+        }
+        // Cache miss - fetch from DB
+        const user = await user_model_1.default.findById(decoded.userId).maxTimeMS(2000);
         if (!user) {
             res.status(401).json({ message: "Unauthorized: User not found" });
             return;
         }
-        req.userId = decoded.userId;
-        req.user = {
+        const authUser = {
             _id: user._id.toString(),
             name: user.name,
             email: user.email,
@@ -34,6 +45,10 @@ const isAuth = async (req, res, next) => {
             mobile: user.mobile || undefined,
             balance: user.balance || 0,
         };
+        // Cache user data
+        await cache_1.cache.set(cacheKey, authUser, USER_CACHE_TTL);
+        req.userId = decoded.userId;
+        req.user = authUser;
         next();
     }
     catch (error) {
@@ -54,3 +69,8 @@ const isAuth = async (req, res, next) => {
     }
 };
 exports.isAuth = isAuth;
+// Invalidate user cache (call on profile update, role change, etc.)
+const invalidateUserCache = async (userId) => {
+    await cache_1.cache.del(`auth:user:${userId}`);
+};
+exports.invalidateUserCache = invalidateUserCache;

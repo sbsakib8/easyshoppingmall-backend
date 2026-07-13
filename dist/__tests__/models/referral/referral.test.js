@@ -46,7 +46,7 @@ afterAll(async () => {
     await mongoServer.stop();
 });
 beforeEach(async () => {
-    cache_1.memoryCache.clear();
+    await cache_1.cache.delByPrefix("");
     await order_model_1.default.deleteMany({});
     await referral_model_1.default.deleteMany({});
     await product_model_1.default.deleteMany({});

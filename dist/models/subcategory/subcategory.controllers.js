@@ -48,7 +48,11 @@ const createSubCategory = async (req, res) => {
             message: "SubCategory created successfully",
             data: subCategory,
         });
-        cache_1.memoryCache.clear();
+        await cache_1.cache.delByPrefix("subcategories:");
+        await cache_1.cache.del("all_categories");
+        await cache_1.cache.del("category_tree");
+        await cache_1.cache.delByPrefix("products:");
+        await cache_1.cache.delByPrefix("homepage");
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -59,14 +63,15 @@ exports.createSubCategory = createSubCategory;
 const getSubCategories = async (req, res) => {
     try {
         const { filterType } = req.query;
-        const cacheKey = `subcategories:${filterType || 'all'}`;
-        const cached = cache_1.memoryCache.get(cacheKey);
+        const showAll = req.query.status === "all";
+        const cacheKey = `subcategories:${showAll ? "admin:" : ""}${filterType || 'all'}`;
+        const cached = await cache_1.cache.get(cacheKey);
         if (cached) {
             res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
             res.json(cached);
             return;
         }
-        const filter = { isActive: true };
+        const filter = showAll ? {} : { isActive: true };
         if (filterType === "new-products" || filterType === "boost-products") {
             const productFilter = { publish: true };
             if (filterType === "new-products") {
@@ -88,7 +93,7 @@ const getSubCategories = async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
         const response = { success: true, data: subCategories };
-        cache_1.memoryCache.set(cacheKey, response, 300);
+        await cache_1.cache.set(cacheKey, response, 300);
         res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
         res.status(200).json(response);
     }
@@ -141,7 +146,11 @@ const updateSubCategory = async (req, res) => {
             message: "SubCategory updated successfully",
             data: updatedSubCategory,
         });
-        cache_1.memoryCache.clear();
+        await cache_1.cache.delByPrefix("subcategories:");
+        await cache_1.cache.del("all_categories");
+        await cache_1.cache.del("category_tree");
+        await cache_1.cache.delByPrefix("products:");
+        await cache_1.cache.delByPrefix("homepage");
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -159,7 +168,11 @@ const deleteSubCategory = async (req, res) => {
             return;
         }
         res.status(200).json({ success: true, message: "SubCategory deleted successfully" });
-        cache_1.memoryCache.clear();
+        await cache_1.cache.delByPrefix("subcategories:");
+        await cache_1.cache.del("all_categories");
+        await cache_1.cache.del("category_tree");
+        await cache_1.cache.delByPrefix("products:");
+        await cache_1.cache.delByPrefix("homepage");
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });

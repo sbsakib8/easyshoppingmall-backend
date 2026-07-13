@@ -18,4 +18,6 @@ const paymentSchema = new mongoose_1.Schema({
     tran_id: { type: String, unique: true, required: true },
     gateway_response: { type: mongoose_1.Schema.Types.Mixed },
 }, { timestamps: true });
+paymentSchema.index({ orderId: 1 });
+paymentSchema.index({ userId: 1, createdAt: -1 });
 exports.PaymentModel = (0, mongoose_1.model)("Payment", paymentSchema);
