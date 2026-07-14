@@ -9,6 +9,7 @@ const subcategory_model_1 = __importDefault(require("./subcategory.model"));
 const category_model_1 = __importDefault(require("../category/category.model"));
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 const cache_1 = require("../../utils/cache");
+const revalidate_1 = require("../../utils/revalidate");
 // ✅ Create SubCategory
 const createSubCategory = async (req, res) => {
     try {
@@ -43,16 +44,17 @@ const createSubCategory = async (req, res) => {
             category,
         });
         await subCategory.save();
-        res.status(201).json({
-            success: true,
-            message: "SubCategory created successfully",
-            data: subCategory,
-        });
         await cache_1.cache.delByPrefix("subcategories:");
         await cache_1.cache.del("all_categories");
         await cache_1.cache.del("category_tree");
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
+        res.status(201).json({
+            success: true,
+            message: "SubCategory created successfully",
+            data: subCategory,
+        });
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -64,18 +66,10 @@ const getSubCategories = async (req, res) => {
     try {
         const { filterType } = req.query;
         const showAll = req.query.status === "all";
-        const cacheKey = `subcategories:${showAll ? "admin:" : ""}${filterType || 'all'}`;
-        const cached = await cache_1.cache.get(cacheKey);
-        if (cached) {
-            res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
-            res.json(cached);
-            return;
-        }
         const filter = showAll ? {} : { isActive: true };
         if (filterType === "new-products" || filterType === "boost-products") {
             const productFilter = { publish: true };
             if (filterType === "new-products") {
-                // Products created in the last 30 days are considered new
                 const thirtyDaysAgo = new Date();
                 thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
                 productFilter.createdAt = { $gte: thirtyDaysAgo };
@@ -83,7 +77,6 @@ const getSubCategories = async (req, res) => {
             else if (filterType === "boost-products") {
                 productFilter.isBoost = true;
             }
-            // Fetch distinct subcategory IDs having matching products
             const subCategoryIds = await product_model_1.default.distinct("subCategory", productFilter);
             filter._id = { $in: subCategoryIds };
         }
@@ -92,10 +85,8 @@ const getSubCategories = async (req, res) => {
             .populate("category", "name slug")
             .sort({ createdAt: -1 })
             .lean();
-        const response = { success: true, data: subCategories };
-        await cache_1.cache.set(cacheKey, response, 300);
-        res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
-        res.status(200).json(response);
+        res.set('Cache-Control', 'private, no-cache');
+        res.status(200).json({ success: true, data: subCategories });
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -151,6 +142,7 @@ const updateSubCategory = async (req, res) => {
         await cache_1.cache.del("category_tree");
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -173,6 +165,7 @@ const deleteSubCategory = async (req, res) => {
         await cache_1.cache.del("category_tree");
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });

@@ -14,7 +14,7 @@ export const getHomepageData = async (req: Request, res: Response): Promise<void
     const cacheKey = "homepage";
     const cached = await cache.get(cacheKey);
     if (cached) {
-      res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+      res.set("Cache-Control", "private, no-cache");
       res.json(cached);
       return;
     }
@@ -74,7 +74,7 @@ export const getHomepageData = async (req: Request, res: Response): Promise<void
     };
 
     await cache.set(cacheKey, response, HOMEPAGE_CACHE_TTL);
-    res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+    res.set("Cache-Control", "private, no-cache");
     res.json(response);
   } catch (error: any) {
     res.status(500).json({

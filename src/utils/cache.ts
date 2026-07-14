@@ -49,7 +49,8 @@ class RedisCache implements CacheStore {
     try {
       const data = await redis!.get<T>(key);
       return data ?? null;
-    } catch {
+    } catch (err) {
+      console.error(`[CACHE] Failed to get key "${key}":`, err);
       return null;
     }
   }
@@ -57,16 +58,16 @@ class RedisCache implements CacheStore {
   async set(key: string, data: any, ttlSeconds: number = 300): Promise<void> {
     try {
       await redis!.set(key, data, { ex: ttlSeconds });
-    } catch {
-      // Silent fail - cache is non-critical
+    } catch (err) {
+      console.error(`[CACHE] Failed to set key "${key}":`, err);
     }
   }
 
   async del(key: string): Promise<void> {
     try {
       await redis!.del(key);
-    } catch {
-      // Silent fail
+    } catch (err) {
+      console.error(`[CACHE] Failed to delete key "${key}":`, err);
     }
   }
 
@@ -88,8 +89,8 @@ class RedisCache implements CacheStore {
           await redis!.del(...batch);
         }
       }
-    } catch {
-      // Silent fail
+    } catch (err) {
+      console.error(`[CACHE] Failed to delete by prefix "${prefix}":`, err);
     }
   }
 
