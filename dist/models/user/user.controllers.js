@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.getAllUsers = exports.getUserProfile = exports.googleAuth = exports.resetpassword = exports.verifyotp = exports.sendotp = exports.signOut = exports.signIn = exports.signUp = void 0;
+exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.getAllUsers = exports.getUserById = exports.getUserProfile = exports.googleAuth = exports.resetpassword = exports.verifyotp = exports.sendotp = exports.signOut = exports.signIn = exports.signUp = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 const generatetoken_1 = __importDefault(require("../../utils/generatetoken"));
@@ -358,29 +358,72 @@ const getUserProfile = async (req, res) => {
     }
 };
 exports.getUserProfile = getUserProfile;
-//  get all users (paginated)
+// get single user by ID (admin only)
+const getUserById = async (req, res) => {
+    try {
+        const user = await user_model_1.default.findById(req.params.id)
+            .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+            .populate("address_details");
+        if (!user) {
+            res.status(404).json({ success: false, message: "User not found" });
+            return;
+        }
+        res.status(200).json({ success: true, user });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.getUserById = getUserById;
+//  get all users (paginated with search)
 const getAllUsers = async (req, res) => {
     try {
         const page = Math.max(1, parseInt(req.query.page) || 1);
-        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
-        const skip = (page - 1) * limit;
+        const limitParam = parseInt(req.query.limit);
+        const limit = limitParam ? Math.min(500, Math.max(1, limitParam)) : 0; // 0 = no limit (return all)
+        const skip = limit > 0 ? (page - 1) * limit : 0;
+        // Build filter
+        const filter = {};
+        // Search by name, email, or mobile
+        if (req.query.search) {
+            const search = req.query.search.trim();
+            filter.$or = [
+                { name: { $regex: search, $options: "i" } },
+                { email: { $regex: search, $options: "i" } },
+                { mobile: { $regex: search, $options: "i" } },
+            ];
+        }
+        // Filter by role
+        if (req.query.role) {
+            filter.role = req.query.role;
+        }
+        // Filter by status
+        if (req.query.status) {
+            filter.status = req.query.status;
+        }
+        // Filter by customerstatus
+        if (req.query.customerstatus) {
+            filter.customerstatus = req.query.customerstatus;
+        }
+        let userQuery = user_model_1.default.find(filter)
+            .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+            .populate("address_details")
+            .sort({ createdAt: -1 });
+        if (limit > 0) {
+            userQuery = userQuery.skip(skip).limit(limit);
+        }
         const [users, totalCount] = await Promise.all([
-            user_model_1.default.find()
-                .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
-                .populate("address_details")
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(limit),
-            user_model_1.default.countDocuments(),
+            userQuery,
+            user_model_1.default.countDocuments(filter),
         ]);
         res.status(200).json({
             success: true,
             users,
             pagination: {
-                currentPage: page,
-                totalPages: Math.ceil(totalCount / limit),
+                currentPage: limit > 0 ? page : 1,
+                totalPages: limit > 0 ? Math.ceil(totalCount / limit) : 1,
                 totalCount,
-                limit,
+                limit: limit > 0 ? limit : totalCount,
             },
         });
     }
@@ -463,11 +506,27 @@ const updateUserProfile = async (req, res) => {
         const { name, email, mobile, customerstatus, image, status, verify_email, role, date_of_birth, gender, shopName, shopLogo, facebookPage, whatsappNumber, paymentDetails, address_data, // New: address information (object)
         address_details, // Alternative: address information (array)
          } = req.body;
-        if (role !== undefined && req.user?.role !== "admin") {
+        if (role !== undefined && req.user?.role !== "ADMIN") {
             res.status(403).json({
                 success: false,
                 message: "Permission denied: Only admins can update user roles",
             });
+            return;
+        }
+        // Validate enum fields
+        const VALID_ROLES = ["ADMIN", "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING", "MANAGER", "CPO"];
+        const VALID_STATUSES = ["Active", "Inactive", "Blocked"];
+        const VALID_CUSTOMER_STATUSES = ["NewCustomer", "TopCustomer", "ReturningCustomer", "VIPCustomer", "WholesaleCustomer", "Reseller", "3starCustomer", "4starCustomer", "5starCustomer"];
+        if (role !== undefined && !VALID_ROLES.includes(role.toUpperCase())) {
+            res.status(400).json({ success: false, message: `Invalid role. Allowed: ${VALID_ROLES.join(", ")}` });
+            return;
+        }
+        if (status !== undefined && !VALID_STATUSES.includes(status)) {
+            res.status(400).json({ success: false, message: `Invalid status. Allowed: ${VALID_STATUSES.join(", ")}` });
+            return;
+        }
+        if (customerstatus !== undefined && !VALID_CUSTOMER_STATUSES.includes(customerstatus)) {
+            res.status(400).json({ success: false, message: `Invalid customerstatus. Allowed: ${VALID_CUSTOMER_STATUSES.join(", ")}` });
             return;
         }
         const user = await user_model_1.default.findById(userId);
@@ -491,7 +550,9 @@ const updateUserProfile = async (req, res) => {
         if (verify_email !== undefined)
             user.verify_email = verify_email;
         if (role !== undefined) {
-            user.role = role;
+            user.role = role.toUpperCase();
+            // Sync roles array: replace entirely to prevent stale roles from lingering
+            user.roles = [role.toUpperCase()];
         }
         // Dropshipping Shop Details
         if (shopName !== undefined)

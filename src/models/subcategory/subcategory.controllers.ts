@@ -4,6 +4,7 @@ import SubCategoryModel from "./subcategory.model";
 import CategoryModel from "../category/category.model";
 import uploadClouinary from "../../utils/cloudinary";
 import { cache } from "../../utils/cache";
+import { revalidateFrontend } from "../../utils/revalidate";
 
 // ✅ Create SubCategory
 export const createSubCategory = async (req: Request, res: Response): Promise<void> => {
@@ -45,16 +46,18 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
 
     await subCategory.save();
 
-    res.status(201).json({
-      success: true,
-      message: "SubCategory created successfully",
-      data: subCategory,
-    });
     await cache.delByPrefix("subcategories:");
     await cache.del("all_categories");
     await cache.del("category_tree");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    revalidateFrontend();
+
+    res.status(201).json({
+      success: true,
+      message: "SubCategory created successfully",
+      data: subCategory,
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -65,13 +68,6 @@ export const getSubCategories = async (req: Request, res: Response): Promise<voi
   try {
     const { filterType } = req.query;
     const showAll = req.query.status === "all";
-    const cacheKey = `subcategories:${showAll ? "admin:" : ""}${filterType || 'all'}`;
-    const cached = await cache.get(cacheKey);
-    if (cached) {
-      res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
-      res.json(cached);
-      return;
-    }
 
     const filter: any = showAll ? {} : { isActive: true };
 
@@ -79,7 +75,6 @@ export const getSubCategories = async (req: Request, res: Response): Promise<voi
       const productFilter: any = { publish: true };
       
       if (filterType === "new-products") {
-        // Products created in the last 30 days are considered new
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         productFilter.createdAt = { $gte: thirtyDaysAgo };
@@ -87,7 +82,6 @@ export const getSubCategories = async (req: Request, res: Response): Promise<voi
         productFilter.isBoost = true;
       }
 
-      // Fetch distinct subcategory IDs having matching products
       const subCategoryIds = await ProductModel.distinct("subCategory", productFilter);
       filter._id = { $in: subCategoryIds };
     }
@@ -98,10 +92,8 @@ export const getSubCategories = async (req: Request, res: Response): Promise<voi
       .sort({ createdAt: -1 })
       .lean();
 
-    const response = { success: true, data: subCategories };
-    await cache.set(cacheKey, response, 300);
-    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
-    res.status(200).json(response);
+    res.set('Cache-Control', 'private, no-cache');
+    res.status(200).json({ success: true, data: subCategories });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -165,6 +157,7 @@ export const updateSubCategory = async (req: Request, res: Response): Promise<vo
     await cache.del("category_tree");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    revalidateFrontend();
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -194,6 +187,7 @@ export const deleteSubCategory = async (req: Request, res: Response): Promise<vo
     await cache.del("category_tree");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    revalidateFrontend();
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

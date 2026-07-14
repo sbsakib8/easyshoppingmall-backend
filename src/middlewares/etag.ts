@@ -4,10 +4,21 @@ import { createHash } from "crypto";
 /**
  * ETag middleware for GET requests.
  * Generates ETag from response body and supports If-None-Match for 304 responses.
+ * Skips ALL caching for authenticated requests (admin dashboard).
  */
 export const etagMiddleware = (req: Request, res: Response, next: NextFunction): void => {
   // Only apply to GET requests
   if (req.method !== "GET") {
+    next();
+    return;
+  }
+
+  // Skip ALL caching for authenticated requests (admin dashboard)
+  if (req.cookies?.token) {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+    res.set("Surrogate-Control", "no-store");
     next();
     return;
   }
@@ -31,9 +42,10 @@ export const etagMiddleware = (req: Request, res: Response, next: NextFunction):
       return res;
     }
 
-    // Set Cache-Control for cacheable GET responses
+    // Set Cache-Control for non-auth GET responses
+    // private = no CDN caching, no-cache = browser must revalidate with ETag every request
     if (!res.get("Cache-Control")) {
-      res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=30");
+      res.set("Cache-Control", "private, no-cache");
     }
 
     return originalJson(body);

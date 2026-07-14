@@ -3,6 +3,7 @@ import HomeBanner from "./homeBanner.model";
 import uploadClouinary from "../../../utils/cloudinary"; // your uploader util
 import fs from "fs";
 import { cache } from "../../../utils/cache";
+import { revalidateFrontend } from "../../../utils/revalidate";
 
 // Create Home Banner
 export const createHomeBanner = async (req: Request, res: Response) => {
@@ -32,6 +33,7 @@ export const createHomeBanner = async (req: Request, res: Response) => {
 
     await cache.delByPrefix("banners:home:");
     await cache.delByPrefix("homepage");
+    revalidateFrontend();
     return res.status(201).json({
       success: true,
       message: "Home banner created successfully",
@@ -50,7 +52,7 @@ export const getAllHomeBanners = async (req: Request, res: Response) => {
     const cacheKey = `banners:home:${sliderFor || 'all'}:${active || 'all'}`;
     const cached = await cache.get(cacheKey);
     if (cached) {
-      res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+      res.set('Cache-Control', 'private, no-cache');
       return res.status(200).json(cached);
     }
 
@@ -67,7 +69,7 @@ export const getAllHomeBanners = async (req: Request, res: Response) => {
     const banners = await HomeBanner.find(filter).sort({ createdAt: -1 });
     const response = { success: true, data: banners };
     await cache.set(cacheKey, response, 300);
-    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+    res.set('Cache-Control', 'private, no-cache');
     return res.status(200).json(response);
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
@@ -144,6 +146,7 @@ export const deleteHomeBanner = async (req: Request, res: Response) => {
     }
     await cache.delByPrefix("banners:home:");
     await cache.delByPrefix("homepage");
+    revalidateFrontend();
     return res.status(200).json({ success: true, message: "Banner deleted successfully" });
   } catch (error: any) {
     console.error("Delete HomeBanner error:", error);

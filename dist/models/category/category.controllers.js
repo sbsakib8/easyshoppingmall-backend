@@ -8,6 +8,7 @@ const product_model_1 = __importDefault(require("../product/product.model"));
 const category_model_1 = __importDefault(require("./category.model"));
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 const cache_1 = require("../../utils/cache");
+const revalidate_1 = require("../../utils/revalidate");
 // ✅ Create Category
 const createCategory = async (req, res) => {
     try {
@@ -40,6 +41,7 @@ const createCategory = async (req, res) => {
         await cache_1.cache.delByPrefix("subcategories:");
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
         res.status(201).json({ success: true, message: "Category created successfully", data: category });
     }
     catch (error) {
@@ -51,18 +53,11 @@ exports.createCategory = createCategory;
 const getCategories = async (req, res) => {
     try {
         const showAll = req.query.status === "all";
-        const cacheKey = showAll ? "all_categories_admin" : "all_categories";
-        const cachedData = await cache_1.cache.get(cacheKey);
-        if (cachedData) {
-            res.status(200).json({ success: true, data: cachedData });
-            return;
-        }
         const filter = showAll ? {} : { isActive: true };
         const categories = await category_model_1.default.find(filter)
             .select("name image slug icon isActive")
             .sort({ createdAt: -1 })
             .lean();
-        await cache_1.cache.set(cacheKey, categories, 600); // Cache for 10 minutes
         res.status(200).json({ success: true, data: categories });
     }
     catch (error) {
@@ -74,12 +69,6 @@ exports.getCategories = getCategories;
 const getCategoryTree = async (req, res) => {
     try {
         const showAll = req.query.status === "all";
-        const cacheKey = showAll ? "category_tree_admin" : "category_tree";
-        const cachedData = await cache_1.cache.get(cacheKey);
-        if (cachedData) {
-            res.status(200).json({ success: true, data: cachedData });
-            return;
-        }
         const matchStage = showAll ? {} : { isActive: true };
         const tree = await category_model_1.default.aggregate([
             { $match: matchStage },
@@ -107,7 +96,6 @@ const getCategoryTree = async (req, res) => {
             },
             { $sort: { name: 1 } }
         ]);
-        await cache_1.cache.set(cacheKey, tree, 600); // Cache for 10 minutes
         res.status(200).json({ success: true, data: tree });
     }
     catch (error) {
@@ -159,6 +147,7 @@ const updateCategory = async (req, res) => {
         await cache_1.cache.delByPrefix("subcategories:");
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
     }
     catch (error) {
         console.error("Update Category Error:", error);
@@ -182,6 +171,7 @@ const deleteCategory = async (req, res) => {
         await cache_1.cache.delByPrefix("subcategories:");
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
         res.status(200).json({ success: true, message: "Category deleted successfully" });
     }
     catch (error) {

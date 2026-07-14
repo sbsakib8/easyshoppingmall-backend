@@ -8,6 +8,7 @@ const homeBanner_model_1 = __importDefault(require("./homeBanner.model"));
 const cloudinary_1 = __importDefault(require("../../../utils/cloudinary")); // your uploader util
 const fs_1 = __importDefault(require("fs"));
 const cache_1 = require("../../../utils/cache");
+const revalidate_1 = require("../../../utils/revalidate");
 // Create Home Banner
 const createHomeBanner = async (req, res) => {
     try {
@@ -31,6 +32,7 @@ const createHomeBanner = async (req, res) => {
         });
         await cache_1.cache.delByPrefix("banners:home:");
         await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
         return res.status(201).json({
             success: true,
             message: "Home banner created successfully",
@@ -50,7 +52,7 @@ const getAllHomeBanners = async (req, res) => {
         const cacheKey = `banners:home:${sliderFor || 'all'}:${active || 'all'}`;
         const cached = await cache_1.cache.get(cacheKey);
         if (cached) {
-            res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+            res.set('Cache-Control', 'private, no-cache');
             return res.status(200).json(cached);
         }
         const filter = {};
@@ -63,7 +65,7 @@ const getAllHomeBanners = async (req, res) => {
         const banners = await homeBanner_model_1.default.find(filter).sort({ createdAt: -1 });
         const response = { success: true, data: banners };
         await cache_1.cache.set(cacheKey, response, 300);
-        res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+        res.set('Cache-Control', 'private, no-cache');
         return res.status(200).json(response);
     }
     catch (error) {
@@ -134,6 +136,7 @@ const deleteHomeBanner = async (req, res) => {
         }
         await cache_1.cache.delByPrefix("banners:home:");
         await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
         return res.status(200).json({ success: true, message: "Banner deleted successfully" });
     }
     catch (error) {
