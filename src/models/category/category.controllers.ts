@@ -3,6 +3,7 @@ import ProductModel from "../product/product.model";
 import CategoryModel from "./category.model";
 import uploadClouinary from "../../utils/cloudinary";
 import { cache } from "../../utils/cache";
+import { revalidateFrontend } from "../../utils/revalidate";
 
 // ✅ Create Category
 export const createCategory = async (req: Request, res: Response): Promise<void> => {
@@ -39,6 +40,8 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
 
+    revalidateFrontend();
+
     res.status(201).json({ success: true, message: "Category created successfully", data: category });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -49,20 +52,11 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
 export const getCategories = async (req: Request, res: Response): Promise<void> => {
   try {
     const showAll = req.query.status === "all";
-    const cacheKey = showAll ? "all_categories_admin" : "all_categories";
-    const cachedData = await cache.get(cacheKey);
-    if (cachedData) {
-      res.status(200).json({ success: true, data: cachedData });
-      return;
-    }
-
     const filter: any = showAll ? {} : { isActive: true };
     const categories = await CategoryModel.find(filter)
       .select("name image slug icon isActive")
       .sort({ createdAt: -1 })
       .lean();
-
-    await cache.set(cacheKey, categories, 600); // Cache for 10 minutes
     res.status(200).json({ success: true, data: categories });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -73,13 +67,6 @@ export const getCategories = async (req: Request, res: Response): Promise<void> 
 export const getCategoryTree = async (req: Request, res: Response): Promise<void> => {
   try {
     const showAll = req.query.status === "all";
-    const cacheKey = showAll ? "category_tree_admin" : "category_tree";
-    const cachedData = await cache.get(cacheKey);
-    if (cachedData) {
-      res.status(200).json({ success: true, data: cachedData });
-      return;
-    }
-
     const matchStage: any = showAll ? {} : { isActive: true };
     const tree = await CategoryModel.aggregate([
       { $match: matchStage },
@@ -107,8 +94,6 @@ export const getCategoryTree = async (req: Request, res: Response): Promise<void
       },
       { $sort: { name: 1 } }
     ]);
-
-    await cache.set(cacheKey, tree, 600); // Cache for 10 minutes
     res.status(200).json({ success: true, data: tree });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -169,6 +154,7 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
     await cache.delByPrefix("subcategories:");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    revalidateFrontend();
   } catch (error: any) {
     console.error("Update Category Error:", error);
     res.status(500).json({ success: false, message: error.message });
@@ -198,6 +184,7 @@ export const deleteCategory = async (req: Request, res: Response): Promise<void>
     await cache.delByPrefix("subcategories:");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    revalidateFrontend();
     res.status(200).json({ success: true, message: "Category deleted successfully" });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

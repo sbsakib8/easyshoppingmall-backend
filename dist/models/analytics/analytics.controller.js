@@ -29,7 +29,7 @@ const getCustomerAnalytics = async (req, res) => {
             };
         }
         // 1. Core Metrics
-        const totalCustomers = await user_model_1.default.countDocuments({ role: "USER" });
+        const totalCustomers = await user_model_1.default.countDocuments();
         const newCustomers = await user_model_1.default.countDocuments({
             role: "USER",
             ...dateFilter,

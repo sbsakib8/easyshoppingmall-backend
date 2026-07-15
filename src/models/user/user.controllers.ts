@@ -71,7 +71,7 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       await User.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
     }
 
-    const token = generateToken(user._id.toString());
+    const token = generateToken(user._id.toString(), user.tokenVersion ?? 0);
     //  cookie
     res.cookie("token", token, cookieOptions);
 
@@ -145,14 +145,21 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
       res.status(401).json({ message: "incorrect password" });
       return;
     }
-    const token = generateToken(user._id.toString());
+
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      { $inc: { tokenVersion: 1 } },
+      { new: true }
+    );
+
+    const token = generateToken(user._id.toString(), updatedUser!.tokenVersion!);
 
     res.cookie("token", token, cookieOptions);
 
     res.json({
       success: true,
       message: "User Signin successfully",
-      user,
+      user: updatedUser,
     });
 
   } catch (error: any) {
@@ -161,8 +168,12 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
 };
 
 // Sign out user
-export const signOut = async (req: Request, res: Response): Promise<void> => {
+export const signOut = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    if (req.userId) {
+      await User.findByIdAndUpdate(req.userId, { $inc: { tokenVersion: 1 } });
+    }
+
     res.clearCookie("token", {
       ...cookieOptions,
       path: "/",
@@ -262,6 +273,8 @@ export const resetpassword = async (req: Request, res: Response): Promise<void> 
     user.isotpverified = false;
     await user.save();
 
+    await User.findByIdAndUpdate(user._id, { $inc: { tokenVersion: 1 } });
+
     res.status(200).json({ success: true, message: "Password reset successfully" });
 
   } catch (error) {
@@ -302,17 +315,24 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
         await User.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
       }
     }
-    const token = generateToken(user._id.toString());
+
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      { $inc: { tokenVersion: 1 } },
+      { new: true }
+    );
+
+    const token = generateToken(user._id.toString(), updatedUser!.tokenVersion!);
     res.cookie("token", token, cookieOptions);
     res.status(200).json({
       success: true,
       message: "User logged in with Google successfully",
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      mobile: user.mobile,
-      image: user.image,
-      role: user.role,
+      id: updatedUser!._id,
+      name: updatedUser!.name,
+      email: updatedUser!.email,
+      mobile: updatedUser!.mobile,
+      image: updatedUser!.image,
+      role: updatedUser!.role,
     });
 
 
@@ -397,31 +417,83 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
 };
 
 
-//  get all users (paginated)
+// get single user by ID (admin only)
+export const getUserById = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+      .populate("address_details");
+
+    if (!user) {
+      res.status(404).json({ success: false, message: "User not found" });
+      return;
+    }
+
+    res.status(200).json({ success: true, user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: (error as Error).message });
+  }
+};
+
+
+//  get all users (paginated with search)
 export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
-    const skip = (page - 1) * limit;
+    const limitParam = parseInt(req.query.limit as string);
+    const limit = limitParam ? Math.min(500, Math.max(1, limitParam)) : 0; // 0 = no limit (return all)
+    const skip = limit > 0 ? (page - 1) * limit : 0;
+
+    // Build filter
+    const filter: any = {};
+
+    // Search by name, email, or mobile
+    if (req.query.search) {
+      const search = (req.query.search as string).trim();
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { mobile: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // Filter by role
+    if (req.query.role) {
+      filter.role = req.query.role;
+    }
+
+    // Filter by status
+    if (req.query.status) {
+      filter.status = req.query.status;
+    }
+
+    // Filter by customerstatus
+    if (req.query.customerstatus) {
+      filter.customerstatus = req.query.customerstatus;
+    }
+
+    let userQuery = User.find(filter)
+      .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+      .populate("address_details")
+      .sort({ createdAt: -1 });
+
+    if (limit > 0) {
+      userQuery = userQuery.skip(skip).limit(limit);
+    }
 
     const [users, totalCount] = await Promise.all([
-      User.find()
-        .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
-        .populate("address_details")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      User.countDocuments(),
+      userQuery,
+      User.countDocuments(filter),
     ]);
 
     res.status(200).json({
       success: true,
       users,
       pagination: {
-        currentPage: page,
-        totalPages: Math.ceil(totalCount / limit),
+        currentPage: limit > 0 ? page : 1,
+        totalPages: limit > 0 ? Math.ceil(totalCount / limit) : 1,
         totalCount,
-        limit,
+        limit: limit > 0 ? limit : totalCount,
       },
     });
   } catch (error) {
@@ -529,11 +601,29 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       address_details, // Alternative: address information (array)
     } = req.body;
 
-    if (role !== undefined && req.user?.role !== "admin") {
+    if (role !== undefined && req.user?.role !== "ADMIN") {
       res.status(403).json({
         success: false,
         message: "Permission denied: Only admins can update user roles",
       });
+      return;
+    }
+
+    // Validate enum fields
+    const VALID_ROLES = ["ADMIN", "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING", "MANAGER", "CPO"];
+    const VALID_STATUSES = ["Active", "Inactive", "Blocked"];
+    const VALID_CUSTOMER_STATUSES = ["NewCustomer", "TopCustomer", "ReturningCustomer", "VIPCustomer", "WholesaleCustomer", "Reseller", "3starCustomer", "4starCustomer", "5starCustomer"];
+
+    if (role !== undefined && !VALID_ROLES.includes(role.toUpperCase())) {
+      res.status(400).json({ success: false, message: `Invalid role. Allowed: ${VALID_ROLES.join(", ")}` });
+      return;
+    }
+    if (status !== undefined && !VALID_STATUSES.includes(status)) {
+      res.status(400).json({ success: false, message: `Invalid status. Allowed: ${VALID_STATUSES.join(", ")}` });
+      return;
+    }
+    if (customerstatus !== undefined && !VALID_CUSTOMER_STATUSES.includes(customerstatus)) {
+      res.status(400).json({ success: false, message: `Invalid customerstatus. Allowed: ${VALID_CUSTOMER_STATUSES.join(", ")}` });
       return;
     }
 
@@ -552,7 +642,9 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     if (status !== undefined) user.status = status;
     if (verify_email !== undefined) user.verify_email = verify_email;
     if (role !== undefined) {
-      user.role = role;
+      user.role = role.toUpperCase();
+      // Sync roles array: replace entirely to prevent stale roles from lingering
+      user.roles = [role.toUpperCase()];
     }
 
     // Dropshipping Shop Details

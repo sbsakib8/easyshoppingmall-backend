@@ -42,7 +42,8 @@ class RedisCache {
             const data = await redis.get(key);
             return data ?? null;
         }
-        catch {
+        catch (err) {
+            console.error(`[CACHE] Failed to get key "${key}":`, err);
             return null;
         }
     }
@@ -50,16 +51,16 @@ class RedisCache {
         try {
             await redis.set(key, data, { ex: ttlSeconds });
         }
-        catch {
-            // Silent fail - cache is non-critical
+        catch (err) {
+            console.error(`[CACHE] Failed to set key "${key}":`, err);
         }
     }
     async del(key) {
         try {
             await redis.del(key);
         }
-        catch {
-            // Silent fail
+        catch (err) {
+            console.error(`[CACHE] Failed to delete key "${key}":`, err);
         }
     }
     async delByPrefix(prefix) {
@@ -80,8 +81,8 @@ class RedisCache {
                 }
             }
         }
-        catch {
-            // Silent fail
+        catch (err) {
+            console.error(`[CACHE] Failed to delete by prefix "${prefix}":`, err);
         }
     }
     async has(key) {

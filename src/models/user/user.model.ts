@@ -25,6 +25,7 @@ export interface IUser extends Document {
     gender?: "Male" | "Female" | "Other" | null;
     referralCode?: string | null;
     referredBy?: Types.ObjectId | null;
+    tokenVersion?: number;
     referralCount?: number;
     deliveredItemsCount?: number;
     balance?: number;
@@ -148,6 +149,10 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
             default: null
+        },
+        tokenVersion: {
+            type: Number,
+            default: 0
         },
         referralCount: {
             type: Number,

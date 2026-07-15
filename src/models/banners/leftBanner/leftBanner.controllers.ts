@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import LeftBanner from "./leftBanner.model";
 import uploadClouinary from "../../../utils/cloudinary"; 
-import { cache } from "../../../utils/cache"; 
+import { cache } from "../../../utils/cache";
+import { revalidateFrontend } from "../../../utils/revalidate";
 
 // Create Home Banner
 export const createLeftBanner = async (req: Request, res: Response) => {
@@ -30,6 +31,7 @@ export const createLeftBanner = async (req: Request, res: Response) => {
 
     await cache.del("banners:left");
     await cache.delByPrefix("homepage");
+    revalidateFrontend();
 
     return res.status(201).json({
       success: true,
@@ -48,14 +50,14 @@ export const getAllLeftBanners = async (req: Request, res: Response) => {
     const cacheKey = "banners:left";
     const cached = await cache.get(cacheKey);
     if (cached) {
-      res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+      res.set("Cache-Control", "private, no-cache");
       return res.status(200).json(cached);
     }
 
     const banners = await LeftBanner.find().sort({ createdAt: -1 }).lean();
     const response = { success: true, data: banners };
     await cache.set(cacheKey, response, 300);
-    res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+    res.set("Cache-Control", "private, no-cache");
     return res.status(200).json(response);
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
@@ -110,6 +112,7 @@ export const updateLeftBanner = async (req: Request, res: Response) => {
 
     await cache.del("banners:left");
     await cache.delByPrefix("homepage");
+    revalidateFrontend();
 
     return res.status(200).json({
       success: true,
@@ -132,6 +135,7 @@ export const deleteLeftBanner = async (req: Request, res: Response) => {
 
     await cache.del("banners:left");
     await cache.delByPrefix("homepage");
+    revalidateFrontend();
 
     return res.status(200).json({ success: true, message: "Banner deleted successfully" });
   } catch (error: any) {
