@@ -71,7 +71,7 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       await User.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
     }
 
-    const token = generateToken(user._id.toString());
+    const token = generateToken(user._id.toString(), user.tokenVersion ?? 0);
     //  cookie
     res.cookie("token", token, cookieOptions);
 
@@ -145,14 +145,21 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
       res.status(401).json({ message: "incorrect password" });
       return;
     }
-    const token = generateToken(user._id.toString());
+
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      { $inc: { tokenVersion: 1 } },
+      { new: true }
+    );
+
+    const token = generateToken(user._id.toString(), updatedUser!.tokenVersion!);
 
     res.cookie("token", token, cookieOptions);
 
     res.json({
       success: true,
       message: "User Signin successfully",
-      user,
+      user: updatedUser,
     });
 
   } catch (error: any) {
@@ -161,8 +168,12 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
 };
 
 // Sign out user
-export const signOut = async (req: Request, res: Response): Promise<void> => {
+export const signOut = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    if (req.userId) {
+      await User.findByIdAndUpdate(req.userId, { $inc: { tokenVersion: 1 } });
+    }
+
     res.clearCookie("token", {
       ...cookieOptions,
       path: "/",
@@ -262,6 +273,8 @@ export const resetpassword = async (req: Request, res: Response): Promise<void> 
     user.isotpverified = false;
     await user.save();
 
+    await User.findByIdAndUpdate(user._id, { $inc: { tokenVersion: 1 } });
+
     res.status(200).json({ success: true, message: "Password reset successfully" });
 
   } catch (error) {
@@ -302,17 +315,24 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
         await User.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
       }
     }
-    const token = generateToken(user._id.toString());
+
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      { $inc: { tokenVersion: 1 } },
+      { new: true }
+    );
+
+    const token = generateToken(user._id.toString(), updatedUser!.tokenVersion!);
     res.cookie("token", token, cookieOptions);
     res.status(200).json({
       success: true,
       message: "User logged in with Google successfully",
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      mobile: user.mobile,
-      image: user.image,
-      role: user.role,
+      id: updatedUser!._id,
+      name: updatedUser!.name,
+      email: updatedUser!.email,
+      mobile: updatedUser!.mobile,
+      image: updatedUser!.image,
+      role: updatedUser!.role,
     });
 
 

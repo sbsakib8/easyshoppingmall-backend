@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Notice from "./notice.model";
 import { cache } from "../../utils/cache";
+import { revalidateFrontend } from "../../utils/revalidate";
 
 /**
  * @desc Create a new notice (Admin only)
@@ -49,6 +50,10 @@ export const createNotice = async (req: Request, res: Response): Promise<void> =
       isActive: isActive !== undefined ? isActive : true,
       priority: priority || 0,
     });
+
+    await cache.del("notices:active");
+    await cache.delByPrefix("homepage");
+    await revalidateFrontend();
 
     res.status(201).json({
       success: true,
