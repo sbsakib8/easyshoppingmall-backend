@@ -108,6 +108,10 @@ const userSchema = new mongoose_1.default.Schema({
         ref: "User",
         default: null
     },
+    tokenVersion: {
+        type: Number,
+        default: 0
+    },
     referralCount: {
         type: Number,
         default: 0

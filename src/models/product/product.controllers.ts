@@ -9,6 +9,7 @@ import productModel from "./product.model";
 import CategoryModel from "../category/category.model";
 import SubCategoryModel from "../subcategory/subcategory.model";
 import { cache } from "../../utils/cache";
+import { revalidateFrontend } from "../../utils/revalidate";
 
 interface PaginationRequest extends Request {
   body: {
@@ -163,15 +164,17 @@ export const createProductController = async (
       sku,
     });
 
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("product:");
+    await cache.delByPrefix("homepage");
+    await revalidateFrontend();
+
     res.json({
       message: "Product Created Successfully",
       data: product,
       error: false,
       success: true,
     });
-    await cache.delByPrefix("products:");
-    await cache.delByPrefix("product:");
-    await cache.delByPrefix("homepage");
   } catch (error: any) {
     // Duplicate SKU handle
     if (error.code === 11000) {
@@ -298,7 +301,7 @@ export const getProductController = async (
     if (!skipCache) {
       const cached = await cache.get(cacheKey);
       if (cached) {
-        res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
+        res.set('Cache-Control', 'public, max-age=10, must-revalidate');
         res.json(cached);
         return;
       }
@@ -432,7 +435,7 @@ export const getProductController = async (
 
     if (!skipCache) {
       await cache.set(cacheKey, response, 60);
-      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
+      res.set('Cache-Control', 'public, max-age=10, must-revalidate');
     }
     res.json(response);
   } catch (error: any) {
@@ -459,7 +462,7 @@ export const getProductByCategory = async (
     const cacheKey = `products:category:${id}`;
     const cached = await cache.get(cacheKey);
     if (cached) {
-      res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
+      res.set('Cache-Control', 'public, max-age=10, must-revalidate');
       res.json(cached);
       return;
     }
@@ -478,7 +481,7 @@ export const getProductByCategory = async (
 
     const response = { message: "Category product list", data, error: false, success: true };
     await cache.set(cacheKey, response, 120);
-    res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
+    res.set('Cache-Control', 'public, max-age=10, must-revalidate');
     res.json(response);
   } catch (error: any) {
     res.status(500).json({ message: error.message || error, error: true, success: false });
@@ -502,7 +505,7 @@ export const getProductByCategoryAndSubCategory = async (
     const cacheKey = `products:cat:${categoryId}:sub:${subCategoryId}:p${page}:l${limit}`;
     const cached = await cache.get(cacheKey);
     if (cached) {
-      res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
+      res.set('Cache-Control', 'public, max-age=10, must-revalidate');
       res.json(cached);
       return;
     }
@@ -545,7 +548,7 @@ export const getProductByCategoryAndSubCategory = async (
     };
 
     await cache.set(cacheKey, response, 120);
-    res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
+    res.set('Cache-Control', 'public, max-age=10, must-revalidate');
     res.json(response);
   } catch (error: any) {
     res.status(500).json({ message: error.message || error, error: true, success: false });
@@ -559,7 +562,7 @@ export const getProductDetails = async (req: Request, res: Response) => {
     const cacheKey = `product:${productId}`;
     const cached = await cache.get(cacheKey);
     if (cached) {
-      res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+      res.set('Cache-Control', 'public, max-age=10, must-revalidate');
       res.json(cached);
       return;
     }
@@ -570,7 +573,7 @@ export const getProductDetails = async (req: Request, res: Response) => {
 
     const response = { message: "Product details", data: product, error: false, success: true };
     await cache.set(cacheKey, response, 300);
-    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+    res.set('Cache-Control', 'public, max-age=10, must-revalidate');
     res.json(response);
   } catch (error: any) {
     res.status(500).json({ message: error.message || error, error: true, success: false });
@@ -612,10 +615,13 @@ export const updateProductDetails = async (
     }
 
     const updateProduct = await productModel.findByIdAndUpdate(_id, { $set: updateData }, { new: true });
-    res.json({ message: "Updated successfully", data: updateProduct, error: false, success: true });
+
     await cache.delByPrefix("products:");
     await cache.delByPrefix("product:");
     await cache.delByPrefix("homepage");
+    await revalidateFrontend();
+
+    res.json({ message: "Updated successfully", data: updateProduct, error: false, success: true });
   } catch (error: any) {
     res.status(500).json({ message: error.message || error, error: true, success: false });
   }
@@ -637,10 +643,13 @@ export const deleteProductDetails = async (
       Review.deleteMany({ productId: _id }),
       productModel.deleteOne({ _id })
     ]);
-    res.json({ message: "Delete successfully", error: false, success: true });
+
     await cache.delByPrefix("products:");
     await cache.delByPrefix("product:");
     await cache.delByPrefix("homepage");
+    await revalidateFrontend();
+
+    res.json({ message: "Delete successfully", error: false, success: true });
   } catch (error: any) {
     res.status(500).json({ message: error.message || error, error: true, success: false });
   }

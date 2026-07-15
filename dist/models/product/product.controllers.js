@@ -14,6 +14,7 @@ const product_model_1 = __importDefault(require("./product.model"));
 const category_model_1 = __importDefault(require("../category/category.model"));
 const subcategory_model_1 = __importDefault(require("../subcategory/subcategory.model"));
 const cache_1 = require("../../utils/cache");
+const revalidate_1 = require("../../utils/revalidate");
 // Create Product
 const createProductController = async (req, res) => {
     try {
@@ -95,15 +96,16 @@ const createProductController = async (req, res) => {
             gender: gender || "unisex",
             sku,
         });
+        await cache_1.cache.delByPrefix("products:");
+        await cache_1.cache.delByPrefix("product:");
+        await cache_1.cache.delByPrefix("homepage");
+        await (0, revalidate_1.revalidateFrontend)();
         res.json({
             message: "Product Created Successfully",
             data: product,
             error: false,
             success: true,
         });
-        await cache_1.cache.delByPrefix("products:");
-        await cache_1.cache.delByPrefix("product:");
-        await cache_1.cache.delByPrefix("homepage");
     }
     catch (error) {
         // Duplicate SKU handle
@@ -215,7 +217,7 @@ const getProductController = async (req, res) => {
         if (!skipCache) {
             const cached = await cache_1.cache.get(cacheKey);
             if (cached) {
-                res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
+                res.set('Cache-Control', 'public, max-age=10, must-revalidate');
                 res.json(cached);
                 return;
             }
@@ -335,7 +337,7 @@ const getProductController = async (req, res) => {
         };
         if (!skipCache) {
             await cache_1.cache.set(cacheKey, response, 60);
-            res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
+            res.set('Cache-Control', 'public, max-age=10, must-revalidate');
         }
         res.json(response);
     }
@@ -359,7 +361,7 @@ const getProductByCategory = async (req, res) => {
         const cacheKey = `products:category:${id}`;
         const cached = await cache_1.cache.get(cacheKey);
         if (cached) {
-            res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
+            res.set('Cache-Control', 'public, max-age=10, must-revalidate');
             res.json(cached);
             return;
         }
@@ -376,7 +378,7 @@ const getProductByCategory = async (req, res) => {
             .lean();
         const response = { message: "Category product list", data, error: false, success: true };
         await cache_1.cache.set(cacheKey, response, 120);
-        res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
+        res.set('Cache-Control', 'public, max-age=10, must-revalidate');
         res.json(response);
     }
     catch (error) {
@@ -397,7 +399,7 @@ const getProductByCategoryAndSubCategory = async (req, res) => {
         const cacheKey = `products:cat:${categoryId}:sub:${subCategoryId}:p${page}:l${limit}`;
         const cached = await cache_1.cache.get(cacheKey);
         if (cached) {
-            res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
+            res.set('Cache-Control', 'public, max-age=10, must-revalidate');
             res.json(cached);
             return;
         }
@@ -436,7 +438,7 @@ const getProductByCategoryAndSubCategory = async (req, res) => {
             error: false,
         };
         await cache_1.cache.set(cacheKey, response, 120);
-        res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=60');
+        res.set('Cache-Control', 'public, max-age=10, must-revalidate');
         res.json(response);
     }
     catch (error) {
@@ -450,7 +452,7 @@ const getProductDetails = async (req, res) => {
         const cacheKey = `product:${productId}`;
         const cached = await cache_1.cache.get(cacheKey);
         if (cached) {
-            res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+            res.set('Cache-Control', 'public, max-age=10, must-revalidate');
             res.json(cached);
             return;
         }
@@ -459,7 +461,7 @@ const getProductDetails = async (req, res) => {
             .lean();
         const response = { message: "Product details", data: product, error: false, success: true };
         await cache_1.cache.set(cacheKey, response, 300);
-        res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+        res.set('Cache-Control', 'public, max-age=10, must-revalidate');
         res.json(response);
     }
     catch (error) {
@@ -505,10 +507,11 @@ const updateProductDetails = async (req, res) => {
             updateData.price = parseFloat(updateData.price);
         }
         const updateProduct = await product_model_1.default.findByIdAndUpdate(_id, { $set: updateData }, { new: true });
-        res.json({ message: "Updated successfully", data: updateProduct, error: false, success: true });
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("product:");
         await cache_1.cache.delByPrefix("homepage");
+        await (0, revalidate_1.revalidateFrontend)();
+        res.json({ message: "Updated successfully", data: updateProduct, error: false, success: true });
     }
     catch (error) {
         res.status(500).json({ message: error.message || error, error: true, success: false });
@@ -528,10 +531,11 @@ const deleteProductDetails = async (req, res) => {
             review_model_1.Review.deleteMany({ productId: _id }),
             product_model_1.default.deleteOne({ _id })
         ]);
-        res.json({ message: "Delete successfully", error: false, success: true });
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("product:");
         await cache_1.cache.delByPrefix("homepage");
+        await (0, revalidate_1.revalidateFrontend)();
+        res.json({ message: "Delete successfully", error: false, success: true });
     }
     catch (error) {
         res.status(500).json({ message: error.message || error, error: true, success: false });

@@ -17,7 +17,7 @@ export const isAuth = async (req: AuthRequest, res: Response, next: NextFunction
       return;
     }
 
-    const decoded = jwt.verify(token, processdata.jwtsecret) as JwtPayload & { userId?: string };
+    const decoded = jwt.verify(token, processdata.jwtsecret) as JwtPayload & { userId?: string; tokenVersion?: number };
 
     if (!decoded?.userId) {
       res.status(401).json({ message: "Unauthorized: Invalid token" });
@@ -27,6 +27,11 @@ export const isAuth = async (req: AuthRequest, res: Response, next: NextFunction
     const user = await UserModel.findById(decoded.userId).maxTimeMS(5000);
     if (!user) {
       res.status(401).json({ message: "Unauthorized: User not found" });
+      return;
+    }
+
+    if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
+      res.status(401).json({ message: "Session invalidated. Please login again." });
       return;
     }
 
