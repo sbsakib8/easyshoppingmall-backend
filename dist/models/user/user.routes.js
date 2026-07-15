@@ -12,7 +12,7 @@ const user_controllers_1 = require("./user.controllers");
 const router = express_1.default.Router();
 router.post("/signup", decryptBody_1.decryptBody, user_controllers_1.signUp);
 router.post("/signin", decryptBody_1.decryptBody, user_controllers_1.signIn);
-router.get("/signout", user_controllers_1.signOut);
+router.get("/signout", isAuth_1.isAuth, user_controllers_1.signOut);
 // reset password
 router.post("/send-otp", decryptBody_1.decryptBody, user_controllers_1.sendotp);
 router.post("/verify-otp", decryptBody_1.decryptBody, user_controllers_1.verifyotp);

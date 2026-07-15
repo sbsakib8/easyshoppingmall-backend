@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.toggleNoticeStatus = exports.deleteNotice = exports.updateNotice = exports.getNoticeById = exports.getActiveNotices = exports.getAllNoticesAdmin = exports.createNotice = void 0;
 const notice_model_1 = __importDefault(require("./notice.model"));
 const cache_1 = require("../../utils/cache");
+const revalidate_1 = require("../../utils/revalidate");
 /**
  * @desc Create a new notice (Admin only)
  * @route POST /api/notice
@@ -49,6 +50,9 @@ const createNotice = async (req, res) => {
             isActive: isActive !== undefined ? isActive : true,
             priority: priority || 0,
         });
+        await cache_1.cache.del("notices:active");
+        await cache_1.cache.delByPrefix("homepage");
+        await (0, revalidate_1.revalidateFrontend)();
         res.status(201).json({
             success: true,
             message: "Notice created successfully",

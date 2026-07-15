@@ -24,6 +24,10 @@ const isAuth = async (req, res, next) => {
             res.status(401).json({ message: "Unauthorized: User not found" });
             return;
         }
+        if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
+            res.status(401).json({ message: "Session invalidated. Please login again." });
+            return;
+        }
         req.userId = decoded.userId;
         req.user = {
             _id: user._id.toString(),
