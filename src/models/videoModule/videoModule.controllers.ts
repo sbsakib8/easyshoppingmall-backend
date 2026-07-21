@@ -1,8 +1,11 @@
 import { Request, Response } from "express";
 import VideoModuleModel from "./videoModule.model";
 import VideoContentModel from "../videoContent/videoContent.model";
-// import { AuthRequest } from "../../middlewares/user.middelwear";
+import { invalidateCache } from "../../middlewares/cacheResponse";
+
 type AuthRequest = Request;
+
+const VIDEO_MODULE_CACHE_KEY = "/api/video-module/all";
 
 // Create a new module (Admin)
 export const createModule = async (req: AuthRequest, res: Response) => {
@@ -21,6 +24,7 @@ export const createModule = async (req: AuthRequest, res: Response) => {
         });
 
         await newModule.save();
+        await invalidateCache(VIDEO_MODULE_CACHE_KEY);
         res.status(201).json({ success: true, message: "Module created successfully", data: newModule });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error", error });
@@ -55,6 +59,7 @@ export const updateModule = async (req: AuthRequest, res: Response) => {
         if (!updated) {
             return res.status(404).json({ success: false, message: "Module not found" });
         }
+        await invalidateCache(VIDEO_MODULE_CACHE_KEY);
         res.status(200).json({ success: true, message: "Module updated successfully", data: updated });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error", error });
@@ -73,6 +78,7 @@ export const deleteModule = async (req: AuthRequest, res: Response) => {
         if (!deleted) {
             return res.status(404).json({ success: false, message: "Module not found" });
         }
+        await invalidateCache(VIDEO_MODULE_CACHE_KEY);
         res.status(200).json({ success: true, message: "Module and its videos deleted successfully" });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error", error });

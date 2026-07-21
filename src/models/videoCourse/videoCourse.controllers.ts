@@ -3,6 +3,9 @@ import VideoCourse from "./videoCourse.model";
 import { AuthRequest } from "../../middlewares/isAuth";
 import VideoModuleModel from "../videoModule/videoModule.model";
 import VideoContentModel from "../videoContent/videoContent.model";
+import { invalidateCache } from "../../middlewares/cacheResponse";
+
+const VIDEO_COURSE_CACHE_KEY = "/api/video-course/all";
 
 export const getAllCourses = async (req: Request, res: Response) => {
     try {
@@ -26,6 +29,7 @@ export const createCourse = async (req: AuthRequest, res: Response) => {
     try {
         const { title, description, price, discountPrice, referralBonus, isActive } = req.body;
         const newCourse = await VideoCourse.create({ title, description, price, discountPrice, referralBonus, isActive });
+        await invalidateCache(VIDEO_COURSE_CACHE_KEY);
         res.status(201).json({ success: true, data: newCourse });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -36,6 +40,7 @@ export const updateCourse = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
         const updatedCourse = await VideoCourse.findByIdAndUpdate(id, req.body, { new: true });
+        await invalidateCache(VIDEO_COURSE_CACHE_KEY);
         res.status(200).json({ success: true, data: updatedCourse });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -59,6 +64,7 @@ export const deleteCourse = async (req: AuthRequest, res: Response) => {
         // Delete the course itself
         await VideoCourse.findByIdAndDelete(id);
         
+        await invalidateCache(VIDEO_COURSE_CACHE_KEY);
         res.status(200).json({ success: true, message: "Course and its modules/videos deleted successfully" });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });

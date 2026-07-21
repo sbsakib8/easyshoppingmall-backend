@@ -9,11 +9,12 @@ import {
 import { isAuth } from "../../middlewares/isAuth";
 import { isAdmin } from "../../middlewares/isAdmin";
 import { isDashboardAccess } from "../../middlewares/isDashboardAccess";
+import { cacheResponse } from "../../middlewares/cacheResponse";
 
 const router = express.Router();
 
 // Public / Dropshipper route
-router.get("/all", getActiveModules);
+router.get("/all", cacheResponse(300), getActiveModules);
 
 // Admin / Manager routes (dropshipping manage video)
 router.post("/admin/create", isAuth, isDashboardAccess("dropshipping"), createModule);
