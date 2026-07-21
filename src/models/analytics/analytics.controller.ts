@@ -231,6 +231,247 @@ export const getCustomerAnalytics = async (req: Request, res: Response) => {
 
 
 // =======================
+// DASHBOARD OVERVIEW SUMMARY
+// =======================
+export const getDashboardSummary = async (req: Request, res: Response) => {
+    try {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        const endOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        // Build date range from query params or default to all time
+        const { startDate, endDate, range } = req.query;
+        let dateFilter: any = {};
+        if (startDate && endDate) {
+            dateFilter.createdAt = {
+                $gte: new Date(startDate as string),
+                $lte: new Date(endDate as string),
+            };
+        }
+
+        // ── Total metrics (all time or filtered) ──
+        const totalMatch: any = { ...dateFilter };
+
+        const [totalOrdersResult, totalUsers, totalProducts] = await Promise.all([
+            OrderModel.aggregate([
+                { $match: totalMatch },
+                {
+                    $group: {
+                        _id: null,
+                        totalOrders: { $sum: 1 },
+                        totalRevenue: { $sum: "$totalAmt" },
+                        totalDeliveryCharge: { $sum: "$deliveryCharge" },
+                        completedOrders: { $sum: { $cond: [{ $eq: ["$order_status", "completed"] }, 1, 0] } },
+                        pendingOrders: { $sum: { $cond: [{ $eq: ["$order_status", "pending"] }, 1, 0] } },
+                        processingOrders: { $sum: { $cond: [{ $eq: ["$order_status", "processing"] }, 1, 0] } },
+                        shippedOrders: { $sum: { $cond: [{ $eq: ["$order_status", "shipped"] }, 1, 0] } },
+                        cancelledOrders: { $sum: { $cond: [{ $eq: ["$order_status", "cancelled"] }, 1, 0] } },
+                        returnOrders: { $sum: { $cond: [{ $eq: ["$order_status", "return"] }, 1, 0] } },
+                        totalCouponDiscount: { $sum: "$couponDiscount" },
+                        totalAmountPaid: { $sum: "$amount_paid" },
+                        totalAmountDue: { $sum: "$amount_due" },
+                        totalDeliveryCompleted: {
+                            $sum: {
+                                $cond: [
+                                    { $in: ["$order_status", ["completed", "delivered"]] },
+                                    "$deliveryCharge",
+                                    0
+                                ]
+                            }
+                        },
+                    }
+                }
+            ]),
+            UserModel.countDocuments(),
+            ProductModel.countDocuments()
+        ]);
+
+        const totalStats = totalOrdersResult[0] || {
+            totalOrders: 0, totalRevenue: 0, totalDeliveryCharge: 0,
+            completedOrders: 0, pendingOrders: 0, processingOrders: 0,
+            shippedOrders: 0, cancelledOrders: 0, returnOrders: 0,
+            totalCouponDiscount: 0, totalAmountPaid: 0, totalAmountDue: 0,
+            totalDeliveryCompleted: 0
+        };
+
+        // ── Today metrics ──
+        const todayMatch = { createdAt: { $gte: startOfToday, $lte: now } };
+        const todayResult = await OrderModel.aggregate([
+            { $match: todayMatch },
+            {
+                $group: {
+                    _id: null,
+                    todayOrders: { $sum: 1 },
+                    todayRevenue: { $sum: "$totalAmt" },
+                    todayCompleted: { $sum: { $cond: [{ $eq: ["$order_status", "completed"] }, 1, 0] } },
+                    todayPending: { $sum: { $cond: [{ $eq: ["$order_status", "pending"] }, 1, 0] } },
+                    todayProcessing: { $sum: { $cond: [{ $eq: ["$order_status", "processing"] }, 1, 0] } },
+                    todayShipped: { $sum: { $cond: [{ $eq: ["$order_status", "shipped"] }, 1, 0] } },
+                    todayCancelled: { $sum: { $cond: [{ $eq: ["$order_status", "cancelled"] }, 1, 0] } },
+                    todayDelivered: {
+                        $sum: {
+                            $cond: [
+                                { $in: ["$order_status", ["completed", "delivered"]] },
+                                1,
+                                0
+                            ]
+                        }
+                    },
+                    todayDeliveryRevenue: {
+                        $sum: {
+                            $cond: [
+                                { $in: ["$order_status", ["completed", "delivered"]] },
+                                "$deliveryCharge",
+                                0
+                            ]
+                        }
+                    },
+                }
+            }
+        ]);
+
+        const todayStats = todayResult[0] || {
+            todayOrders: 0, todayRevenue: 0, todayCompleted: 0,
+            todayPending: 0, todayProcessing: 0, todayShipped: 0,
+            todayCancelled: 0, todayDelivered: 0, todayDeliveryRevenue: 0
+        };
+
+        // ── Yesterday metrics (for comparison) ──
+        const yesterdayMatch = { createdAt: { $gte: startOfYesterday, $lt: endOfYesterday } };
+        const yesterdayResult = await OrderModel.aggregate([
+            { $match: yesterdayMatch },
+            {
+                $group: {
+                    _id: null,
+                    yesterdayOrders: { $sum: 1 },
+                    yesterdayRevenue: { $sum: "$totalAmt" },
+                    yesterdayDelivered: {
+                        $sum: {
+                            $cond: [
+                                { $in: ["$order_status", ["completed", "delivered"]] },
+                                1,
+                                0
+                            ]
+                        }
+                    },
+                }
+            }
+        ]);
+
+        const yesterdayStats = yesterdayResult[0] || {
+            yesterdayOrders: 0, yesterdayRevenue: 0, yesterdayDelivered: 0
+        };
+
+        // ── Sales trend (last 7 days) ──
+        const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+        const salesTrend = await OrderModel.aggregate([
+            { $match: { createdAt: { $gte: sevenDaysAgo, $lte: now } } },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                    revenue: { $sum: "$totalAmt" },
+                    orders: { $sum: 1 },
+                    delivered: {
+                        $sum: {
+                            $cond: [
+                                { $in: ["$order_status", ["completed", "delivered"]] },
+                                1,
+                                0
+                            ]
+                        }
+                    }
+                }
+            },
+            { $sort: { "_id": 1 } }
+        ]);
+
+        const formattedSalesTrend = salesTrend.map(s => ({
+            date: s._id,
+            revenue: s.revenue,
+            orders: s.orders,
+            delivered: s.delivered
+        }));
+
+        // ── Recent orders (last 5) ──
+        const recentOrders = await OrderModel.find()
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .populate("userId", "name email role")
+            .select("orderId totalAmt order_status payment_method createdAt products")
+            .lean();
+
+        // ── Top selling products ──
+        const topProducts = await OrderModel.aggregate([
+            { $match: totalMatch },
+            { $unwind: "$products" },
+            {
+                $group: {
+                    _id: "$products.productId",
+                    name: { $first: "$products.name" },
+                    totalSold: { $sum: "$products.quantity" },
+                    totalRevenue: { $sum: "$products.totalPrice" }
+                }
+            },
+            { $sort: { totalSold: -1 } },
+            { $limit: 5 }
+        ]);
+
+        // ── Calculate percentage changes ──
+        const pctChange = (current: number, previous: number) => {
+            if (previous === 0) return current > 0 ? 100 : 0;
+            return Number((((current - previous) / previous) * 100).toFixed(1));
+        };
+
+        res.status(200).json({
+            success: true,
+            data: {
+                totals: {
+                    orders: totalStats.totalOrders,
+                    revenue: totalStats.totalRevenue,
+                    deliveryCharge: totalStats.totalDeliveryCharge,
+                    completed: totalStats.completedOrders,
+                    pending: totalStats.pendingOrders,
+                    processing: totalStats.processingOrders,
+                    shipped: totalStats.shippedOrders,
+                    cancelled: totalStats.cancelledOrders,
+                    returned: totalStats.returnOrders,
+                    couponDiscount: totalStats.totalCouponDiscount,
+                    amountPaid: totalStats.totalAmountPaid,
+                    amountDue: totalStats.totalAmountDue,
+                    deliveryCompleted: totalStats.totalDeliveryCompleted,
+                    users: totalUsers,
+                    products: totalProducts,
+                },
+                today: {
+                    orders: todayStats.todayOrders,
+                    revenue: todayStats.todayRevenue,
+                    completed: todayStats.todayCompleted,
+                    pending: todayStats.todayPending,
+                    processing: todayStats.todayProcessing,
+                    shipped: todayStats.todayShipped,
+                    cancelled: todayStats.todayCancelled,
+                    delivered: todayStats.todayDelivered,
+                    deliveryRevenue: todayStats.todayDeliveryRevenue,
+                },
+                changes: {
+                    orders: pctChange(todayStats.todayOrders, yesterdayStats.yesterdayOrders),
+                    revenue: pctChange(todayStats.todayRevenue, yesterdayStats.yesterdayRevenue),
+                    delivered: pctChange(todayStats.todayDelivered, yesterdayStats.yesterdayDelivered),
+                },
+                salesTrend: formattedSalesTrend,
+                recentOrders,
+                topProducts
+            }
+        });
+
+    } catch (error) {
+        console.error("Error in getDashboardSummary:", error);
+        res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
+// =======================
 // PRODUCT ANALYTICS
 // =======================
 export const getProductAnalytics = async (req: Request, res: Response) => {
