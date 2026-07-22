@@ -263,6 +263,15 @@ export const getDashboardSummary = async (req: Request, res: Response) => {
                         totalRevenue: { $sum: "$totalAmt" },
                         totalDeliveryCharge: { $sum: "$deliveryCharge" },
                         completedOrders: { $sum: { $cond: [{ $eq: ["$order_status", "completed"] }, 1, 0] } },
+                        deliveredOrders: {
+                            $sum: {
+                                $cond: [
+                                    { $in: ["$order_status", ["completed", "delivered"]] },
+                                    1,
+                                    0
+                                ]
+                            }
+                        },
                         pendingOrders: { $sum: { $cond: [{ $eq: ["$order_status", "pending"] }, 1, 0] } },
                         processingOrders: { $sum: { $cond: [{ $eq: ["$order_status", "processing"] }, 1, 0] } },
                         shippedOrders: { $sum: { $cond: [{ $eq: ["$order_status", "shipped"] }, 1, 0] } },
@@ -289,7 +298,8 @@ export const getDashboardSummary = async (req: Request, res: Response) => {
 
         const totalStats = totalOrdersResult[0] || {
             totalOrders: 0, totalRevenue: 0, totalDeliveryCharge: 0,
-            completedOrders: 0, pendingOrders: 0, processingOrders: 0,
+            completedOrders: 0, deliveredOrders: 0,
+            pendingOrders: 0, processingOrders: 0,
             shippedOrders: 0, cancelledOrders: 0, returnOrders: 0,
             totalCouponDiscount: 0, totalAmountPaid: 0, totalAmountDue: 0,
             totalDeliveryCompleted: 0
@@ -431,9 +441,12 @@ export const getDashboardSummary = async (req: Request, res: Response) => {
                     revenue: totalStats.totalRevenue,
                     deliveryCharge: totalStats.totalDeliveryCharge,
                     completed: totalStats.completedOrders,
+                    delivered: totalStats.deliveredOrders,
                     pending: totalStats.pendingOrders,
                     processing: totalStats.processingOrders,
+                    confirmed: totalStats.processingOrders,
                     shipped: totalStats.shippedOrders,
+                    outForDelivery: totalStats.shippedOrders,
                     cancelled: totalStats.cancelledOrders,
                     returned: totalStats.returnOrders,
                     couponDiscount: totalStats.totalCouponDiscount,

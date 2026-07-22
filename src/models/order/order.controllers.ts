@@ -982,9 +982,38 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
     const skip = (page - 1) * limit;
+    const { search, status } = req.query;
+
+    const filter: any = {};
+
+    if (status) {
+      filter.order_status = status;
+    }
+
+    if (search) {
+      const searchRegex = { $regex: search, $options: "i" };
+      const users = await UserModel.find({
+        $or: [
+          { name: searchRegex },
+          { email: searchRegex },
+          { mobile: searchRegex },
+        ],
+      }).select("_id");
+
+      const userIds = users.map((u) => u._id);
+
+      filter.$or = [
+        { orderId: searchRegex },
+        { "address.customer_name": searchRegex },
+        { "address.mobile": searchRegex },
+        { "address.address_line": searchRegex },
+        { "address.district": searchRegex },
+        { userId: { $in: userIds } },
+      ];
+    }
 
     const [orders, totalCount] = await Promise.all([
-      OrderModel.find()
+      OrderModel.find(filter)
         .populate({
           path: "products.productId",
           populate: [
@@ -1003,7 +1032,7 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      OrderModel.countDocuments(),
+      OrderModel.countDocuments(filter),
     ]);
 
     res.json({
@@ -1042,11 +1071,34 @@ export const getOrdersByStatus = async (req: Request, res: Response): Promise<vo
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
     const skip = (page - 1) * limit;
+    const { search } = req.query;
 
-    const query = { order_status: status };
+    const filter: any = { order_status: status };
+
+    if (search) {
+      const searchRegex = { $regex: search, $options: "i" };
+      const users = await UserModel.find({
+        $or: [
+          { name: searchRegex },
+          { email: searchRegex },
+          { mobile: searchRegex },
+        ],
+      }).select("_id");
+
+      const userIds = users.map((u) => u._id);
+
+      filter.$or = [
+        { orderId: searchRegex },
+        { "address.customer_name": searchRegex },
+        { "address.mobile": searchRegex },
+        { "address.address_line": searchRegex },
+        { "address.district": searchRegex },
+        { userId: { $in: userIds } },
+      ];
+    }
 
     const [orders, totalCount] = await Promise.all([
-      OrderModel.find(query)
+      OrderModel.find(filter)
         .populate({
           path: "products.productId",
           populate: [
@@ -1065,7 +1117,7 @@ export const getOrdersByStatus = async (req: Request, res: Response): Promise<vo
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      OrderModel.countDocuments(query),
+      OrderModel.countDocuments(filter),
     ]);
 
     res.json({
