@@ -41,6 +41,7 @@ const videoCourse_routes_1 = __importDefault(require("./models/videoCourse/video
 const videoRequest_routes_1 = __importDefault(require("./models/videoRequest/videoRequest.routes"));
 const notice_routes_1 = __importDefault(require("./models/notice/notice.routes"));
 const homepage_routes_1 = __importDefault(require("./models/homepage/homepage.routes"));
+const balanceTransaction_routes_1 = __importDefault(require("./models/balanceTransaction/balanceTransaction.routes"));
 const homepage_controller_1 = require("./models/homepage/homepage.controller");
 // middleware
 const app = (0, express_1.default)();
@@ -104,6 +105,7 @@ app.use("/api/video-module", videoModule_routes_1.default);
 app.use("/api/video-request", videoRequest_routes_1.default);
 app.use("/api/notice", notice_routes_1.default);
 app.use("/api/homepage", homepage_routes_1.default);
+app.use("/api/balance-transaction", balanceTransaction_routes_1.default);
 app.use("/api/team-system", teamSystem_routes_1.default);
 app.use("/api/admin", admin_route_1.default);
 app.get("/", (req, res) => {

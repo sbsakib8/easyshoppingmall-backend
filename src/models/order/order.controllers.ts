@@ -8,6 +8,7 @@ import { AuthUser } from "./interface";
 import OrderModel from "./order.model";
 import CouponModel from "../coupon/coupon.model";
 import WebsiteInfo from "../content/websiteInfo/websiteinfo.model";
+import BalanceTransactionModel from "../balanceTransaction/balanceTransaction.model";
 import Referral from "../referral/referral.model";
 import { validateAndCalculateDiscount } from "../coupon/coupon.service";
 import productModel from "../product/product.model";
@@ -490,12 +491,24 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
         console.log(`[Order Update] Return-status: delivery charge already deducted for order ${id}. Skipping.`);
       } else if (deductionAmount > 0) {
         // Atomic balance deduction (may result in negative balance)
-        await UserModel.findByIdAndUpdate(user._id, {
+        const updatedUser = await UserModel.findByIdAndUpdate(user._id, {
           $inc: { balance: -deductionAmount }
-        });
+        }, { new: true });
         order.deliveryChargeDeducted = true;
         order.deliveryChargeDeductedAt = new Date();
         order.deliveryChargeDeductedAmount = deductionAmount;
+
+        // Log to balance transaction history
+        await BalanceTransactionModel.create({
+          userId: user._id,
+          amount: -deductionAmount,
+          type: "cod_return_deduction",
+          reason: `COD return delivery charge deduction for order ${order.orderId || id}`,
+          orderId: order._id,
+          performedBy: req.user?._id,
+          balanceAfter: updatedUser?.balance || 0,
+        });
+
         console.log(`[Order Update] Return-status: deducted ৳${deductionAmount} from dropshipper ${user._id} (order ${id}).`);
       }
     }

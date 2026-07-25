@@ -40,6 +40,7 @@ import videoCourseRouter from "./models/videoCourse/videoCourse.routes";
 import videoRequestRouter from "./models/videoRequest/videoRequest.routes";
 import noticeRouter from "./models/notice/notice.routes";
 import homepageRoutes from "./models/homepage/homepage.routes";
+import balanceTransactionRouter from "./models/balanceTransaction/balanceTransaction.routes";
 import { warmHomepageCache } from "./models/homepage/homepage.controller";
 
 // middleware
@@ -113,6 +114,7 @@ app.use("/api/video-module", videoModuleRouter);
 app.use("/api/video-request", videoRequestRouter);
 app.use("/api/notice", noticeRouter);
 app.use("/api/homepage", homepageRoutes);
+app.use("/api/balance-transaction", balanceTransactionRouter);
 
 app.use("/api/team-system", teamSystemRoutes);
 
