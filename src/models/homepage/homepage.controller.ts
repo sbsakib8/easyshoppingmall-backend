@@ -23,7 +23,7 @@ export const getHomepageData = async (req: Request, res: Response): Promise<void
     const [banners, categories, subCategories, featuredProducts, websiteInfo, activeNotices] =
       await Promise.all([
         HomeBanner.find({ active: true, sliderFor: "USER" })
-          .select("title Description Link_URL images status sliderFor")
+          .select("title Description Link_URL images active sliderFor")
           .sort({ createdAt: -1 })
           .lean(),
 
@@ -95,7 +95,7 @@ export const warmHomepageCache = async (): Promise<void> => {
     const [banners, categories, subCategories, featuredProducts, websiteInfo, activeNotices] =
       await Promise.all([
         HomeBanner.find({ active: true, sliderFor: "USER" })
-          .select("title Description Link_URL images status sliderFor")
+          .select("title Description Link_URL images active sliderFor")
           .sort({ createdAt: -1 })
           .lean(),
         CategoryModel.find({ isActive: true })

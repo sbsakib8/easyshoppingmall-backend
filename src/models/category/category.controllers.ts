@@ -68,6 +68,7 @@ export const getCategoryTree = async (req: Request, res: Response): Promise<void
   try {
     const showAll = req.query.status === "all";
     const matchStage: any = showAll ? {} : { isActive: true };
+    const subcategoryMatch: any = showAll ? {} : { isActive: true };
     const tree = await CategoryModel.aggregate([
       { $match: matchStage },
       {
@@ -76,6 +77,18 @@ export const getCategoryTree = async (req: Request, res: Response): Promise<void
           localField: "_id",
           foreignField: "category",
           as: "subcategories"
+        }
+      },
+      {
+        $addFields: {
+          subcategories: {
+            $filter: {
+              input: "$subcategories",
+              cond: showAll
+                ? { $ne: ["$$this._id", null] }
+                : { $eq: ["$$this.isActive", true] }
+            }
+          }
         }
       },
       {
@@ -89,7 +102,8 @@ export const getCategoryTree = async (req: Request, res: Response): Promise<void
           "subcategories.name": 1,
           "subcategories.slug": 1,
           "subcategories.image": 1,
-          "subcategories.icon": 1
+          "subcategories.icon": 1,
+          "subcategories.isActive": 1
         }
       },
       { $sort: { name: 1 } }

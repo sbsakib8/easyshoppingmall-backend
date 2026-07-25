@@ -70,6 +70,7 @@ const getCategoryTree = async (req, res) => {
     try {
         const showAll = req.query.status === "all";
         const matchStage = showAll ? {} : { isActive: true };
+        const subcategoryMatch = showAll ? {} : { isActive: true };
         const tree = await category_model_1.default.aggregate([
             { $match: matchStage },
             {
@@ -78,6 +79,18 @@ const getCategoryTree = async (req, res) => {
                     localField: "_id",
                     foreignField: "category",
                     as: "subcategories"
+                }
+            },
+            {
+                $addFields: {
+                    subcategories: {
+                        $filter: {
+                            input: "$subcategories",
+                            cond: showAll
+                                ? { $ne: ["$$this._id", null] }
+                                : { $eq: ["$$this.isActive", true] }
+                        }
+                    }
                 }
             },
             {
@@ -91,7 +104,8 @@ const getCategoryTree = async (req, res) => {
                     "subcategories.name": 1,
                     "subcategories.slug": 1,
                     "subcategories.image": 1,
-                    "subcategories.icon": 1
+                    "subcategories.icon": 1,
+                    "subcategories.isActive": 1
                 }
             },
             { $sort: { name: 1 } }

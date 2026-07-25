@@ -126,6 +126,7 @@ export const updateHomeBanner = async (req: Request, res: Response) => {
 
     await cache.delByPrefix("banners:home:");
     await cache.delByPrefix("homepage");
+    revalidateFrontend();
     return res.status(200).json({
       success: true,
       message: "Home banner updated successfully",

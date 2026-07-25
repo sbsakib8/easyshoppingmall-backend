@@ -115,6 +115,7 @@ const updateHomeBanner = async (req, res) => {
         }
         await cache_1.cache.delByPrefix("banners:home:");
         await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
         return res.status(200).json({
             success: true,
             message: "Home banner updated successfully",

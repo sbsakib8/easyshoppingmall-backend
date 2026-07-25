@@ -7,9 +7,10 @@ const express_1 = __importDefault(require("express"));
 const videoModule_controllers_1 = require("./videoModule.controllers");
 const isAuth_1 = require("../../middlewares/isAuth");
 const isDashboardAccess_1 = require("../../middlewares/isDashboardAccess");
+const cacheResponse_1 = require("../../middlewares/cacheResponse");
 const router = express_1.default.Router();
 // Public / Dropshipper route
-router.get("/all", videoModule_controllers_1.getActiveModules);
+router.get("/all", (0, cacheResponse_1.cacheResponse)(300), videoModule_controllers_1.getActiveModules);
 // Admin / Manager routes (dropshipping manage video)
 router.post("/admin/create", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("dropshipping"), videoModule_controllers_1.createModule);
 router.get("/admin/all", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("dropshipping"), videoModule_controllers_1.getAllModulesAdmin);

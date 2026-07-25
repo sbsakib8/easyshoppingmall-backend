@@ -29,7 +29,7 @@ export const createCenterBanner = async (req: Request, res: Response) => {
       images: imageUrls,
     });
 
-    await cache.del("banners:center");
+    await cache.delByPrefix("banners:center");
     await cache.delByPrefix("homepage");
     revalidateFrontend();
 
@@ -47,14 +47,20 @@ export const createCenterBanner = async (req: Request, res: Response) => {
 //  Get All Banners
 export const getAllCenterBanner = async (req: Request, res: Response) => {
   try {
-    const cacheKey = "banners:center";
+    const status = (req.query.status as string) || "active";
+    const cacheKey = `banners:center:${status}`;
     const cached = await cache.get(cacheKey);
     if (cached) {
       res.set("Cache-Control", "private, no-cache");
       return res.status(200).json(cached);
     }
 
-    const banners = await CenterBanner.find().sort({ createdAt: -1 }).lean();
+    const filter: any = {};
+    if (status !== "all") {
+      filter.status = status;
+    }
+
+    const banners = await CenterBanner.find(filter).sort({ createdAt: -1 }).lean();
     const response = { success: true, data: banners };
     await cache.set(cacheKey, response, 300);
     res.set("Cache-Control", "private, no-cache");
@@ -110,7 +116,7 @@ export const updateCenterBanner= async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
-    await cache.del("banners:center");
+    await cache.delByPrefix("banners:center");
     await cache.delByPrefix("homepage");
     revalidateFrontend();
 
@@ -133,7 +139,7 @@ export const deleteCenterBanner = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
-    await cache.del("banners:center");
+    await cache.delByPrefix("banners:center");
     await cache.delByPrefix("homepage");
     revalidateFrontend();
 

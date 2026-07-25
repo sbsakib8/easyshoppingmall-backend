@@ -30,7 +30,7 @@ export const createRightBanner = async (req: Request, res: Response) => {
       images: imageUrls,
     });
 
-    await cache.del("banners:right");
+    await cache.delByPrefix("banners:right");
     await cache.delByPrefix("homepage");
     revalidateFrontend();
 
@@ -48,14 +48,20 @@ export const createRightBanner = async (req: Request, res: Response) => {
 //  Get All Banners
 export const getAllRightBanners = async (req: Request, res: Response) => {
   try {
-    const cacheKey = "banners:right";
+    const status = (req.query.status as string) || "active";
+    const cacheKey = `banners:right:${status}`;
     const cached = await cache.get(cacheKey);
     if (cached) {
       res.set("Cache-Control", "private, no-cache");
       return res.status(200).json(cached);
     }
 
-    const banners = await RightBanner.find().sort({ createdAt: -1 }).lean();
+    const filter: any = {};
+    if (status !== "all") {
+      filter.status = status;
+    }
+
+    const banners = await RightBanner.find(filter).sort({ createdAt: -1 }).lean();
     const response = { success: true, data: banners };
     await cache.set(cacheKey, response, 300);
     res.set("Cache-Control", "private, no-cache");
@@ -111,7 +117,7 @@ export const updateRightBanner = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
-    await cache.del("banners:right");
+    await cache.delByPrefix("banners:right");
     await cache.delByPrefix("homepage");
     revalidateFrontend();
 
@@ -134,7 +140,7 @@ export const deleteRightBanner = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
-    await cache.del("banners:right");
+    await cache.delByPrefix("banners:right");
     await cache.delByPrefix("homepage");
     revalidateFrontend();
 

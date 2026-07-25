@@ -446,20 +446,33 @@ export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void
 
     // Build filter
     const filter: any = {};
+    const conditions: any[] = [];
 
     // Search by name, email, or mobile
     if (req.query.search) {
       const search = (req.query.search as string).trim();
-      filter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { mobile: { $regex: search, $options: "i" } },
-      ];
+      conditions.push({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { mobile: { $regex: search, $options: "i" } },
+        ],
+      });
     }
 
-    // Filter by role
+    // Filter by role - search both role field and roles array
     if (req.query.role) {
-      filter.role = req.query.role;
+      const roleValue = (req.query.role as string).toUpperCase();
+      conditions.push({
+        $or: [{ role: roleValue }, { roles: roleValue }],
+      });
+    }
+
+    // Combine conditions with $and if multiple
+    if (conditions.length > 1) {
+      filter.$and = conditions;
+    } else if (conditions.length === 1) {
+      Object.assign(filter, conditions[0]);
     }
 
     // Filter by status
@@ -843,6 +856,128 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
     res.status(500).json({
       success: false,
       message: error.message || "Internal Server Error",
+    });
+  }
+};
+
+// Export users as CSV
+export const exportUsers = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const filter: any = {};
+    const conditions: any[] = [];
+
+    // Search by name, email, or mobile
+    if (req.query.search) {
+      const search = (req.query.search as string).trim();
+      conditions.push({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { mobile: { $regex: search, $options: "i" } },
+        ],
+      });
+    }
+
+    // Filter by role - search both role field and roles array
+    if (req.query.role) {
+      const roleValue = (req.query.role as string).toUpperCase();
+      conditions.push({
+        $or: [{ role: roleValue }, { roles: roleValue }],
+      });
+    }
+
+    // Combine conditions with $and if multiple
+    if (conditions.length > 1) {
+      filter.$and = conditions;
+    } else if (conditions.length === 1) {
+      Object.assign(filter, conditions[0]);
+    }
+
+    // Filter by status
+    if (req.query.status) {
+      filter.status = req.query.status;
+    }
+
+    // Filter by customerstatus
+    if (req.query.customerstatus) {
+      filter.customerstatus = req.query.customerstatus;
+    }
+
+    const users = await User.find(filter)
+      .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // CSV headers
+    const headers = [
+      "Name",
+      "Email",
+      "Mobile",
+      "Role",
+      "Roles",
+      "Status",
+      "Customer Status",
+      "Verify Email",
+      "Referral Code",
+      "Balance",
+      "Shop Name",
+      "Shop Logo",
+      "Facebook Page",
+      "WhatsApp Number",
+      "Shop Address",
+      "Shop Website",
+      "Payment BKash",
+      "Payment Nagad",
+      "Payment Rocket",
+      "Payment Bank",
+      "Created At",
+      "Updated At",
+    ];
+
+    // Build CSV rows
+    const escapeCSV = (value: any): string => {
+      if (value === null || value === undefined) return "";
+      const str = String(value);
+      if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = users.map((user) => [
+      escapeCSV(user.name),
+      escapeCSV(user.email),
+      escapeCSV(user.mobile),
+      escapeCSV(user.role),
+      escapeCSV(Array.isArray(user.roles) ? user.roles.join("; ") : user.roles),
+      escapeCSV(user.status),
+      escapeCSV(user.customerstatus),
+      escapeCSV(user.verify_email),
+      escapeCSV(user.referralCode),
+      escapeCSV(user.balance),
+      escapeCSV(user.shopName),
+      escapeCSV(user.shopLogo),
+      escapeCSV(user.facebookPage),
+      escapeCSV(user.whatsappNumber),
+      escapeCSV(user.shopAddress),
+      escapeCSV(user.shopWebsite),
+      escapeCSV(user.paymentDetails?.bkash),
+      escapeCSV(user.paymentDetails?.nagad),
+      escapeCSV(user.paymentDetails?.rocket),
+      escapeCSV(user.paymentDetails?.bank),
+      escapeCSV(user.createdAt),
+      escapeCSV(user.updatedAt),
+    ].join(","));
+
+    const csv = [headers.join(","), ...rows].join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="users.csv"');
+    res.status(200).send(csv);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: (error as Error).message,
     });
   }
 };
