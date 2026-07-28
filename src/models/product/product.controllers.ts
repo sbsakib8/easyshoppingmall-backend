@@ -10,6 +10,7 @@ import CategoryModel from "../category/category.model";
 import SubCategoryModel from "../subcategory/subcategory.model";
 import { cache } from "../../utils/cache";
 import { revalidateFrontend } from "../../utils/revalidate";
+import { buildFuzzyQuery, filterAndScoreFuzzy, scoreProduct } from "../../utils/fuzzySearch";
 
 interface PaginationRequest extends Request {
   body: {
@@ -167,6 +168,7 @@ export const createProductController = async (
     await cache.delByPrefix("products:");
     await cache.delByPrefix("product:");
     await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
     await revalidateFrontend();
 
     res.json({
@@ -332,21 +334,60 @@ export const getProductController = async (
     const selectFields = "productName description brand price dropshippingPrice productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory color tags";
 
     if (isSearch) {
-      // Phase 1: Find direct search matches
-      const searchQuery = buildProductQuery(req.body);
-      const isTextSearch = !!searchQuery.$text;
-      
-      const directMatches = await productModel
-        .find(searchQuery)
-        .select(isTextSearch ? `${selectFields} score: { $meta: "textScore" }` : selectFields)
-        .sort(isTextSearch ? { score: { $meta: "textScore" } } : undefined)
-        .lean();
+      const search = (req.body.search || req.body.skyTitle || req.body.q || req.body.keyword || "") as string;
+
+      // Phase 1: Find direct search matches (exact / $text)
+      let directMatches: any[] = [];
+      let searchQuery: any = {};
+      try {
+        searchQuery = buildProductQuery(req.body);
+        const isTextSearch = !!searchQuery.$text;
+
+        if (isTextSearch) {
+          directMatches = await productModel
+            .find(searchQuery)
+            .select(selectFields)
+            .select({ score: { $meta: "textScore" } })
+            .sort({ score: { $meta: "textScore" } })
+            .lean();
+        } else {
+          directMatches = await productModel
+            .find(searchQuery)
+            .select(selectFields)
+            .lean();
+        }
+      } catch (_) {
+        // $text search may fail on some MongoDB versions — fall through to fuzzy
+        directMatches = [];
+      }
 
       const directIds = new Set(directMatches.map((p: any) => String(p._id)));
 
-      // Collect subcategory IDs from matched products
+      // Phase 1.5: Fuzzy fallback — when exact results are insufficient
+      let fuzzyMatches: any[] = [];
+      if (directMatches.length < limit && search.length >= 2) {
+        const fuzzyQuery = buildFuzzyQuery(search);
+        // Exclude already-found products
+        fuzzyQuery._id = {
+          $nin: [...directIds].map((id) => new mongoose.Types.ObjectId(id)),
+        };
+
+        const fuzzyCandidates = await productModel
+          .find(fuzzyQuery)
+          .select(selectFields)
+          .limit(limit * 3)
+          .lean();
+
+        const scored = filterAndScoreFuzzy(fuzzyCandidates, search, 10);
+        fuzzyMatches = scored
+          .slice(0, limit - directMatches.length)
+          .map((item) => ({ ...item.product, _score: item.score }));
+      }
+
+      // Collect subcategory IDs from matched products (direct + fuzzy)
+      const allMatchIds = new Set([...directIds, ...fuzzyMatches.map((p: any) => String(p._id))]);
       const relatedSubCatIds: any[] = [];
-      for (const p of directMatches) {
+      for (const p of [...directMatches, ...fuzzyMatches]) {
         if (Array.isArray(p.subCategory)) {
           for (const sc of p.subCategory) {
             const scId = typeof sc === 'object' ? String(sc._id || sc) : String(sc);
@@ -359,14 +400,13 @@ export const getProductController = async (
 
       let relatedProducts: any[] = [];
       if (relatedSubCatIds.length > 0) {
-        // Phase 2: Find related products from same subcategories (excluding direct matches)
+        // Phase 2: Find related products from same subcategories (excluding all matches)
         const relatedQuery: any = {
           publish: true,
           subCategory: { $in: relatedSubCatIds.map((id) => new mongoose.Types.ObjectId(id)) },
-          _id: { $nin: [...directIds].map((id) => new mongoose.Types.ObjectId(id)) },
+          _id: { $nin: [...allMatchIds].map((id) => new mongoose.Types.ObjectId(id)) },
         };
 
-        // Apply same category/gender/price filters if present
         if (searchQuery.category) relatedQuery.category = searchQuery.category;
         if (searchQuery.gender) relatedQuery.gender = searchQuery.gender;
 
@@ -387,9 +427,18 @@ export const getProductController = async (
         .populate("category subCategory", "name slug")
         .lean();
 
-      // Merge: direct matches first, then related products
-      const data = [...populatedDirect, ...relatedProducts].slice(0, limit);
-      const totalCount = populatedDirect.length + relatedProducts.length;
+      // Populate category/subCategory on fuzzy matches
+      const populatedFuzzy = fuzzyMatches.length > 0
+        ? await productModel
+            .find({ _id: { $in: fuzzyMatches.map((p: any) => new mongoose.Types.ObjectId(p._id)) } })
+            .select(selectFields)
+            .populate("category subCategory", "name slug")
+            .lean()
+        : [];
+
+      // Merge: direct matches first, then fuzzy matches, then related products
+      const data = [...populatedDirect, ...populatedFuzzy, ...relatedProducts].slice(0, limit);
+      const totalCount = populatedDirect.length + populatedFuzzy.length + relatedProducts.length;
 
       const response = {
         message: "Product data retrieved successfully",
@@ -619,6 +668,7 @@ export const updateProductDetails = async (
     await cache.delByPrefix("products:");
     await cache.delByPrefix("product:");
     await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
     await revalidateFrontend();
 
     res.json({ message: "Updated successfully", data: updateProduct, error: false, success: true });
@@ -647,6 +697,7 @@ export const deleteProductDetails = async (
     await cache.delByPrefix("products:");
     await cache.delByPrefix("product:");
     await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
     await revalidateFrontend();
 
     res.json({ message: "Delete successfully", error: false, success: true });
