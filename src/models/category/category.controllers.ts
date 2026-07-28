@@ -39,6 +39,7 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
     await cache.delByPrefix("subcategories:");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
 
     revalidateFrontend();
 
@@ -168,9 +169,41 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
     await cache.delByPrefix("subcategories:");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
     revalidateFrontend();
   } catch (error: any) {
     console.error("Update Category Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Toggle Category Active Status
+export const toggleCategoryActive = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const category = await CategoryModel.findById(id);
+    if (!category) {
+      res.status(404).json({ success: false, message: "Category not found" });
+      return;
+    }
+
+    category.isActive = !category.isActive;
+    await category.save();
+
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("subcategories:");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    revalidateFrontend();
+
+    res.status(200).json({
+      success: true,
+      message: `Category ${category.isActive ? "activated" : "deactivated"} successfully`,
+      data: category,
+    });
+  } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -198,6 +231,7 @@ export const deleteCategory = async (req: Request, res: Response): Promise<void>
     await cache.delByPrefix("subcategories:");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
     revalidateFrontend();
     res.status(200).json({ success: true, message: "Category deleted successfully" });
   } catch (error: any) {

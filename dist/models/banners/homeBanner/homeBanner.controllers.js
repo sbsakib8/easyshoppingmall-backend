@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteHomeBanner = exports.updateHomeBanner = exports.getSingleHomeBanner = exports.getAllHomeBanners = exports.createHomeBanner = void 0;
+exports.deleteHomeBanner = exports.toggleHomeBannerActive = exports.updateHomeBanner = exports.getSingleHomeBanner = exports.getAllHomeBanners = exports.createHomeBanner = void 0;
 const homeBanner_model_1 = __importDefault(require("./homeBanner.model"));
 const cloudinary_1 = __importDefault(require("../../../utils/cloudinary")); // your uploader util
 const fs_1 = __importDefault(require("fs"));
@@ -128,6 +128,30 @@ const updateHomeBanner = async (req, res) => {
     }
 };
 exports.updateHomeBanner = updateHomeBanner;
+// Toggle Home Banner Active Status
+const toggleHomeBannerActive = async (req, res) => {
+    try {
+        const banner = await homeBanner_model_1.default.findById(req.params.id);
+        if (!banner) {
+            return res.status(404).json({ success: false, message: "Banner not found" });
+        }
+        banner.active = !banner.active;
+        await banner.save();
+        await cache_1.cache.delByPrefix("banners:home:");
+        await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
+        return res.status(200).json({
+            success: true,
+            message: `Home banner ${banner.active ? "activated" : "deactivated"} successfully`,
+            data: banner,
+        });
+    }
+    catch (error) {
+        console.error("Toggle HomeBanner error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.toggleHomeBannerActive = toggleHomeBannerActive;
 //  Delete Banner
 const deleteHomeBanner = async (req, res) => {
     try {

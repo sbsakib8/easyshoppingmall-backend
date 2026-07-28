@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { getHomepageData } from "./homepage.controller";
+import { getHomepageData, getPopularProducts } from "./homepage.controller";
 
 const router = Router();
 
 router.get("/", getHomepageData);
+router.post("/popular-products", getPopularProducts);
 
 export default router;

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteCategory = exports.updateCategory = exports.getCategoryById = exports.getCategoryTree = exports.getCategories = exports.createCategory = void 0;
+exports.deleteCategory = exports.toggleCategoryActive = exports.updateCategory = exports.getCategoryById = exports.getCategoryTree = exports.getCategories = exports.createCategory = void 0;
 const product_model_1 = __importDefault(require("../product/product.model"));
 const category_model_1 = __importDefault(require("./category.model"));
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
@@ -41,6 +41,7 @@ const createCategory = async (req, res) => {
         await cache_1.cache.delByPrefix("subcategories:");
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("homepage");
+        await cache_1.cache.delByPrefix("popular-products");
         (0, revalidate_1.revalidateFrontend)();
         res.status(201).json({ success: true, message: "Category created successfully", data: category });
     }
@@ -161,6 +162,7 @@ const updateCategory = async (req, res) => {
         await cache_1.cache.delByPrefix("subcategories:");
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("homepage");
+        await cache_1.cache.delByPrefix("popular-products");
         (0, revalidate_1.revalidateFrontend)();
     }
     catch (error) {
@@ -169,6 +171,35 @@ const updateCategory = async (req, res) => {
     }
 };
 exports.updateCategory = updateCategory;
+// Toggle Category Active Status
+const toggleCategoryActive = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const category = await category_model_1.default.findById(id);
+        if (!category) {
+            res.status(404).json({ success: false, message: "Category not found" });
+            return;
+        }
+        category.isActive = !category.isActive;
+        await category.save();
+        await cache_1.cache.del("all_categories");
+        await cache_1.cache.del("category_tree");
+        await cache_1.cache.delByPrefix("subcategories:");
+        await cache_1.cache.delByPrefix("products:");
+        await cache_1.cache.delByPrefix("homepage");
+        await cache_1.cache.delByPrefix("popular-products");
+        (0, revalidate_1.revalidateFrontend)();
+        res.status(200).json({
+            success: true,
+            message: `Category ${category.isActive ? "activated" : "deactivated"} successfully`,
+            data: category,
+        });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.toggleCategoryActive = toggleCategoryActive;
 //  Delete Category
 const deleteCategory = async (req, res) => {
     try {
@@ -185,6 +216,7 @@ const deleteCategory = async (req, res) => {
         await cache_1.cache.delByPrefix("subcategories:");
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("homepage");
+        await cache_1.cache.delByPrefix("popular-products");
         (0, revalidate_1.revalidateFrontend)();
         res.status(200).json({ success: true, message: "Category deleted successfully" });
     }

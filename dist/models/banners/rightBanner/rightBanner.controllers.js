@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteRightBanner = exports.updateRightBanner = exports.getSingleRightBanner = exports.getAllRightBanners = exports.createRightBanner = void 0;
+exports.deleteRightBanner = exports.toggleRightBannerStatus = exports.updateRightBanner = exports.getSingleRightBanner = exports.getAllRightBanners = exports.createRightBanner = void 0;
 const rightBanner_model_1 = __importDefault(require("./rightBanner.model"));
 const cloudinary_1 = __importDefault(require("../../../utils/cloudinary"));
 const cache_1 = require("../../../utils/cache");
@@ -120,6 +120,30 @@ const updateRightBanner = async (req, res) => {
     }
 };
 exports.updateRightBanner = updateRightBanner;
+// Toggle Right Banner Status
+const toggleRightBannerStatus = async (req, res) => {
+    try {
+        const banner = await rightBanner_model_1.default.findById(req.params.id);
+        if (!banner) {
+            return res.status(404).json({ success: false, message: "Banner not found" });
+        }
+        banner.status = banner.status === "active" ? "inactive" : "active";
+        await banner.save();
+        await cache_1.cache.delByPrefix("banners:right");
+        await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
+        return res.status(200).json({
+            success: true,
+            message: `Right banner ${banner.status === "active" ? "activated" : "deactivated"} successfully`,
+            data: banner,
+        });
+    }
+    catch (error) {
+        console.error("Toggle RightBanner error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.toggleRightBannerStatus = toggleRightBannerStatus;
 //  Delete Banner
 const deleteRightBanner = async (req, res) => {
     try {

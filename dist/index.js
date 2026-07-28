@@ -71,8 +71,11 @@ app.use(async (req, res, next) => {
         next(error);
     }
 });
-// Warm homepage cache after DB connection
-(0, db_connect_1.default)().then(() => (0, homepage_controller_1.warmHomepageCache)()).catch(() => { });
+// Warm caches after DB connection
+(0, db_connect_1.default)().then(() => {
+    (0, homepage_controller_1.warmHomepageCache)();
+    (0, homepage_controller_1.warmPopularProductsCache)();
+}).catch(() => { });
 //  route
 const analytics_routes_1 = __importDefault(require("./models/analytics/analytics.routes"));
 const teamSystem_routes_1 = __importDefault(require("./models/teamSystem/teamSystem.routes"));

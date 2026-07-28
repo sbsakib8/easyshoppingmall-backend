@@ -51,6 +51,7 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
     await cache.del("category_tree");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
     revalidateFrontend();
 
     res.status(201).json({
@@ -157,12 +158,44 @@ export const updateSubCategory = async (req: Request, res: Response): Promise<vo
     await cache.del("category_tree");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
     revalidateFrontend();
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
+
+// Toggle SubCategory Active Status
+export const toggleSubCategoryActive = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const subCategory = await SubCategoryModel.findById(id);
+    if (!subCategory) {
+      res.status(404).json({ success: false, message: "SubCategory not found" });
+      return;
+    }
+
+    subCategory.isActive = !subCategory.isActive;
+    await subCategory.save();
+
+    await cache.delByPrefix("subcategories:");
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    revalidateFrontend();
+
+    res.status(200).json({
+      success: true,
+      message: `SubCategory ${subCategory.isActive ? "activated" : "deactivated"} successfully`,
+      data: subCategory,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 export const deleteSubCategory = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -187,6 +220,7 @@ export const deleteSubCategory = async (req: Request, res: Response): Promise<vo
     await cache.del("category_tree");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
     revalidateFrontend();
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

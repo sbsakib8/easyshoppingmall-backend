@@ -13,5 +13,6 @@ router.post("/create", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAcces
 router.get("/get", centerBanner_controllers_1.getAllCenterBanner);
 router.get("/:id", centerBanner_controllers_1.getSingleCenterBanner);
 router.put("/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("banner"), multer_1.upload.array("images", 4), centerBanner_controllers_1.updateCenterBanner);
+router.patch("/:id/toggle-active", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("banner"), centerBanner_controllers_1.toggleCenterBannerStatus);
 router.delete("/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("banner"), centerBanner_controllers_1.deleteCenterBanner);
 exports.default = router;

@@ -13,5 +13,6 @@ router.post("/create", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAcces
 router.get("/get", homeBanner_controllers_1.getAllHomeBanners);
 router.get("/:id", homeBanner_controllers_1.getSingleHomeBanner);
 router.put("/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("banner"), multer_1.upload.array("images", 4), homeBanner_controllers_1.updateHomeBanner);
+router.patch("/:id/toggle-active", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("banner"), homeBanner_controllers_1.toggleHomeBannerActive);
 router.delete("/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("banner"), homeBanner_controllers_1.deleteHomeBanner);
 exports.default = router;

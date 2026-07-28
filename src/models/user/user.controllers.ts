@@ -517,7 +517,110 @@ export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
-// user imge push 
+/**
+ * @desc    Get customers (users with orders) - aggregated with order stats
+ * @route   GET /api/users/customers
+ * @access  Private (Admin/Manager)
+ */
+export const getCustomers = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limitParam = parseInt(req.query.limit as string);
+    const limit = limitParam ? Math.min(500, Math.max(1, limitParam)) : 20;
+    const skip = (page - 1) * limit;
+    const search = (req.query.search as string || "").trim();
+    const status = req.query.status as string;
+
+    // Build user match conditions
+    const userMatch: any = {};
+
+    if (search) {
+      userMatch.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { mobile: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    if (status) {
+      userMatch.status = status;
+    }
+
+    const pipeline: any[] = [
+      { $match: userMatch },
+      {
+        $lookup: {
+          from: "orders",
+          localField: "_id",
+          foreignField: "userId",
+          as: "orders",
+        },
+      },
+      { $match: { "orders.0": { $exists: true } } },
+      {
+        $addFields: {
+          orderStats: {
+            orderCount: { $size: "$orders" },
+            totalSpent: { $sum: "$orders.totalAmt" },
+            lastOrderDate: { $max: "$orders.createdAt" },
+          },
+        },
+      },
+      {
+        $project: {
+          password: 0,
+          refresh_token: 0,
+          forgot_password_otp: 0,
+          forgot_password_expiry: 0,
+          isotpverified: 0,
+          orders: 0,
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    const countPipeline: any[] = [
+      { $match: userMatch },
+      {
+        $lookup: {
+          from: "orders",
+          localField: "_id",
+          foreignField: "userId",
+          as: "orders",
+        },
+      },
+      { $match: { "orders.0": { $exists: true } } },
+      { $count: "total" },
+    ];
+
+    const [customers, countResult] = await Promise.all([
+      User.aggregate(pipeline),
+      User.aggregate(countPipeline),
+    ]);
+
+    const totalCount = countResult[0]?.total || 0;
+
+    res.status(200).json({
+      success: true,
+      customers,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+        limit,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
+// user imge push
 export const userImage = async (req: AuthRequest, res: Response) => {
   try {
     if (req.userId !== req.params.id) {

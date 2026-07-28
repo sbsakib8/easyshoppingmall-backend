@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { AuthRequest } from "../../middlewares/isAuth";
+import OrderModel from "../order/order.model";
 import UserModel from "../user/user.model";
 import BalanceTransactionModel from "./balanceTransaction.model";
 
@@ -227,6 +228,134 @@ export const getAllTransactions = async (req: AuthRequest, res: Response): Promi
           totalPages: Math.ceil(total / limit),
           totalItems: total,
           itemsPerPage: limit,
+        },
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+
+/**
+ * @desc    Deduct courier cost difference from dropshipper balance
+ * @route   POST /api/balance-transaction/courier-deduct
+ * @access  Private (Admin)
+ */
+export const deductCourierCost = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { dropshipperId, orderId, courierCharge, actualCourierCharge } = req.body;
+
+    if (!dropshipperId || !orderId || courierCharge === undefined || actualCourierCharge === undefined) {
+      res.status(400).json({
+        success: false,
+        message: "dropshipperId, orderId, courierCharge, and actualCourierCharge are required",
+      });
+      return;
+    }
+
+    if (courierCharge < 0 || actualCourierCharge < 0) {
+      res.status(400).json({
+        success: false,
+        message: "Charges must be non-negative",
+      });
+      return;
+    }
+
+    // Find dropshipper
+    let dropshipper;
+    if (dropshipperId.match(/^[0-9a-fA-F]{24}$/)) {
+      dropshipper = await UserModel.findById(dropshipperId);
+    } else {
+      dropshipper = await UserModel.findOne({ email: dropshipperId });
+    }
+
+    if (!dropshipper) {
+      res.status(404).json({ success: false, message: "Dropshipper not found" });
+      return;
+    }
+
+    const isDropshipper = dropshipper.role === "DROPSHIPPING" || dropshipper.roles?.includes("DROPSHIPPING");
+    if (!isDropshipper) {
+      res.status(400).json({
+        success: false,
+        message: "User is not a dropshipper",
+      });
+      return;
+    }
+
+    // Find order
+    let order;
+    if (orderId.match(/^[0-9a-fA-F]{24}$/)) {
+      order = await OrderModel.findById(orderId);
+    } else {
+      order = await OrderModel.findOne({ orderId });
+    }
+
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found" });
+      return;
+    }
+
+    if (order.userId.toString() !== dropshipper._id.toString()) {
+      res.status(400).json({
+        success: false,
+        message: "Order does not belong to this dropshipper",
+      });
+      return;
+    }
+
+    const difference = courierCharge - actualCourierCharge;
+
+    if (difference <= 0) {
+      res.status(400).json({
+        success: false,
+        message: "Actual courier charge must be less than courier charge to have a deduction",
+      });
+      return;
+    }
+
+    const currentBalance = dropshipper.balance || 0;
+
+    // Update order with courier charges
+    await OrderModel.findByIdAndUpdate(order._id, {
+      courierCharge,
+      actualCourierCharge,
+    });
+
+    // Deduct from balance
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      dropshipper._id,
+      { $inc: { balance: -difference } },
+      { new: true }
+    );
+
+    const newBalance = updatedUser?.balance || 0;
+
+    // Create transaction
+    await BalanceTransactionModel.create({
+      userId: dropshipper._id,
+      amount: -difference,
+      type: "courier_adjustment",
+      reason: `Courier cost adjustment for order ${order.orderId}. Actual: ৳${courierCharge}, Charged: ৳${actualCourierCharge}, Difference: ৳${difference}`,
+      orderId: order._id,
+      performedBy: req.user?._id,
+      balanceAfter: newBalance,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Courier cost deducted successfully. ৳${difference} deducted from ${dropshipper.name}'s balance.`,
+      data: {
+        previousBalance: currentBalance,
+        deduction: difference,
+        newBalance,
+        order: {
+          orderId: order.orderId,
+          courierCharge,
+          actualCourierCharge,
         },
       },
     });

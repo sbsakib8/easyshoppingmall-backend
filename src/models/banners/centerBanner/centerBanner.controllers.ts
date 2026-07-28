@@ -131,6 +131,32 @@ export const updateCenterBanner= async (req: Request, res: Response) => {
   }
 };
 
+// Toggle Center Banner Status
+export const toggleCenterBannerStatus = async (req: Request, res: Response) => {
+  try {
+    const banner = await CenterBanner.findById(req.params.id);
+    if (!banner) {
+      return res.status(404).json({ success: false, message: "Banner not found" });
+    }
+
+    banner.status = banner.status === "active" ? "inactive" : "active";
+    await banner.save();
+
+    await cache.delByPrefix("banners:center");
+    await cache.delByPrefix("homepage");
+    revalidateFrontend();
+
+    return res.status(200).json({
+      success: true,
+      message: `Center banner ${banner.status === "active" ? "activated" : "deactivated"} successfully`,
+      data: banner,
+    });
+  } catch (error: any) {
+    console.error("Toggle CenterBanner error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 //  Delete Banner
 export const deleteCenterBanner = async (req: Request, res: Response) => {
   try {
