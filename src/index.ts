@@ -41,8 +41,6 @@ import videoRequestRouter from "./models/videoRequest/videoRequest.routes";
 import noticeRouter from "./models/notice/notice.routes";
 import homepageRoutes from "./models/homepage/homepage.routes";
 import balanceTransactionRouter from "./models/balanceTransaction/balanceTransaction.routes";
-import { warmHomepageCache, warmPopularProductsCache } from "./models/homepage/homepage.controller";
-
 // middleware
 const app: Application = express();
 
@@ -77,11 +75,7 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// Warm caches after DB connection
-connectDB().then(() => {
-  warmHomepageCache();
-  warmPopularProductsCache();
-}).catch(() => {});
+// Cache warming is handled in server.ts after DB connection
 
 //  route
 import analyticsRoutes from "./models/analytics/analytics.routes";

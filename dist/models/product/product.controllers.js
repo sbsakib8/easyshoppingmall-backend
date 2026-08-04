@@ -250,13 +250,30 @@ const getProductController = async (req, res) => {
         if (isSearch) {
             const search = (req.body.search || req.body.skyTitle || req.body.q || req.body.keyword || "");
             // Phase 1: Find direct search matches (exact / $text)
-            const searchQuery = buildProductQuery(req.body);
-            const isTextSearch = !!searchQuery.$text;
-            const directMatches = await product_model_1.default
-                .find(searchQuery)
-                .select(isTextSearch ? `${selectFields} score: { $meta: "textScore" }` : selectFields)
-                .sort(isTextSearch ? { score: { $meta: "textScore" } } : undefined)
-                .lean();
+            let directMatches = [];
+            let searchQuery = {};
+            try {
+                searchQuery = buildProductQuery(req.body);
+                const isTextSearch = !!searchQuery.$text;
+                if (isTextSearch) {
+                    directMatches = await product_model_1.default
+                        .find(searchQuery)
+                        .select(selectFields)
+                        .select({ score: { $meta: "textScore" } })
+                        .sort({ score: { $meta: "textScore" } })
+                        .lean();
+                }
+                else {
+                    directMatches = await product_model_1.default
+                        .find(searchQuery)
+                        .select(selectFields)
+                        .lean();
+                }
+            }
+            catch (_) {
+                // $text search may fail on some MongoDB versions — fall through to fuzzy
+                directMatches = [];
+            }
             const directIds = new Set(directMatches.map((p) => String(p._id)));
             // Phase 1.5: Fuzzy fallback — when exact results are insufficient
             let fuzzyMatches = [];

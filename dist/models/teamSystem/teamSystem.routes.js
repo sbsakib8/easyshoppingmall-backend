@@ -2,7 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const isAuth_1 = require("../../middlewares/isAuth");
+const isDashboardAccess_1 = require("../../middlewares/isDashboardAccess");
 const teamSystem_controller_1 = require("./teamSystem.controller");
+const teamSystem_admin_controller_1 = require("./teamSystem.admin.controller");
 const teamSystemRoutes = (0, express_1.Router)();
 teamSystemRoutes.get("/", isAuth_1.isAuth, teamSystem_controller_1.getTeamSystem);
+teamSystemRoutes.get("/admin/all", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("dropshipping"), teamSystem_admin_controller_1.getAdminTeamSystem);
 exports.default = teamSystemRoutes;
