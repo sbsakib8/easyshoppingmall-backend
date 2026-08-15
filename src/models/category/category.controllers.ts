@@ -142,7 +142,7 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const { _id, slug, ...updateData } = req.body;
+    const { _id, slug, image: _image, ...updateData } = req.body;
     if (req.file) {
       const imageUrl = await uploadClouinary(req.file.buffer);
       updateData.image = imageUrl;
