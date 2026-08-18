@@ -9,7 +9,7 @@ import { isAuth } from "../../middlewares/isAuth";
 
 const router = express.Router();
 
-router.use(isAuth); // all routes protected
+router.use(isAuth);
 
 router.post("/add", addToWishlist);
 router.get("/", getWishlist);

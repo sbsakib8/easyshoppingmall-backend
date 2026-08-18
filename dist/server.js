@@ -23,7 +23,7 @@ const io = new socket_io_1.Server(server, {
     },
 });
 exports.io = io;
-//  Socket.io 
+//  Socket.io  connection
 index_1.default.set("io", io);
 io.on("connection", (socket) => {
     console.log("Socket connected:", socket.id);
