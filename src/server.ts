@@ -17,11 +17,13 @@ const io = new Server(server, {
       "https://easyshoppingmallbd.vercel.app"],
     methods: ["GET", "POST"],
     credentials: true,
+
   },
 });
 
 //  Socket.io 
 app.set("io", io);
+
 
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
