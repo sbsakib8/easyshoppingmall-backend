@@ -142,7 +142,7 @@ const updateCategory = async (req, res) => {
             res.status(400).json({ success: false, message: "No data provided for update" });
             return;
         }
-        const { _id, slug, ...updateData } = req.body;
+        const { _id, slug, image: _image, ...updateData } = req.body;
         if (req.file) {
             const imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
             updateData.image = imageUrl;

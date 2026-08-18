@@ -36,12 +36,10 @@ const addToCart = async (req, res) => {
         if (!userId || !productId || !quantity) {
             return res.status(400).json({ success: false, message: "Missing required fields" });
         }
-        // 🔥 Fetch product
-        const product = await product_model_1.default.findById(productId);
+        const product = await product_model_1.default.findById(productId).select("price productSize color productWeight productStock");
         if (!product) {
             return res.status(404).json({ success: false, message: "Product not found" });
         }
-        // 🔥 AUTO PICK FIRST VARIANT IF NOT SELECTED
         size =
             size ??
                 (product.productSize?.length ? product.productSize[0] : null);
@@ -51,7 +49,6 @@ const addToCart = async (req, res) => {
         weight =
             weight ??
                 (product.productWeight?.length ? product.productWeight[0] : null);
-        // 🔥 Price fallback
         price = price ?? product.price;
         let cart = await cart_model_1.CartModel.findOne({ userId });
         if (!cart) {
@@ -66,6 +63,10 @@ const addToCart = async (req, res) => {
                         weight,
                         totalPrice: quantity * price,
                     }],
+            });
+            await cart.save();
+            await user_model_1.default.findByIdAndUpdate(userId, {
+                $addToSet: { shopping_cart: cart._id },
             });
         }
         else {
@@ -85,13 +86,8 @@ const addToCart = async (req, res) => {
                     totalPrice: quantity * price,
                 });
             }
+            await cart.save();
         }
-        cart.subTotalAmt = cart.products.reduce((s, p) => s + p.totalPrice, 0);
-        cart.totalAmt = cart.subTotalAmt;
-        await cart.save();
-        await user_model_1.default.findByIdAndUpdate(userId, {
-            $addToSet: { shopping_cart: cart._id },
-        });
         res.json({
             success: true,
             message: "Product added to cart",
