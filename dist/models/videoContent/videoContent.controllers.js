@@ -9,6 +9,8 @@ const videoContent_model_1 = __importDefault(require("./videoContent.model"));
 const videoAccess_model_1 = __importDefault(require("../videoAccess/videoAccess.model"));
 const videoModule_model_1 = __importDefault(require("../videoModule/videoModule.model"));
 const videoCourse_model_1 = __importDefault(require("../videoCourse/videoCourse.model"));
+const cacheResponse_1 = require("../../middlewares/cacheResponse");
+const VIDEO_CONTENT_CACHE_KEY = "/api/video-content/all";
 const STANDALONE_VIDEO_TYPES = ["standard", "demo"];
 const resolveModuleRequirement = async (videoType, moduleId) => {
     const isStandalone = !videoType || STANDALONE_VIDEO_TYPES.includes(videoType);
@@ -135,6 +137,7 @@ const createVideo = async (req, res) => {
             videoType,
             moduleId: resolved.moduleId,
         });
+        await (0, cacheResponse_1.invalidateCache)(VIDEO_CONTENT_CACHE_KEY);
         res.status(201).json({ success: true, data: newVideo });
     }
     catch (error) {
@@ -160,6 +163,7 @@ const updateVideo = async (req, res) => {
             moduleId: resolved.moduleId,
         };
         const updatedVideo = await videoContent_model_1.default.findByIdAndUpdate(id, updatePayload, { new: true });
+        await (0, cacheResponse_1.invalidateCache)(VIDEO_CONTENT_CACHE_KEY);
         res.status(200).json({ success: true, data: updatedVideo });
     }
     catch (error) {
@@ -171,6 +175,7 @@ const deleteVideo = async (req, res) => {
     try {
         const { id } = req.params;
         await videoContent_model_1.default.findByIdAndDelete(id);
+        await (0, cacheResponse_1.invalidateCache)(VIDEO_CONTENT_CACHE_KEY);
         res.status(200).json({ success: true, message: "Video deleted successfully" });
     }
     catch (error) {

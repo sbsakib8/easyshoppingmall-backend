@@ -8,6 +8,7 @@ import { AuthUser } from "./interface";
 import OrderModel from "./order.model";
 import CouponModel from "../coupon/coupon.model";
 import WebsiteInfo from "../content/websiteInfo/websiteinfo.model";
+import BalanceTransactionModel from "../balanceTransaction/balanceTransaction.model";
 import Referral from "../referral/referral.model";
 import { validateAndCalculateDiscount } from "../coupon/coupon.service";
 import productModel from "../product/product.model";
@@ -490,12 +491,24 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
         console.log(`[Order Update] Return-status: delivery charge already deducted for order ${id}. Skipping.`);
       } else if (deductionAmount > 0) {
         // Atomic balance deduction (may result in negative balance)
-        await UserModel.findByIdAndUpdate(user._id, {
+        const updatedUser = await UserModel.findByIdAndUpdate(user._id, {
           $inc: { balance: -deductionAmount }
-        });
+        }, { new: true });
         order.deliveryChargeDeducted = true;
         order.deliveryChargeDeductedAt = new Date();
         order.deliveryChargeDeductedAmount = deductionAmount;
+
+        // Log to balance transaction history
+        await BalanceTransactionModel.create({
+          userId: user._id,
+          amount: -deductionAmount,
+          type: "cod_return_deduction",
+          reason: `COD return delivery charge deduction for order ${order.orderId || id}`,
+          orderId: order._id,
+          performedBy: req.user?._id,
+          balanceAfter: updatedUser?.balance || 0,
+        });
+
         console.log(`[Order Update] Return-status: deducted ৳${deductionAmount} from dropshipper ${user._id} (order ${id}).`);
       }
     }
@@ -982,9 +995,38 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
     const skip = (page - 1) * limit;
+    const { search, status } = req.query;
+
+    const filter: any = {};
+
+    if (status) {
+      filter.order_status = status;
+    }
+
+    if (search) {
+      const searchRegex = { $regex: search, $options: "i" };
+      const users = await UserModel.find({
+        $or: [
+          { name: searchRegex },
+          { email: searchRegex },
+          { mobile: searchRegex },
+        ],
+      }).select("_id");
+
+      const userIds = users.map((u) => u._id);
+
+      filter.$or = [
+        { orderId: searchRegex },
+        { "address.customer_name": searchRegex },
+        { "address.mobile": searchRegex },
+        { "address.address_line": searchRegex },
+        { "address.district": searchRegex },
+        { userId: { $in: userIds } },
+      ];
+    }
 
     const [orders, totalCount] = await Promise.all([
-      OrderModel.find()
+      OrderModel.find(filter)
         .populate({
           path: "products.productId",
           populate: [
@@ -1003,7 +1045,7 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      OrderModel.countDocuments(),
+      OrderModel.countDocuments(filter),
     ]);
 
     res.json({
@@ -1042,11 +1084,34 @@ export const getOrdersByStatus = async (req: Request, res: Response): Promise<vo
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
     const skip = (page - 1) * limit;
+    const { search } = req.query;
 
-    const query = { order_status: status };
+    const filter: any = { order_status: status };
+
+    if (search) {
+      const searchRegex = { $regex: search, $options: "i" };
+      const users = await UserModel.find({
+        $or: [
+          { name: searchRegex },
+          { email: searchRegex },
+          { mobile: searchRegex },
+        ],
+      }).select("_id");
+
+      const userIds = users.map((u) => u._id);
+
+      filter.$or = [
+        { orderId: searchRegex },
+        { "address.customer_name": searchRegex },
+        { "address.mobile": searchRegex },
+        { "address.address_line": searchRegex },
+        { "address.district": searchRegex },
+        { userId: { $in: userIds } },
+      ];
+    }
 
     const [orders, totalCount] = await Promise.all([
-      OrderModel.find(query)
+      OrderModel.find(filter)
         .populate({
           path: "products.productId",
           populate: [
@@ -1065,7 +1130,7 @@ export const getOrdersByStatus = async (req: Request, res: Response): Promise<vo
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      OrderModel.countDocuments(query),
+      OrderModel.countDocuments(filter),
     ]);
 
     res.json({

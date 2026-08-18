@@ -50,7 +50,7 @@ const subCategorySchema = new mongoose_1.Schema({
     },
     image: {
         type: String,
-        default: "",
+        default: null,
     },
     icon: {
         type: String,

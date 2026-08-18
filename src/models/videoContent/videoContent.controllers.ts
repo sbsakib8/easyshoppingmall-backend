@@ -5,6 +5,9 @@ import { AuthRequest } from "../../middlewares/isAuth";
 import VideoAccess from "../videoAccess/videoAccess.model";
 import VideoModuleModel from "../videoModule/videoModule.model";
 import VideoCourseModel from "../videoCourse/videoCourse.model";
+import { invalidateCache } from "../../middlewares/cacheResponse";
+
+const VIDEO_CONTENT_CACHE_KEY = "/api/video-content/all";
 
 const STANDALONE_VIDEO_TYPES = ["standard", "demo"] as const;
 
@@ -160,6 +163,7 @@ export const createVideo = async (req: Request, res: Response) => {
             videoType,
             moduleId: resolved.moduleId,
         });
+        await invalidateCache(VIDEO_CONTENT_CACHE_KEY);
         res.status(201).json({ success: true, data: newVideo });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -188,6 +192,7 @@ export const updateVideo = async (req: Request, res: Response) => {
         };
 
         const updatedVideo = await VideoContent.findByIdAndUpdate(id, updatePayload, { new: true });
+        await invalidateCache(VIDEO_CONTENT_CACHE_KEY);
         res.status(200).json({ success: true, data: updatedVideo });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -198,6 +203,7 @@ export const deleteVideo = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         await VideoContent.findByIdAndDelete(id);
+        await invalidateCache(VIDEO_CONTENT_CACHE_KEY);
         res.status(200).json({ success: true, message: "Video deleted successfully" });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });

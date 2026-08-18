@@ -6,6 +6,7 @@ import {
   getCategoryById,
   updateCategory,
   deleteCategory,
+  toggleCategoryActive,
 } from "./category.controllers";
 import { isAuth } from "../../middlewares/isAuth";
 import { isDashboardAccess } from "../../middlewares/isDashboardAccess";
@@ -27,6 +28,9 @@ router.get("/:id", getCategoryById);
 
 // Update Category
 router.put("/:id", isAuth, isDashboardAccess("products"), upload.single("image"), updateCategory);
+
+// Toggle Category Active Status
+router.patch("/:id/toggle-active", isAuth, isDashboardAccess("products"), toggleCategoryActive);
 
 // Delete Category
 router.delete("/:id", isAuth, isDashboardAccess("products"), deleteCategory);

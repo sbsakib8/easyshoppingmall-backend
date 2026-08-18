@@ -40,8 +40,7 @@ import videoCourseRouter from "./models/videoCourse/videoCourse.routes";
 import videoRequestRouter from "./models/videoRequest/videoRequest.routes";
 import noticeRouter from "./models/notice/notice.routes";
 import homepageRoutes from "./models/homepage/homepage.routes";
-import { warmHomepageCache } from "./models/homepage/homepage.controller";
-
+import balanceTransactionRouter from "./models/balanceTransaction/balanceTransaction.routes";
 // middleware
 const app: Application = express();
 
@@ -76,8 +75,7 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// Warm homepage cache after DB connection
-connectDB().then(() => warmHomepageCache()).catch(() => {});
+// Cache warming is handled in server.ts after DB connection
 
 //  route
 import analyticsRoutes from "./models/analytics/analytics.routes";
@@ -113,6 +111,7 @@ app.use("/api/video-module", videoModuleRouter);
 app.use("/api/video-request", videoRequestRouter);
 app.use("/api/notice", noticeRouter);
 app.use("/api/homepage", homepageRoutes);
+app.use("/api/balance-transaction", balanceTransactionRouter);
 
 app.use("/api/team-system", teamSystemRoutes);
 

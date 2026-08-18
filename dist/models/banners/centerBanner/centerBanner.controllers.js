@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteCenterBanner = exports.updateCenterBanner = exports.getSingleCenterBanner = exports.getAllCenterBanner = exports.createCenterBanner = void 0;
+exports.deleteCenterBanner = exports.toggleCenterBannerStatus = exports.updateCenterBanner = exports.getSingleCenterBanner = exports.getAllCenterBanner = exports.createCenterBanner = void 0;
 const centerBanner_model_1 = __importDefault(require("./centerBanner.model"));
 const cloudinary_1 = __importDefault(require("../../../utils/cloudinary"));
 const cache_1 = require("../../../utils/cache");
@@ -28,7 +28,7 @@ const createCenterBanner = async (req, res) => {
             status,
             images: imageUrls,
         });
-        await cache_1.cache.del("banners:center");
+        await cache_1.cache.delByPrefix("banners:center");
         await cache_1.cache.delByPrefix("homepage");
         (0, revalidate_1.revalidateFrontend)();
         return res.status(201).json({
@@ -46,13 +46,18 @@ exports.createCenterBanner = createCenterBanner;
 //  Get All Banners
 const getAllCenterBanner = async (req, res) => {
     try {
-        const cacheKey = "banners:center";
+        const status = req.query.status || "active";
+        const cacheKey = `banners:center:${status}`;
         const cached = await cache_1.cache.get(cacheKey);
         if (cached) {
             res.set("Cache-Control", "private, no-cache");
             return res.status(200).json(cached);
         }
-        const banners = await centerBanner_model_1.default.find().sort({ createdAt: -1 }).lean();
+        const filter = {};
+        if (status !== "all") {
+            filter.status = status;
+        }
+        const banners = await centerBanner_model_1.default.find(filter).sort({ createdAt: -1 }).lean();
         const response = { success: true, data: banners };
         await cache_1.cache.set(cacheKey, response, 300);
         res.set("Cache-Control", "private, no-cache");
@@ -100,7 +105,7 @@ const updateCenterBanner = async (req, res) => {
         if (!updatedBanner) {
             return res.status(404).json({ success: false, message: "Banner not found" });
         }
-        await cache_1.cache.del("banners:center");
+        await cache_1.cache.delByPrefix("banners:center");
         await cache_1.cache.delByPrefix("homepage");
         (0, revalidate_1.revalidateFrontend)();
         return res.status(200).json({
@@ -115,6 +120,30 @@ const updateCenterBanner = async (req, res) => {
     }
 };
 exports.updateCenterBanner = updateCenterBanner;
+// Toggle Center Banner Status
+const toggleCenterBannerStatus = async (req, res) => {
+    try {
+        const banner = await centerBanner_model_1.default.findById(req.params.id);
+        if (!banner) {
+            return res.status(404).json({ success: false, message: "Banner not found" });
+        }
+        banner.status = banner.status === "active" ? "inactive" : "active";
+        await banner.save();
+        await cache_1.cache.delByPrefix("banners:center");
+        await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
+        return res.status(200).json({
+            success: true,
+            message: `Center banner ${banner.status === "active" ? "activated" : "deactivated"} successfully`,
+            data: banner,
+        });
+    }
+    catch (error) {
+        console.error("Toggle CenterBanner error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.toggleCenterBannerStatus = toggleCenterBannerStatus;
 //  Delete Banner
 const deleteCenterBanner = async (req, res) => {
     try {
@@ -122,7 +151,7 @@ const deleteCenterBanner = async (req, res) => {
         if (!banner) {
             return res.status(404).json({ success: false, message: "Banner not found" });
         }
-        await cache_1.cache.del("banners:center");
+        await cache_1.cache.delByPrefix("banners:center");
         await cache_1.cache.delByPrefix("homepage");
         (0, revalidate_1.revalidateFrontend)();
         return res.status(200).json({ success: true, message: "Banner deleted successfully" });

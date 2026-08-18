@@ -44,7 +44,7 @@ const categorySchema = new mongoose_1.Schema({
     },
     image: {
         type: String,
-        default: "",
+        default: null,
     },
     slug: {
         type: String,

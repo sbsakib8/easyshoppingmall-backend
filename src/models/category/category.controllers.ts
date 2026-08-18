@@ -39,6 +39,7 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
     await cache.delByPrefix("subcategories:");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
 
     revalidateFrontend();
 
@@ -68,6 +69,7 @@ export const getCategoryTree = async (req: Request, res: Response): Promise<void
   try {
     const showAll = req.query.status === "all";
     const matchStage: any = showAll ? {} : { isActive: true };
+    const subcategoryMatch: any = showAll ? {} : { isActive: true };
     const tree = await CategoryModel.aggregate([
       { $match: matchStage },
       {
@@ -76,6 +78,18 @@ export const getCategoryTree = async (req: Request, res: Response): Promise<void
           localField: "_id",
           foreignField: "category",
           as: "subcategories"
+        }
+      },
+      {
+        $addFields: {
+          subcategories: {
+            $filter: {
+              input: "$subcategories",
+              cond: showAll
+                ? { $ne: ["$$this._id", null] }
+                : { $eq: ["$$this.isActive", true] }
+            }
+          }
         }
       },
       {
@@ -89,7 +103,8 @@ export const getCategoryTree = async (req: Request, res: Response): Promise<void
           "subcategories.name": 1,
           "subcategories.slug": 1,
           "subcategories.image": 1,
-          "subcategories.icon": 1
+          "subcategories.icon": 1,
+          "subcategories.isActive": 1
         }
       },
       { $sort: { name: 1 } }
@@ -127,7 +142,7 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const { _id, slug, ...updateData } = req.body;
+    const { _id, slug, image: _image, ...updateData } = req.body;
     if (req.file) {
       const imageUrl = await uploadClouinary(req.file.buffer);
       updateData.image = imageUrl;
@@ -154,9 +169,41 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
     await cache.delByPrefix("subcategories:");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
     revalidateFrontend();
   } catch (error: any) {
     console.error("Update Category Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Toggle Category Active Status
+export const toggleCategoryActive = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const category = await CategoryModel.findById(id);
+    if (!category) {
+      res.status(404).json({ success: false, message: "Category not found" });
+      return;
+    }
+
+    category.isActive = !category.isActive;
+    await category.save();
+
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("subcategories:");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    revalidateFrontend();
+
+    res.status(200).json({
+      success: true,
+      message: `Category ${category.isActive ? "activated" : "deactivated"} successfully`,
+      data: category,
+    });
+  } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -184,6 +231,7 @@ export const deleteCategory = async (req: Request, res: Response): Promise<void>
     await cache.delByPrefix("subcategories:");
     await cache.delByPrefix("products:");
     await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
     revalidateFrontend();
     res.status(200).json({ success: true, message: "Category deleted successfully" });
   } catch (error: any) {

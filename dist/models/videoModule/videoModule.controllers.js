@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteModule = exports.updateModule = exports.getActiveModules = exports.getAllModulesAdmin = exports.createModule = void 0;
 const videoModule_model_1 = __importDefault(require("./videoModule.model"));
 const videoContent_model_1 = __importDefault(require("../videoContent/videoContent.model"));
+const cacheResponse_1 = require("../../middlewares/cacheResponse");
+const VIDEO_MODULE_CACHE_KEY = "/api/video-module/all";
 // Create a new module (Admin)
 const createModule = async (req, res) => {
     try {
@@ -21,6 +23,7 @@ const createModule = async (req, res) => {
             courseId
         });
         await newModule.save();
+        await (0, cacheResponse_1.invalidateCache)(VIDEO_MODULE_CACHE_KEY);
         res.status(201).json({ success: true, message: "Module created successfully", data: newModule });
     }
     catch (error) {
@@ -58,6 +61,7 @@ const updateModule = async (req, res) => {
         if (!updated) {
             return res.status(404).json({ success: false, message: "Module not found" });
         }
+        await (0, cacheResponse_1.invalidateCache)(VIDEO_MODULE_CACHE_KEY);
         res.status(200).json({ success: true, message: "Module updated successfully", data: updated });
     }
     catch (error) {
@@ -75,6 +79,7 @@ const deleteModule = async (req, res) => {
         if (!deleted) {
             return res.status(404).json({ success: false, message: "Module not found" });
         }
+        await (0, cacheResponse_1.invalidateCache)(VIDEO_MODULE_CACHE_KEY);
         res.status(200).json({ success: true, message: "Module and its videos deleted successfully" });
     }
     catch (error) {

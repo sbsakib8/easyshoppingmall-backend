@@ -51,13 +51,13 @@ export const addToCart = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
-    // 🔥 Fetch product
-    const product = await ProductModel.findById(productId);
+    const product = await ProductModel.findById(productId).select(
+      "price productSize color productWeight productStock"
+    );
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found" });
     }
 
-    // 🔥 AUTO PICK FIRST VARIANT IF NOT SELECTED
     size =
       size ??
       (product.productSize?.length ? product.productSize[0] : null);
@@ -70,7 +70,6 @@ export const addToCart = async (req: Request, res: Response) => {
       weight ??
       (product.productWeight?.length ? product.productWeight[0] : null);
 
-    // 🔥 Price fallback
     price = price ?? product.price;
 
     let cart = await CartModel.findOne({ userId });
@@ -87,6 +86,10 @@ export const addToCart = async (req: Request, res: Response) => {
           weight,
           totalPrice: quantity * price,
         }],
+      });
+      await cart.save();
+      await UserModel.findByIdAndUpdate(userId, {
+        $addToSet: { shopping_cart: cart._id },
       });
     } else {
       const existingProduct = cart.products.find((item: ICartProduct) =>
@@ -107,15 +110,8 @@ export const addToCart = async (req: Request, res: Response) => {
           totalPrice: quantity * price,
         });
       }
+      await cart.save();
     }
-
-    cart.subTotalAmt = cart.products.reduce((s: number, p: ICartProduct) => s + p.totalPrice, 0);
-    cart.totalAmt = cart.subTotalAmt;
-
-    await cart.save();
-    await UserModel.findByIdAndUpdate(userId, {
-      $addToSet: { shopping_cart: cart._id },
-    });
 
     res.json({
       success: true,

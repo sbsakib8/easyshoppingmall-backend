@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.getAllUsers = exports.getUserById = exports.getUserProfile = exports.googleAuth = exports.resetpassword = exports.verifyotp = exports.sendotp = exports.signOut = exports.signIn = exports.signUp = void 0;
+exports.exportUsers = exports.deleteUser = exports.updateUserProfile = exports.userImage = exports.getCustomers = exports.getAllUsers = exports.getUserById = exports.getUserProfile = exports.googleAuth = exports.resetpassword = exports.verifyotp = exports.sendotp = exports.signOut = exports.signIn = exports.signUp = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const cloudinary_1 = __importDefault(require("../../utils/cloudinary"));
 const generatetoken_1 = __importDefault(require("../../utils/generatetoken"));
@@ -390,18 +390,31 @@ const getAllUsers = async (req, res) => {
         const skip = limit > 0 ? (page - 1) * limit : 0;
         // Build filter
         const filter = {};
+        const conditions = [];
         // Search by name, email, or mobile
         if (req.query.search) {
             const search = req.query.search.trim();
-            filter.$or = [
-                { name: { $regex: search, $options: "i" } },
-                { email: { $regex: search, $options: "i" } },
-                { mobile: { $regex: search, $options: "i" } },
-            ];
+            conditions.push({
+                $or: [
+                    { name: { $regex: search, $options: "i" } },
+                    { email: { $regex: search, $options: "i" } },
+                    { mobile: { $regex: search, $options: "i" } },
+                ],
+            });
         }
-        // Filter by role
+        // Filter by role - search both role field and roles array
         if (req.query.role) {
-            filter.role = req.query.role;
+            const roleValue = req.query.role.toUpperCase();
+            conditions.push({
+                $or: [{ role: roleValue }, { roles: roleValue }],
+            });
+        }
+        // Combine conditions with $and if multiple
+        if (conditions.length > 1) {
+            filter.$and = conditions;
+        }
+        else if (conditions.length === 1) {
+            Object.assign(filter, conditions[0]);
         }
         // Filter by status
         if (req.query.status) {
@@ -441,7 +454,103 @@ const getAllUsers = async (req, res) => {
     }
 };
 exports.getAllUsers = getAllUsers;
-// user imge push 
+/**
+ * @desc    Get customers (users with orders) - aggregated with order stats
+ * @route   GET /api/users/customers
+ * @access  Private (Admin/Manager)
+ */
+const getCustomers = async (req, res) => {
+    try {
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limitParam = parseInt(req.query.limit);
+        const limit = limitParam ? Math.min(500, Math.max(1, limitParam)) : 20;
+        const skip = (page - 1) * limit;
+        const search = (req.query.search || "").trim();
+        const status = req.query.status;
+        // Build user match conditions
+        const userMatch = {};
+        if (search) {
+            userMatch.$or = [
+                { name: { $regex: search, $options: "i" } },
+                { email: { $regex: search, $options: "i" } },
+                { mobile: { $regex: search, $options: "i" } },
+            ];
+        }
+        if (status) {
+            userMatch.status = status;
+        }
+        const pipeline = [
+            { $match: userMatch },
+            {
+                $lookup: {
+                    from: "orders",
+                    localField: "_id",
+                    foreignField: "userId",
+                    as: "orders",
+                },
+            },
+            { $match: { "orders.0": { $exists: true } } },
+            {
+                $addFields: {
+                    orderStats: {
+                        orderCount: { $size: "$orders" },
+                        totalSpent: { $sum: "$orders.totalAmt" },
+                        lastOrderDate: { $max: "$orders.createdAt" },
+                    },
+                },
+            },
+            {
+                $project: {
+                    password: 0,
+                    refresh_token: 0,
+                    forgot_password_otp: 0,
+                    forgot_password_expiry: 0,
+                    isotpverified: 0,
+                    orders: 0,
+                },
+            },
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limit },
+        ];
+        const countPipeline = [
+            { $match: userMatch },
+            {
+                $lookup: {
+                    from: "orders",
+                    localField: "_id",
+                    foreignField: "userId",
+                    as: "orders",
+                },
+            },
+            { $match: { "orders.0": { $exists: true } } },
+            { $count: "total" },
+        ];
+        const [customers, countResult] = await Promise.all([
+            user_model_1.default.aggregate(pipeline),
+            user_model_1.default.aggregate(countPipeline),
+        ]);
+        const totalCount = countResult[0]?.total || 0;
+        res.status(200).json({
+            success: true,
+            customers,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalCount / limit),
+                totalCount,
+                limit,
+            },
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+exports.getCustomers = getCustomers;
+// user imge push
 const userImage = async (req, res) => {
     try {
         if (req.userId !== req.params.id) {
@@ -732,3 +841,117 @@ const deleteUser = async (req, res) => {
     }
 };
 exports.deleteUser = deleteUser;
+// Export users as CSV
+const exportUsers = async (req, res) => {
+    try {
+        const filter = {};
+        const conditions = [];
+        // Search by name, email, or mobile
+        if (req.query.search) {
+            const search = req.query.search.trim();
+            conditions.push({
+                $or: [
+                    { name: { $regex: search, $options: "i" } },
+                    { email: { $regex: search, $options: "i" } },
+                    { mobile: { $regex: search, $options: "i" } },
+                ],
+            });
+        }
+        // Filter by role - search both role field and roles array
+        if (req.query.role) {
+            const roleValue = req.query.role.toUpperCase();
+            conditions.push({
+                $or: [{ role: roleValue }, { roles: roleValue }],
+            });
+        }
+        // Combine conditions with $and if multiple
+        if (conditions.length > 1) {
+            filter.$and = conditions;
+        }
+        else if (conditions.length === 1) {
+            Object.assign(filter, conditions[0]);
+        }
+        // Filter by status
+        if (req.query.status) {
+            filter.status = req.query.status;
+        }
+        // Filter by customerstatus
+        if (req.query.customerstatus) {
+            filter.customerstatus = req.query.customerstatus;
+        }
+        const users = await user_model_1.default.find(filter)
+            .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+            .sort({ createdAt: -1 })
+            .lean();
+        // CSV headers
+        const headers = [
+            "Name",
+            "Email",
+            "Mobile",
+            "Role",
+            "Roles",
+            "Status",
+            "Customer Status",
+            "Verify Email",
+            "Referral Code",
+            "Balance",
+            "Shop Name",
+            "Shop Logo",
+            "Facebook Page",
+            "WhatsApp Number",
+            "Shop Address",
+            "Shop Website",
+            "Payment BKash",
+            "Payment Nagad",
+            "Payment Rocket",
+            "Payment Bank",
+            "Created At",
+            "Updated At",
+        ];
+        // Build CSV rows
+        const escapeCSV = (value) => {
+            if (value === null || value === undefined)
+                return "";
+            const str = String(value);
+            if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+        };
+        const rows = users.map((user) => [
+            escapeCSV(user.name),
+            escapeCSV(user.email),
+            escapeCSV(user.mobile),
+            escapeCSV(user.role),
+            escapeCSV(Array.isArray(user.roles) ? user.roles.join("; ") : user.roles),
+            escapeCSV(user.status),
+            escapeCSV(user.customerstatus),
+            escapeCSV(user.verify_email),
+            escapeCSV(user.referralCode),
+            escapeCSV(user.balance),
+            escapeCSV(user.shopName),
+            escapeCSV(user.shopLogo),
+            escapeCSV(user.facebookPage),
+            escapeCSV(user.whatsappNumber),
+            escapeCSV(user.shopAddress),
+            escapeCSV(user.shopWebsite),
+            escapeCSV(user.paymentDetails?.bkash),
+            escapeCSV(user.paymentDetails?.nagad),
+            escapeCSV(user.paymentDetails?.rocket),
+            escapeCSV(user.paymentDetails?.bank),
+            escapeCSV(user.createdAt),
+            escapeCSV(user.updatedAt),
+        ].join(","));
+        const csv = [headers.join(","), ...rows].join("\n");
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", 'attachment; filename="users.csv"');
+        res.status(200).send(csv);
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+exports.exportUsers = exportUsers;

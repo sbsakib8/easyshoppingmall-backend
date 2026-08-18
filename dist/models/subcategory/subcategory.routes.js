@@ -17,6 +17,8 @@ router.get("/", subcategory_controllers_1.getSubCategories);
 router.get("/:id", subcategory_controllers_1.getSubCategoryById);
 // Update SubCategory
 router.put("/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("products"), multer_1.upload.single("image"), subcategory_controllers_1.updateSubCategory);
+// Toggle SubCategory Active Status
+router.patch("/:id/toggle-active", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("products"), subcategory_controllers_1.toggleSubCategoryActive);
 // Delete SubCategory
 router.delete("/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("products"), subcategory_controllers_1.deleteSubCategory);
 exports.default = router;
