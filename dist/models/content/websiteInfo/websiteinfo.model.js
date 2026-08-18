@@ -57,6 +57,7 @@ const WebsiteInfoSchema = new mongoose_1.Schema({
     email: { type: String, required: true },
     number: { type: String, required: true },
     socialLinks: { type: [SocialLinkSchema], default: [] },
+    profitPerProduct: { type: Number, default: 0 },
     active: { type: Boolean, default: true },
 }, { timestamps: true });
 exports.default = mongoose_1.default.model("WebsiteInfo", WebsiteInfoSchema);

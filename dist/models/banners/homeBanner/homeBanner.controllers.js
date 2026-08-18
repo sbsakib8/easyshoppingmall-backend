@@ -3,21 +3,21 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteHomeBanner = exports.updateHomeBanner = exports.getSingleHomeBanner = exports.getAllHomeBanners = exports.createHomeBanner = void 0;
+exports.deleteHomeBanner = exports.toggleHomeBannerActive = exports.updateHomeBanner = exports.getSingleHomeBanner = exports.getAllHomeBanners = exports.createHomeBanner = void 0;
 const homeBanner_model_1 = __importDefault(require("./homeBanner.model"));
 const cloudinary_1 = __importDefault(require("../../../utils/cloudinary")); // your uploader util
 const fs_1 = __importDefault(require("fs"));
+const cache_1 = require("../../../utils/cache");
+const revalidate_1 = require("../../../utils/revalidate");
 // Create Home Banner
 const createHomeBanner = async (req, res) => {
     try {
-        const { title, Description, Link_URL, active } = req.body;
+        const { title, Description, Link_URL, active, sliderFor } = req.body;
         const files = req.files;
         let imageUrls = [];
         if (files && files.length > 0) {
             const uploadPromises = files.map(async (file) => {
-                const imageUrl = await (0, cloudinary_1.default)(file.path);
-                if (fs_1.default.existsSync(file.path))
-                    fs_1.default.unlinkSync(file.path);
+                const imageUrl = await (0, cloudinary_1.default)(file.buffer);
                 return imageUrl;
             });
             imageUrls = await Promise.all(uploadPromises);
@@ -27,8 +27,12 @@ const createHomeBanner = async (req, res) => {
             Description,
             Link_URL,
             active,
+            sliderFor: sliderFor || "USER",
             images: imageUrls,
         });
+        await cache_1.cache.delByPrefix("banners:home:");
+        await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
         return res.status(201).json({
             success: true,
             message: "Home banner created successfully",
@@ -44,8 +48,25 @@ exports.createHomeBanner = createHomeBanner;
 //  Get All Banners
 const getAllHomeBanners = async (req, res) => {
     try {
-        const banners = await homeBanner_model_1.default.find().sort({ createdAt: -1 });
-        return res.status(200).json({ success: true, data: banners });
+        const { sliderFor, active } = req.query;
+        const cacheKey = `banners:home:${sliderFor || 'all'}:${active || 'all'}`;
+        const cached = await cache_1.cache.get(cacheKey);
+        if (cached) {
+            res.set('Cache-Control', 'private, no-cache');
+            return res.status(200).json(cached);
+        }
+        const filter = {};
+        if (sliderFor) {
+            filter.sliderFor = sliderFor;
+        }
+        if (active !== undefined) {
+            filter.active = active === "true";
+        }
+        const banners = await homeBanner_model_1.default.find(filter).sort({ createdAt: -1 });
+        const response = { success: true, data: banners };
+        await cache_1.cache.set(cacheKey, response, 300);
+        res.set('Cache-Control', 'private, no-cache');
+        return res.status(200).json(response);
     }
     catch (error) {
         return res.status(500).json({ success: false, message: error.message });
@@ -69,12 +90,12 @@ exports.getSingleHomeBanner = getSingleHomeBanner;
 //  Update Banner
 const updateHomeBanner = async (req, res) => {
     try {
-        const { title, Description, Link_URL, active } = req.body;
+        const { title, Description, Link_URL, active, sliderFor } = req.body;
         const files = req.files;
         let imageUrls = [];
         if (files && files.length > 0) {
             const uploadPromises = files.map(async (file) => {
-                const imageUrl = await (0, cloudinary_1.default)(file.path);
+                const imageUrl = await (0, cloudinary_1.default)(file.buffer);
                 if (fs_1.default.existsSync(file.path))
                     fs_1.default.unlinkSync(file.path);
                 return imageUrl;
@@ -86,11 +107,15 @@ const updateHomeBanner = async (req, res) => {
             Description,
             Link_URL,
             active,
+            sliderFor,
             ...(imageUrls.length > 0 && { images: imageUrls }),
         }, { new: true });
         if (!updatedBanner) {
             return res.status(404).json({ success: false, message: "Banner not found" });
         }
+        await cache_1.cache.delByPrefix("banners:home:");
+        await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
         return res.status(200).json({
             success: true,
             message: "Home banner updated successfully",
@@ -103,6 +128,30 @@ const updateHomeBanner = async (req, res) => {
     }
 };
 exports.updateHomeBanner = updateHomeBanner;
+// Toggle Home Banner Active Status
+const toggleHomeBannerActive = async (req, res) => {
+    try {
+        const banner = await homeBanner_model_1.default.findById(req.params.id);
+        if (!banner) {
+            return res.status(404).json({ success: false, message: "Banner not found" });
+        }
+        banner.active = !banner.active;
+        await banner.save();
+        await cache_1.cache.delByPrefix("banners:home:");
+        await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
+        return res.status(200).json({
+            success: true,
+            message: `Home banner ${banner.active ? "activated" : "deactivated"} successfully`,
+            data: banner,
+        });
+    }
+    catch (error) {
+        console.error("Toggle HomeBanner error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.toggleHomeBannerActive = toggleHomeBannerActive;
 //  Delete Banner
 const deleteHomeBanner = async (req, res) => {
     try {
@@ -110,6 +159,9 @@ const deleteHomeBanner = async (req, res) => {
         if (!banner) {
             return res.status(404).json({ success: false, message: "Banner not found" });
         }
+        await cache_1.cache.delByPrefix("banners:home:");
+        await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
         return res.status(200).json({ success: true, message: "Banner deleted successfully" });
     }
     catch (error) {

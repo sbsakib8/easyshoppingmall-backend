@@ -1,40 +1,86 @@
+import dns from "node:dns"; // or const dns = require('node:dns');
+dns.setServers(["1.1.1.1", "8.8.8.8"]); // Cloudflare + Google
+
+import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import type { Application, Request, Response } from "express";
+import type { Application, Request, Response, NextFunction } from "express";
 import express from "express";
-import addressRouter from "./models/address/address.routs";
-import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routs";
-import homeBannerRoutes from "./models/banners/homeBanner/homeBanner.routs";
-import leftBannerRoutes from "./models/banners/leftBanner/leftBanner.routs";
-import RightBannerRoutes from "./models/banners/rightBanner/rightBanner.routs";
-import cartRouter from './models/cart/cart.routs';
-import categoryRoutes from "./models/category/category.routs";
-import blogRoutes from "./models/content/blogs/blogs.routs";
-import contactRoutes from "./models/content/contact/contact.routs";
-import websiteInfo from "./models/content/websiteInfo/websiteinfo.routs";
-import notifications from "./models/notification/notification.routs";
-import orderRoute from './models/order/order.routs';
-import productRouter from "./models/product/product.routs";
-import subcategoriesRoutes from "./models/subcategory/subcategory.routs";
-import userRoutes from "./models/user/user.routs";
-import wishlistRouter from './models/wishlist/wishlist.routs';
+import connectDB from "./config/db.connect";
+
+import addressRouter from "./models/address/address.routes";
+import centerBannerRoutes from "./models/banners/centerBanner/centerBanner.routes";
+import homeBannerRoutes from "./models/banners/homeBanner/homeBanner.routes";
+import leftBannerRoutes from "./models/banners/leftBanner/leftBanner.routes";
+import RightBannerRoutes from "./models/banners/rightBanner/rightBanner.routes";
+import cartRouter from "./models/cart/cart.routes";
+import categoryRoutes from "./models/category/category.routes";
+import blogRoutes from "./models/content/blogs/blogs.routes";
+import contactRoutes from "./models/content/contact/contact.routes";
+import websiteInfo from "./models/content/websiteInfo/websiteinfo.routes";
+import referralRouter from "./models/referral/referral.routes";
+import notifications from "./models/notification/notification.routes";
+import orderRoute from "./models/order/order.routes";
+import paymentRouter from "./models/payment/payment.route";
+
+import errorHandler from "./middlewares/errorHandler";
+import { etagMiddleware } from "./middlewares/etag";
+import adminRoutes from "./models/admin/admin.route";
+import productRouter from "./models/product/product.routes";
+import reviewRouter from "./models/review/review.routes";
+import subcategoriesRoutes from "./models/subcategory/subcategory.routes";
+import userRoutes from "./models/user/user.routes";
+import wishlistRouter from "./models/wishlist/wishlist.routes";
+import couponRouter from "./models/coupon/coupon.routes";
+import paymentRequestRouter from "./models/paymentRequest/paymentRequest.routes";
+import videoAccessRouter from "./models/videoAccess/videoAccess.routes";
+import videoContentRouter from "./models/videoContent/videoContent.routes";
+import videoModuleRouter from "./models/videoModule/videoModule.routes";
+import videoCourseRouter from "./models/videoCourse/videoCourse.routes";
+import videoRequestRouter from "./models/videoRequest/videoRequest.routes";
+import noticeRouter from "./models/notice/notice.routes";
+import homepageRoutes from "./models/homepage/homepage.routes";
+import balanceTransactionRouter from "./models/balanceTransaction/balanceTransaction.routes";
 // middleware
 const app: Application = express();
+
+app.set("trust proxy", 1);
+
+app.use(compression()); // Compress all responses
+app.use(etagMiddleware); // Add ETag support for conditional requests
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // cors
-app.use(cors(
-  {
-    origin: ["http://localhost:3000",
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
       "https://easyshoppingmallbd.com",
-      "https://easyshoppingmallbd.vercel.app"],
+      "https://www.easyshoppingmallbd.com",
+      "https://easyshoppingmallbd.vercel.app",
+    ],
     credentials: true,
-  }
-));
+  }),
+);
 
+// Ensure database is connected before processing any requests (Crucial for Vercel Serverless)
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Cache warming is handled in server.ts after DB connection
 
 //  route
+import analyticsRoutes from "./models/analytics/analytics.routes";
+import teamSystemRoutes from "./models/teamSystem/teamSystem.routes";
+
 app.use("/api/users", userRoutes);
 app.use("/api/products", productRouter);
 app.use("/api/address", addressRouter);
@@ -46,16 +92,36 @@ app.use("/api/LeftBanner", leftBannerRoutes);
 app.use("/api/RightBanner", RightBannerRoutes);
 app.use("/api/blog", blogRoutes);
 app.use("/api/websiteinfo", websiteInfo);
+app.use("/api/referral", referralRouter);
 app.use("/api/contact", contactRoutes);
 app.use("/api/notification", notifications);
-app.use("/api/cart", cartRouter)
-app.use("/api/orders", orderRoute)
-app.use("/api/wishlist", wishlistRouter)
-app.use("/api/payment", paymentRouter)
+app.use("/api/cart", cartRouter);
+app.use("/api/orders", orderRoute);
+app.use("/api/wishlist", wishlistRouter);
+app.use("/api/payment", paymentRouter);
+app.use("/api/review", reviewRouter);
+app.use("/api/coupon", couponRouter);
 
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/payment-request", paymentRequestRouter);
+app.use("/api/video-course", videoCourseRouter);
+app.use("/api/video-access", videoAccessRouter);
+app.use("/api/video-content", videoContentRouter);
+app.use("/api/video-module", videoModuleRouter);
+app.use("/api/video-request", videoRequestRouter);
+app.use("/api/notice", noticeRouter);
+app.use("/api/homepage", homepageRoutes);
+app.use("/api/balance-transaction", balanceTransactionRouter);
+
+app.use("/api/team-system", teamSystemRoutes);
+
+app.use("/api/admin", adminRoutes);
 
 app.get("/", (req: Request, res: Response) => {
   res.send("APi  is running...");
 });
+
+// Centralized error handling middleware (must be last)
+app.use(errorHandler);
 
 export default app;

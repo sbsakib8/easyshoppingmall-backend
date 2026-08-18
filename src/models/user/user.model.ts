@@ -12,14 +12,35 @@ export interface IUser extends Document {
     verify_email?: boolean;
     last_login_date?: Date | null;
     status: "Active" | "Inactive" | "Blocked";
-    customerstatus: "NewCustomer"| "TopCustomer" | "ReturningCustomer" | "VIPCustomer" | "WholesaleCustomer" | "Reseller" | "3starCustomer" | "4starCustomer" | "5starCustomer" ;
+    customerstatus: "NewCustomer" | "TopCustomer" | "ReturningCustomer" | "VIPCustomer" | "WholesaleCustomer" | "Reseller" | "3starCustomer" | "4starCustomer" | "5starCustomer";
     address_details: Types.ObjectId[];
     shopping_cart: Types.ObjectId[];
     orderHistory: Types.ObjectId[];
     forgot_password_otp?: string | null;
     forgot_password_expiry?: Date | null;
     isotpverified?: boolean;
-    role: "ADMIN" | "USER";
+    role: "ADMIN" | "USER" | "INVESTMENT" | "SELLERPROGRAM" | "BOXLEADER" | "DROPSHIPPING" | "MANAGER" | "CPO";
+    roles: ("ADMIN" | "USER" | "INVESTMENT" | "SELLERPROGRAM" | "BOXLEADER" | "DROPSHIPPING" | "MANAGER" | "CPO")[];
+    date_of_birth?: Date | null;
+    gender?: "Male" | "Female" | "Other" | null;
+    referralCode?: string | null;
+    referredBy?: Types.ObjectId | null;
+    tokenVersion?: number;
+    referralCount?: number;
+    deliveredItemsCount?: number;
+    balance?: number;
+    shopName?: string | null;
+    shopLogo?: string | null;
+    facebookPage?: string | null;
+    whatsappNumber?: string | null;
+    shopAddress?: string | null;
+    shopWebsite?: string | null;
+    paymentDetails?: {
+        bkash?: string | null;
+        nagad?: string | null;
+        rocket?: string | null;
+        bank?: string | null;
+    } | null;
     createdAt?: Date;
     updatedAt?: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -61,30 +82,30 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
         },
         status: {
             type: String,
-            enum: [ 'Active', 'Inactive', 'Blocked' ],
+            enum: ['Active', 'Inactive', 'Blocked'],
             default: "Active"
         },
         customerstatus: {
             type: String,
-            enum: [ 'NewCustomer', 'TopCustomer', 'ReturningCustomer', 'VIPCustomer', 'WholesaleCustomer', 'Reseller', '3starCustomer', '4starCustomer', '5starCustomer' ],
+            enum: ['NewCustomer', 'TopCustomer', 'ReturningCustomer', 'VIPCustomer', 'WholesaleCustomer', 'Reseller', '3starCustomer', '4starCustomer', '5starCustomer'],
             default: "NewCustomer"
         },
         address_details: [
             {
                 type: mongoose.Schema.ObjectId,
-                ref: 'address'
+                ref: 'Address'
             }
         ],
         shopping_cart: [
             {
                 type: mongoose.Schema.ObjectId,
-                ref: 'cartProduct'
+                ref: 'Cart'
             }
         ],
         orderHistory: [
             {
                 type: mongoose.Schema.ObjectId,
-                ref: 'order'
+                ref: 'Order'
             }
         ],
         forgot_password_otp: {
@@ -101,12 +122,94 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ['ADMIN', "USER"],
+            enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING", "MANAGER", "CPO"],
             default: "USER"
+        },
+        roles: {
+            type: [String],
+            enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING", "MANAGER", "CPO"],
+            default: ["USER"]
+        },
+        date_of_birth: {
+            type: Date,
+            default: null,
+        },
+        gender: {
+            type: String,
+            enum: ["Male", "Female", "Other"],
+            default: null,
+        },
+        referralCode: {
+            type: String,
+            unique: true,
+            sparse: true,
+            default: null
+        },
+        referredBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        },
+        tokenVersion: {
+            type: Number,
+            default: 0
+        },
+        referralCount: {
+            type: Number,
+            default: 0
+        },
+        deliveredItemsCount: {
+            type: Number,
+            default: 0
+        },
+        balance: {
+            type: Number,
+            default: 0
+        },
+        shopName: {
+            type: String,
+            default: null
+        },
+        shopLogo: {
+            type: String,
+            default: null
+        },
+        facebookPage: {
+            type: String,
+            default: null
+        },
+        whatsappNumber: {
+            type: String,
+            default: null
+        },
+        shopAddress: {
+            type: String,
+            default: null
+        },
+        shopWebsite: {
+            type: String,
+            default: null
+        },
+        paymentDetails: {
+            bkash: { type: String, default: null },
+            nagad: { type: String, default: null },
+            rocket: { type: String, default: null },
+            bank: { type: String, default: null }
         }
     },
     { timestamps: true }
 );
+
+// SYNC role to roles array before save
+userSchema.pre("save", function (next) {
+    if (this.role && !this.roles.includes(this.role)) {
+        this.roles.push(this.role);
+    }
+    next();
+});
+
+userSchema.index({ role: 1, createdAt: -1 });
+userSchema.index({ role: 1, date_of_birth: 1 });
 
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password")) return next();

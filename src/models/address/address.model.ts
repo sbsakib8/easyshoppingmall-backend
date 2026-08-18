@@ -7,11 +7,15 @@ const addressSchema = new Schema<IAddress>(
       type: String,
       default: "",
     },
-    city: {
+    district: { // Renamed from city
       type: String,
       default: "",
     },
-    state: {
+    division: { // Renamed from state
+      type: String,
+      default: "",
+    },
+    upazila_thana: { // New field for sub-district/thana
       type: String,
       default: "",
     },
@@ -39,6 +43,8 @@ const addressSchema = new Schema<IAddress>(
     timestamps: true,
   }
 );
+
+addressSchema.index({ country: 1 });
 
 // 3. Model type
 const AddressModel: Model<IAddress> = mongoose.model<IAddress>(

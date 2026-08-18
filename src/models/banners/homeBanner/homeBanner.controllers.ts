@@ -2,19 +2,20 @@ import { Request, Response } from "express";
 import HomeBanner from "./homeBanner.model";
 import uploadClouinary from "../../../utils/cloudinary"; // your uploader util
 import fs from "fs";
+import { cache } from "../../../utils/cache";
+import { revalidateFrontend } from "../../../utils/revalidate";
 
 // Create Home Banner
 export const createHomeBanner = async (req: Request, res: Response) => {
   try {
-    const { title, Description, Link_URL, active } = req.body;
+    const { title, Description, Link_URL, active, sliderFor } = req.body;
     const files = req.files as Express.Multer.File[];
 
     let imageUrls: string[] = [];
 
     if (files && files.length > 0) {
       const uploadPromises = files.map(async (file) => {
-        const imageUrl = await uploadClouinary(file.path);
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        const imageUrl = await uploadClouinary(file.buffer);
         return imageUrl;
       });
 
@@ -26,9 +27,13 @@ export const createHomeBanner = async (req: Request, res: Response) => {
       Description,
       Link_URL,
       active,
+      sliderFor: sliderFor || "USER",
       images: imageUrls,
     });
 
+    await cache.delByPrefix("banners:home:");
+    await cache.delByPrefix("homepage");
+    revalidateFrontend();
     return res.status(201).json({
       success: true,
       message: "Home banner created successfully",
@@ -43,8 +48,29 @@ export const createHomeBanner = async (req: Request, res: Response) => {
 //  Get All Banners
 export const getAllHomeBanners = async (req: Request, res: Response) => {
   try {
-    const banners = await HomeBanner.find().sort({ createdAt: -1 });
-    return res.status(200).json({ success: true, data: banners });
+    const { sliderFor, active } = req.query;
+    const cacheKey = `banners:home:${sliderFor || 'all'}:${active || 'all'}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', 'private, no-cache');
+      return res.status(200).json(cached);
+    }
+
+    const filter: any = {};
+
+    if (sliderFor) {
+      filter.sliderFor = sliderFor;
+    }
+
+    if (active !== undefined) {
+      filter.active = active === "true";
+    }
+
+    const banners = await HomeBanner.find(filter).sort({ createdAt: -1 });
+    const response = { success: true, data: banners };
+    await cache.set(cacheKey, response, 300);
+    res.set('Cache-Control', 'private, no-cache');
+    return res.status(200).json(response);
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -66,14 +92,14 @@ export const getSingleHomeBanner = async (req: Request, res: Response) => {
 //  Update Banner
 export const updateHomeBanner = async (req: Request, res: Response) => {
   try {
-    const { title, Description, Link_URL, active } = req.body;
+    const { title, Description, Link_URL, active, sliderFor } = req.body;
     const files = req.files as Express.Multer.File[];
 
     let imageUrls: string[] = [];
 
     if (files && files.length > 0) {
       const uploadPromises = files.map(async (file) => {
-        const imageUrl = await uploadClouinary(file.path);
+        const imageUrl = await uploadClouinary(file.buffer);
         if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
         return imageUrl;
       });
@@ -88,6 +114,7 @@ export const updateHomeBanner = async (req: Request, res: Response) => {
         Description,
         Link_URL,
         active,
+        sliderFor,
         ...(imageUrls.length > 0 && { images: imageUrls }),
       },
       { new: true }
@@ -97,6 +124,9 @@ export const updateHomeBanner = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
+    await cache.delByPrefix("banners:home:");
+    await cache.delByPrefix("homepage");
+    revalidateFrontend();
     return res.status(200).json({
       success: true,
       message: "Home banner updated successfully",
@@ -108,6 +138,32 @@ export const updateHomeBanner = async (req: Request, res: Response) => {
   }
 };
 
+// Toggle Home Banner Active Status
+export const toggleHomeBannerActive = async (req: Request, res: Response) => {
+  try {
+    const banner = await HomeBanner.findById(req.params.id);
+    if (!banner) {
+      return res.status(404).json({ success: false, message: "Banner not found" });
+    }
+
+    banner.active = !banner.active;
+    await banner.save();
+
+    await cache.delByPrefix("banners:home:");
+    await cache.delByPrefix("homepage");
+    revalidateFrontend();
+
+    return res.status(200).json({
+      success: true,
+      message: `Home banner ${banner.active ? "activated" : "deactivated"} successfully`,
+      data: banner,
+    });
+  } catch (error: any) {
+    console.error("Toggle HomeBanner error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 //  Delete Banner
 export const deleteHomeBanner = async (req: Request, res: Response) => {
   try {
@@ -115,6 +171,9 @@ export const deleteHomeBanner = async (req: Request, res: Response) => {
     if (!banner) {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
+    await cache.delByPrefix("banners:home:");
+    await cache.delByPrefix("homepage");
+    revalidateFrontend();
     return res.status(200).json({ success: true, message: "Banner deleted successfully" });
   } catch (error: any) {
     console.error("Delete HomeBanner error:", error);

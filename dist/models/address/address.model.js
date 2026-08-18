@@ -39,11 +39,15 @@ const addressSchema = new mongoose_1.Schema({
         type: String,
         default: "",
     },
-    city: {
+    district: {
         type: String,
         default: "",
     },
-    state: {
+    division: {
+        type: String,
+        default: "",
+    },
+    upazila_thana: {
         type: String,
         default: "",
     },
@@ -69,6 +73,7 @@ const addressSchema = new mongoose_1.Schema({
 }, {
     timestamps: true,
 });
+addressSchema.index({ country: 1 });
 // 3. Model type
 const AddressModel = mongoose_1.default.model("Address", addressSchema);
 exports.default = AddressModel;

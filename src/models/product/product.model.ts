@@ -33,7 +33,7 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
       default: "",
     },
     productWeight: {
-     type: [String],
+      type: [String],
       default: [],
     },
     productSize: {
@@ -45,6 +45,10 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
       default: [],
     },
     price: {
+      type: Number,
+      default: null,
+    },
+    dropshippingPrice: {
       type: Number,
       default: null,
     },
@@ -68,9 +72,24 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    productStatus: {
+      type: [{
+        type: String,
+        enum: ['hot', 'cold']
+      }],
+      default: [],
+    },
     images: {
       type: [String],
       default: [],
+    },
+    video: {
+      type: [String],
+      default: [],
+    },
+    video_link: {
+      type: String,
+      default: null,
     },
     more_details: {
       type: Object,
@@ -79,6 +98,14 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
     publish: {
       type: Boolean,
       default: true,
+    },
+    isBoost: {
+      type: Boolean,
+      default: false,
+    },
+    gender: {
+      type: String,
+      default: "unisex",
     },
     sku: {
       type: String,
@@ -91,12 +118,29 @@ const productSchema: Schema<IProduct> = new mongoose.Schema(
   }
 );
 
-// ✅ ADD THIS
+// Text index for search
 productSchema.index({
   productName: "text",
   description: "text",
   brand: "text",
   tags: "text",
 });
+
+// Primary compound indexes for high-performance filtering + sorting
+// These allow MongoDB to find, filter and sort within a single index scan
+productSchema.index({ publish: 1, category: 1, createdAt: -1 });
+productSchema.index({ publish: 1, category: 1, price: 1 });
+productSchema.index({ publish: 1, subCategory: 1, createdAt: -1 });
+productSchema.index({ publish: 1, subCategory: 1, price: 1 });
+productSchema.index({ publish: 1, gender: 1, createdAt: -1 });
+
+// Supporting indexes
+productSchema.index({ price: 1 });
+productSchema.index({ productRank: -1 });
+productSchema.index({ ratings: -1 });
+
+// Popular products: covers publish + isBoost/featured + subCategory filter with sort
+productSchema.index({ publish: 1, isBoost: 1, subCategory: 1, productRank: -1, ratings: -1 });
+productSchema.index({ publish: 1, featured: 1, subCategory: 1, productRank: -1, ratings: -1 });
 
 export default model<IProduct>("Product", productSchema);

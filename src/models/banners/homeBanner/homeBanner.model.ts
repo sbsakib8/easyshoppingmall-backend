@@ -24,9 +24,16 @@ const homeBannerSchema = new Schema<IHomeBanner>(
          type: Boolean,
           default: true
      },
+    sliderFor: {
+         type: String,
+         enum: ["USER", "DROPSHIPPING"],
+         default: "USER"
+     },
   },
   { timestamps: true }
 );
+
+homeBannerSchema.index({ active: 1, sliderFor: 1 });
 
 export default mongoose.models.HomeBanner ||
   mongoose.model<IHomeBanner>("HomeBanner", homeBannerSchema);

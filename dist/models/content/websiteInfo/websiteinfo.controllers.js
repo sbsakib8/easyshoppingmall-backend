@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteWebsiteInfo = exports.updateWebsiteInfo = exports.getAllWebsiteInfo = exports.createWebsiteInfo = void 0;
 const websiteinfo_model_1 = __importDefault(require("./websiteinfo.model"));
+const cache_1 = require("../../../utils/cache");
 //  Helper: Countdown calculator
 const calculateCountdown = (targetDate) => {
     const now = new Date().getTime();
@@ -29,8 +30,23 @@ const createWebsiteInfo = async (req, res) => {
                 countdownSeconds: countdown.seconds,
             });
         }
+        else if (data.countdownDays !== undefined || data.countdownHours !== undefined) {
+            const now = new Date();
+            const days = Number(data.countdownDays) || 0;
+            const hours = Number(data.countdownHours) || 0;
+            const minutes = Number(data.countdownMinutes) || 0;
+            const seconds = Number(data.countdownSeconds) || 0;
+            const newTarget = new Date(now.getTime() +
+                (days * 24 * 60 * 60 * 1000) +
+                (hours * 60 * 60 * 1000) +
+                (minutes * 60 * 1000) +
+                (seconds * 1000));
+            data.countdownTargetDate = newTarget;
+        }
         const newInfo = new websiteinfo_model_1.default(data);
         const saved = await newInfo.save();
+        await cache_1.cache.del("websiteinfo");
+        await cache_1.cache.delByPrefix("homepage");
         res.status(201).json({ success: true, message: "Website info created", data: saved });
     }
     catch (error) {
@@ -42,8 +58,33 @@ exports.createWebsiteInfo = createWebsiteInfo;
 //  Get All
 const getAllWebsiteInfo = async (_req, res) => {
     try {
-        const info = await websiteinfo_model_1.default.find();
-        res.status(200).json({ success: true, data: info });
+        const cacheKey = "websiteinfo";
+        const cached = await cache_1.cache.get(cacheKey);
+        if (cached) {
+            res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=30");
+            res.status(200).json(cached);
+            return;
+        }
+        let info = await websiteinfo_model_1.default.find();
+        // Dynamically recalculate countdown for each record to ensure it's not stale
+        const updatedInfo = info.map(item => {
+            const plainItem = item.toObject();
+            if (plainItem.countdownTargetDate) {
+                const countdown = calculateCountdown(plainItem.countdownTargetDate);
+                Object.assign(plainItem, {
+                    countdownDays: countdown.days,
+                    countdownHours: countdown.hours,
+                    countdownMinutes: countdown.minutes,
+                    countdownSeconds: countdown.seconds,
+                });
+            }
+            return plainItem;
+        });
+        const response = { success: true, data: updatedInfo };
+        // Short TTL because countdown changes frequently
+        await cache_1.cache.set(cacheKey, response, 60);
+        res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=30");
+        res.status(200).json(response);
     }
     catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -64,9 +105,25 @@ const updateWebsiteInfo = async (req, res) => {
                 countdownSeconds: countdown.seconds,
             });
         }
+        else if (data.countdownDays !== undefined || data.countdownHours !== undefined) {
+            // If user provided days/hours manualy, calculate a new target date from NOW
+            const now = new Date();
+            const days = Number(data.countdownDays) || 0;
+            const hours = Number(data.countdownHours) || 0;
+            const minutes = Number(data.countdownMinutes) || 0;
+            const seconds = Number(data.countdownSeconds) || 0;
+            const newTarget = new Date(now.getTime() +
+                (days * 24 * 60 * 60 * 1000) +
+                (hours * 60 * 60 * 1000) +
+                (minutes * 60 * 1000) +
+                (seconds * 1000));
+            data.countdownTargetDate = newTarget;
+        }
         const updated = await websiteinfo_model_1.default.findByIdAndUpdate(id, data, { new: true });
         if (!updated)
             return res.status(404).json({ success: false, message: "Not found" });
+        await cache_1.cache.del("websiteinfo");
+        await cache_1.cache.delByPrefix("homepage");
         res.status(200).json({ success: true, message: "Updated successfully", data: updated });
     }
     catch (error) {
@@ -81,6 +138,8 @@ const deleteWebsiteInfo = async (req, res) => {
         const deleted = await websiteinfo_model_1.default.findByIdAndDelete(id);
         if (!deleted)
             return res.status(404).json({ success: false, message: "Not found" });
+        await cache_1.cache.del("websiteinfo");
+        await cache_1.cache.delByPrefix("homepage");
         res.status(200).json({ success: true, message: "Deleted successfully" });
     }
     catch (error) {

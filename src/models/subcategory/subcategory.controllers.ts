@@ -1,7 +1,10 @@
 import { Request, Response } from "express";
+import ProductModel from "../product/product.model";
 import SubCategoryModel from "./subcategory.model";
 import CategoryModel from "../category/category.model";
 import uploadClouinary from "../../utils/cloudinary";
+import { cache } from "../../utils/cache";
+import { revalidateFrontend } from "../../utils/revalidate";
 
 // ✅ Create SubCategory
 export const createSubCategory = async (req: Request, res: Response): Promise<void> => {
@@ -16,7 +19,7 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
     }
     let imageUrl: string | undefined;
     if (req.file) {
-      imageUrl = await uploadClouinary(req.file.path);
+      imageUrl = await uploadClouinary(req.file.buffer);
     } else {
       res.status(400).json({ success: false, message: "not image file provided" });
       return;
@@ -29,11 +32,11 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    
+
 
     const subCategory = new SubCategoryModel({
       name,
-      image:imageUrl,
+      image: imageUrl,
       icon,
       isActive,
       metaDescription,
@@ -42,6 +45,14 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
     });
 
     await subCategory.save();
+
+    await cache.delByPrefix("subcategories:");
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    revalidateFrontend();
 
     res.status(201).json({
       success: true,
@@ -56,9 +67,33 @@ export const createSubCategory = async (req: Request, res: Response): Promise<vo
 // ✅ Get All SubCategories
 export const getSubCategories = async (req: Request, res: Response): Promise<void> => {
   try {
-    const subCategories = await SubCategoryModel.find()
+    const { filterType } = req.query;
+    const showAll = req.query.status === "all";
+
+    const filter: any = showAll ? {} : { isActive: true };
+
+    if (filterType === "new-products" || filterType === "boost-products") {
+      const productFilter: any = { publish: true };
+      
+      if (filterType === "new-products") {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        productFilter.createdAt = { $gte: thirtyDaysAgo };
+      } else if (filterType === "boost-products") {
+        productFilter.isBoost = true;
+      }
+
+      const subCategoryIds = await ProductModel.distinct("subCategory", productFilter);
+      filter._id = { $in: subCategoryIds };
+    }
+
+    const subCategories = await SubCategoryModel.find(filter)
+      .select("name image slug icon isActive category")
       .populate("category", "name slug")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.set('Cache-Control', 'private, no-cache');
     res.status(200).json({ success: true, data: subCategories });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -69,7 +104,9 @@ export const getSubCategories = async (req: Request, res: Response): Promise<voi
 export const getSubCategoryById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const subCategory = await SubCategoryModel.findById(id).populate("category", "name slug");
+    const subCategory = await SubCategoryModel.findById(id)
+      .populate("category", "name slug")
+      .lean();
 
     if (!subCategory) {
       res.status(404).json({ success: false, message: "SubCategory not found" });
@@ -92,12 +129,12 @@ export const updateSubCategory = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    
 
-    const { _id, slug, ...updateData } = req.body;
+
+    const { _id, slug, image: _image, ...updateData } = req.body;
 
     if (req.file) {
-      const imageUrl = await uploadClouinary(req.file.path);
+      const imageUrl = await uploadClouinary(req.file.buffer);
       updateData.image = imageUrl;
     }
 
@@ -116,15 +153,60 @@ export const updateSubCategory = async (req: Request, res: Response): Promise<vo
       message: "SubCategory updated successfully",
       data: updatedSubCategory,
     });
+    await cache.delByPrefix("subcategories:");
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    revalidateFrontend();
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ✅ Delete SubCategory
+
+// Toggle SubCategory Active Status
+export const toggleSubCategoryActive = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const subCategory = await SubCategoryModel.findById(id);
+    if (!subCategory) {
+      res.status(404).json({ success: false, message: "SubCategory not found" });
+      return;
+    }
+
+    subCategory.isActive = !subCategory.isActive;
+    await subCategory.save();
+
+    await cache.delByPrefix("subcategories:");
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    revalidateFrontend();
+
+    res.status(200).json({
+      success: true,
+      message: `SubCategory ${subCategory.isActive ? "activated" : "deactivated"} successfully`,
+      data: subCategory,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const deleteSubCategory = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+
+    // Remove the subcategory from all products that reference it
+    await ProductModel.updateMany(
+      { subCategory: id },
+      { $pull: { subCategory: id } }
+    );
+
     const deletedSubCategory = await SubCategoryModel.findByIdAndDelete(id);
 
     if (!deletedSubCategory) {
@@ -133,6 +215,13 @@ export const deleteSubCategory = async (req: Request, res: Response): Promise<vo
     }
 
     res.status(200).json({ success: true, message: "SubCategory deleted successfully" });
+    await cache.delByPrefix("subcategories:");
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    revalidateFrontend();
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

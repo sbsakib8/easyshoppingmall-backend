@@ -51,19 +51,19 @@ const userSchema = new mongoose_1.default.Schema({
     address_details: [
         {
             type: mongoose_1.default.Schema.ObjectId,
-            ref: 'address'
+            ref: 'Address'
         }
     ],
     shopping_cart: [
         {
             type: mongoose_1.default.Schema.ObjectId,
-            ref: 'cartProduct'
+            ref: 'Cart'
         }
     ],
     orderHistory: [
         {
             type: mongoose_1.default.Schema.ObjectId,
-            ref: 'order'
+            ref: 'Order'
         }
     ],
     forgot_password_otp: {
@@ -80,10 +80,90 @@ const userSchema = new mongoose_1.default.Schema({
     },
     role: {
         type: String,
-        enum: ['ADMIN', "USER"],
+        enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING", "MANAGER", "CPO"],
         default: "USER"
+    },
+    roles: {
+        type: [String],
+        enum: ['ADMIN', "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING", "MANAGER", "CPO"],
+        default: ["USER"]
+    },
+    date_of_birth: {
+        type: Date,
+        default: null,
+    },
+    gender: {
+        type: String,
+        enum: ["Male", "Female", "Other"],
+        default: null,
+    },
+    referralCode: {
+        type: String,
+        unique: true,
+        sparse: true,
+        default: null
+    },
+    referredBy: {
+        type: mongoose_1.default.Schema.Types.ObjectId,
+        ref: "User",
+        default: null
+    },
+    tokenVersion: {
+        type: Number,
+        default: 0
+    },
+    referralCount: {
+        type: Number,
+        default: 0
+    },
+    deliveredItemsCount: {
+        type: Number,
+        default: 0
+    },
+    balance: {
+        type: Number,
+        default: 0
+    },
+    shopName: {
+        type: String,
+        default: null
+    },
+    shopLogo: {
+        type: String,
+        default: null
+    },
+    facebookPage: {
+        type: String,
+        default: null
+    },
+    whatsappNumber: {
+        type: String,
+        default: null
+    },
+    shopAddress: {
+        type: String,
+        default: null
+    },
+    shopWebsite: {
+        type: String,
+        default: null
+    },
+    paymentDetails: {
+        bkash: { type: String, default: null },
+        nagad: { type: String, default: null },
+        rocket: { type: String, default: null },
+        bank: { type: String, default: null }
     }
 }, { timestamps: true });
+// SYNC role to roles array before save
+userSchema.pre("save", function (next) {
+    if (this.role && !this.roles.includes(this.role)) {
+        this.roles.push(this.role);
+    }
+    next();
+});
+userSchema.index({ role: 1, createdAt: -1 });
+userSchema.index({ role: 1, date_of_birth: 1 });
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password"))
         return next();

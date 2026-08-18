@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
+import ProductModel from "../product/product.model";
 import CategoryModel from "./category.model";
 import uploadClouinary from "../../utils/cloudinary";
+import { cache } from "../../utils/cache";
+import { revalidateFrontend } from "../../utils/revalidate";
 
 // ✅ Create Category
 export const createCategory = async (req: Request, res: Response): Promise<void> => {
@@ -14,16 +17,16 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
       return;
     }
     let imageUrl: string | undefined;
-        if (req.file) {
-          imageUrl = await uploadClouinary(req.file.path);
-        } else {
-          res.status(400).json({ success: false, message: "not image file provided" });
-          return;
-        }
+    if (req.file) {
+      imageUrl = await uploadClouinary(req.file.buffer);
+    } else {
+      res.status(400).json({ success: false, message: "not image file provided" });
+      return;
+    }
 
     const category = new CategoryModel({
       name,
-      image:imageUrl,
+      image: imageUrl,
       icon,
       isActive,
       metaDescription,
@@ -31,6 +34,14 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
     });
 
     await category.save();
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("subcategories:");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+
+    revalidateFrontend();
 
     res.status(201).json({ success: true, message: "Category created successfully", data: category });
   } catch (error: any) {
@@ -41,8 +52,64 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
 //  Get All Categories
 export const getCategories = async (req: Request, res: Response): Promise<void> => {
   try {
-    const categories = await CategoryModel.find().sort({ createdAt: -1 });
+    const showAll = req.query.status === "all";
+    const filter: any = showAll ? {} : { isActive: true };
+    const categories = await CategoryModel.find(filter)
+      .select("name image slug icon isActive")
+      .sort({ createdAt: -1 })
+      .lean();
     res.status(200).json({ success: true, data: categories });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ✅ Get Categories and Subcategories Tree (Optimized Aggregation)
+export const getCategoryTree = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const showAll = req.query.status === "all";
+    const matchStage: any = showAll ? {} : { isActive: true };
+    const subcategoryMatch: any = showAll ? {} : { isActive: true };
+    const tree = await CategoryModel.aggregate([
+      { $match: matchStage },
+      {
+        $lookup: {
+          from: "subcategories",
+          localField: "_id",
+          foreignField: "category",
+          as: "subcategories"
+        }
+      },
+      {
+        $addFields: {
+          subcategories: {
+            $filter: {
+              input: "$subcategories",
+              cond: showAll
+                ? { $ne: ["$$this._id", null] }
+                : { $eq: ["$$this.isActive", true] }
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          slug: 1,
+          image: 1,
+          icon: 1,
+          "subcategories._id": 1,
+          "subcategories.name": 1,
+          "subcategories.slug": 1,
+          "subcategories.image": 1,
+          "subcategories.icon": 1,
+          "subcategories.isActive": 1
+        }
+      },
+      { $sort: { name: 1 } }
+    ]);
+    res.status(200).json({ success: true, data: tree });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -52,7 +119,7 @@ export const getCategories = async (req: Request, res: Response): Promise<void> 
 export const getCategoryById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const category = await CategoryModel.findById(id);
+    const category = await CategoryModel.findById(id).lean();
 
     if (!category) {
       res.status(404).json({ success: false, message: "Category not found" });
@@ -75,11 +142,11 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const { _id, slug, ...updateData } = req.body;
-     if (req.file) {
-          const imageUrl = await uploadClouinary(req.file.path);
-          updateData.image = imageUrl;
-        }
+    const { _id, slug, image: _image, ...updateData } = req.body;
+    if (req.file) {
+      const imageUrl = await uploadClouinary(req.file.buffer);
+      updateData.image = imageUrl;
+    }
 
     const updatedCategory = await CategoryModel.findByIdAndUpdate(
       id,
@@ -97,17 +164,61 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
       message: "Category updated successfully",
       data: updatedCategory,
     });
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("subcategories:");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    revalidateFrontend();
   } catch (error: any) {
     console.error("Update Category Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
+// Toggle Category Active Status
+export const toggleCategoryActive = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const category = await CategoryModel.findById(id);
+    if (!category) {
+      res.status(404).json({ success: false, message: "Category not found" });
+      return;
+    }
+
+    category.isActive = !category.isActive;
+    await category.save();
+
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("subcategories:");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    revalidateFrontend();
+
+    res.status(200).json({
+      success: true,
+      message: `Category ${category.isActive ? "activated" : "deactivated"} successfully`,
+      data: category,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 //  Delete Category
 export const deleteCategory = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+
+    // Remove the category from all products that reference it
+    await ProductModel.updateMany(
+      { category: id },
+      { $pull: { category: id } }
+    );
+
     const deletedCategory = await CategoryModel.findByIdAndDelete(id);
 
     if (!deletedCategory) {
@@ -115,6 +226,13 @@ export const deleteCategory = async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    await cache.del("all_categories");
+    await cache.del("category_tree");
+    await cache.delByPrefix("subcategories:");
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    revalidateFrontend();
     res.status(200).json({ success: true, message: "Category deleted successfully" });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

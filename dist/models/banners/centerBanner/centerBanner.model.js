@@ -56,5 +56,6 @@ const centerBannerSchema = new mongoose_1.Schema({
         default: 'active'
     }
 }, { timestamps: true });
+centerBannerSchema.index({ status: 1 });
 exports.default = mongoose_1.default.models.CenterBanner ||
     mongoose_1.default.model("CenterBanner", centerBannerSchema);

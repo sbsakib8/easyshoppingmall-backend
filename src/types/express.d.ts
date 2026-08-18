@@ -1,4 +1,4 @@
-import { AuthUser } from "../modules/order/interface";
+import { AuthUser } from "../models/order/interface";
 
 declare global {
   namespace Express {

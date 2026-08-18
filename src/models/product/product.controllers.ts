@@ -1,21 +1,57 @@
+import mongoose from "mongoose";
 import { Request, Response } from "express";
+import sharp from "sharp";
 import uploadClouinary from "../../utils/cloudinary";
+import { CartModel } from "../cart/cart.model";
+import { Review } from "../review/review.model";
+import { WishlistModel } from "../wishlist/wishlist.model";
 import productModel from "./product.model";
+import CategoryModel from "../category/category.model";
+import SubCategoryModel from "../subcategory/subcategory.model";
+import { cache } from "../../utils/cache";
+import { revalidateFrontend } from "../../utils/revalidate";
+import { buildFuzzyQuery, filterAndScoreFuzzy, scoreProduct } from "../../utils/fuzzySearch";
 
 interface PaginationRequest extends Request {
   body: {
     page?: number;
     limit?: number;
     search?: string;
+    skyTitle?: string;
+    q?: string;
+    keyword?: string;
     id?: string;
-    categoryId?: string[];
-    subCategoryId?: string[];
+    categoryId?: string;
+    subCategoryId?: string;
+    brand?: string;
+    gender?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    rating?: number;
+    sortBy?: string;
     productId?: string;
     _id?: string;
+    publish?: boolean;
+    isBoost?: boolean;
+    productName?: string;
+    description?: string;
+    category?: string[];
+    subCategory?: string[];
+    featured?: boolean;
+    productWeight?: string[];
+    productSize?: string[];
+    color?: string[];
+    price?: number;
+    dropshippingPrice?: number;
+    productStock?: number;
+    productRank?: number;
+    discount?: number;
+    ratings?: number;
+    tags?: string[];
+    more_details?: any;
+    video_link?: string;
   };
 }
-
-
 
 // Create Product
 export const createProductController = async (
@@ -23,6 +59,22 @@ export const createProductController = async (
   res: Response
 ): Promise<void> => {
   try {
+    const normalizeArray = (val: any) => {
+      if (!val) return [];
+      if (Array.isArray(val)) return val;
+      if (typeof val === "string") {
+        if (val.startsWith("[") && val.endsWith("]")) {
+          try {
+            return JSON.parse(val);
+          } catch (e) {
+            return [val];
+          }
+        }
+        return [val];
+      }
+      return [val];
+    };
+
     const {
       productName,
       description,
@@ -34,19 +86,22 @@ export const createProductController = async (
       productSize,
       color,
       price,
+      dropshippingPrice,
       productStock,
       productRank,
       discount,
       ratings,
       tags,
+      productStatus,
       more_details,
       publish,
+      isBoost,
+      video_link,
+      gender,
     } = req.body;
 
     // Validation
-    if (
-      !productName
-    ) {
+    if (!productName) {
       res.status(400).json({
         message: "Enter required fields",
         error: true,
@@ -55,15 +110,25 @@ export const createProductController = async (
       return;
     }
 
-    // ✅ Multiple image upload
-    const files = req.files as Express.Multer.File[];
+    // ✅ Multiple image & video upload
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     let imageUrls: string[] = [];
+    let videoUrls: string[] = [];
 
-    if (files && files.length > 0) {
-      for (const file of files) {
-        if (file.path) { // safe check
-          const uploadedUrl = await uploadClouinary(file.path!);
+    if (files && files.images && files.images.length > 0) {
+      for (const file of files.images) {
+        if (file.buffer) {
+          const uploadedUrl = await uploadClouinary(file.buffer);
           imageUrls.push(uploadedUrl);
+        }
+      }
+    }
+
+    if (files && files.video && files.video.length > 0) {
+      for (const file of files.video) {
+        if (file.buffer) {
+          const uploadedUrl = await uploadClouinary(file.buffer);
+          videoUrls.push(uploadedUrl);
         }
       }
     }
@@ -75,24 +140,36 @@ export const createProductController = async (
     const product = await productModel.create({
       productName,
       description,
-      category,
-      subCategory,
-      featured,
+      category: normalizeArray(category),
+      subCategory: normalizeArray(subCategory),
+      featured: String(featured) === "true",
       brand,
-      productWeight,
-      productSize,
-      color,
-      price,
-      productStock,
-      productRank,
-      discount,
-      ratings,
-      tags,
+      productWeight: normalizeArray(productWeight),
+      productSize: normalizeArray(productSize),
+      color: normalizeArray(color),
+      price: price ? parseFloat(price) : null,
+      dropshippingPrice: dropshippingPrice !== undefined && dropshippingPrice !== "" ? parseFloat(dropshippingPrice) : null,
+      productStock: productStock ? parseInt(productStock) : null,
+      productRank: productRank ? parseInt(productRank) : 0,
+      discount: discount ? parseFloat(discount) : null,
+      ratings: ratings ? parseFloat(ratings) : 5,
+      tags: normalizeArray(tags),
+      productStatus: normalizeArray(productStatus).filter((s: string) => ['hot', 'cold'].includes(s)),
       images: imageUrls,
-      more_details,
-      publish,
+      video: videoUrls,
+      video_link: video_link,
+      more_details: typeof more_details === 'string' ? JSON.parse(more_details) : more_details,
+      publish: publish === undefined ? true : String(publish) === "true",
+      isBoost: String(isBoost) === "true",
+      gender: gender || "unisex",
       sku,
     });
+
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("product:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    await revalidateFrontend();
 
     res.json({
       message: "Product Created Successfully",
@@ -119,43 +196,300 @@ export const createProductController = async (
   }
 };
 
+// Helper to build product query (works with both req.query and req.body)
+const buildProductQuery = (params: any) => {
+  const { search: rawSearch, skyTitle, q, keyword, query: searchQuery, categoryId, subCategoryId, brand, gender, minPrice, maxPrice, rating, publish } = params;
+  const search = rawSearch || skyTitle || q || keyword || searchQuery;
+  let query: any = {};
 
-// Get Products (with pagination & search)
+  // For public endpoints, only show published products
+  if (publish === undefined) {
+    query.publish = true;
+  } else {
+    query.publish = publish === 'true' || publish === true;
+  }
+
+  if (search) {
+    // Use $text search for index-backed full-text search (much faster than regex)
+    // For short queries (<3 chars), fall back to regex
+    if (search.length >= 3) {
+      query.$text = { $search: search };
+    } else {
+      const escapeRegex = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#]/g, '\\$&');
+      const regex = new RegExp(escapeRegex(search), 'i');
+      query.$or = [
+        { productName: regex },
+        { description: regex },
+        { brand: regex },
+        { tags: regex },
+        { sku: regex },
+      ];
+    }
+  }
+
+  if (categoryId && categoryId !== "all") {
+    query.category = { $in: [categoryId] };
+  }
+
+  if (subCategoryId && subCategoryId !== "all") {
+    query.subCategory = { $in: [subCategoryId] };
+  }
+
+  if (brand && brand !== "all") {
+    query.brand = { $regex: brand, $options: "i" };
+  }
+
+  if (gender && gender !== "all" && gender !== "") {
+    query.gender = gender;
+  }
+
+  // Price Filter
+  const min = parseFloat(minPrice);
+  const max = parseFloat(maxPrice);
+
+  if (!isNaN(min) || !isNaN(max)) {
+    query.price = {};
+    if (!isNaN(min)) query.price.$gte = min;
+    if (!isNaN(max)) query.price.$lte = max;
+  }
+
+  if (rating && rating > 0) {
+    query.ratings = { $gte: Number(rating) };
+  }
+
+  return query;
+};
+
+// Helper for sorting
+const getSortOption = (sortBy: string | undefined) => {
+  switch (sortBy) {
+    case "price-low":
+      return { price: 1 };
+    case "price-high":
+      return { price: -1 };
+    case "rating":
+      return { ratings: -1 };
+    case "newest":
+    case "name":
+      return { createdAt: -1 };
+    case "discount":
+      return { discount: -1 };
+    case "alphabetical":
+      return { productName: 1 };
+    default:
+      return { createdAt: -1 };
+  }
+};
+
+const isObjectId = (id: string) => /^[0-9a-fA-F]{24}$/.test(id);
+
+// Get Products (with pagination & advanced filters)
 export const getProductController = async (
   req: PaginationRequest,
   res: Response
 ): Promise<void> => {
   try {
-    let { page, limit, search } = req.body;
-    page = page || 1;
-    limit = limit || 10;
+    let { page, limit, sortBy, categoryId, subCategoryId } = req.body;
+    page = Number(page) || 1;
+    limit = Number(limit) || 10;
 
-    const query = search
-      ? { $text: { $search: search } }
-      : {};
+    const search = req.body.search || req.body.skyTitle || req.body.q || req.body.keyword;
+    const isSearch = !!search;
 
+    // Build cache key from body params
+    const cacheKey = `products:${JSON.stringify(req.body)}`;
+    const skipCache = isSearch;
+    
+    if (!skipCache) {
+      const cached = await cache.get(cacheKey);
+      if (cached) {
+        res.set('Cache-Control', 'public, max-age=10, must-revalidate');
+        res.json(cached);
+        return;
+      }
+    }
+
+    // Resolve category slug to ID if needed
+    if (categoryId && categoryId !== "all" && !isObjectId(categoryId)) {
+      const category = await CategoryModel.findOne({ $or: [{ slug: categoryId }, { name: categoryId }] });
+      if (category) {
+        req.body.categoryId = category._id.toString();
+      } else {
+        req.body.categoryId = "000000000000000000000000";
+      }
+    }
+
+    // Resolve subcategory slug to ID if needed
+    if (subCategoryId && subCategoryId !== "all" && !isObjectId(subCategoryId)) {
+      const subCategory = await SubCategoryModel.findOne({ $or: [{ slug: subCategoryId }, { name: subCategoryId }] });
+      if (subCategory) {
+        req.body.subCategoryId = subCategory._id.toString();
+      } else {
+        req.body.subCategoryId = "000000000000000000000000";
+      }
+    }
+
+    const sort = getSortOption(sortBy);
     const skip = (page - 1) * limit;
+    const selectFields = "productName description brand price dropshippingPrice productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory color tags";
+
+    if (isSearch) {
+      const search = (req.body.search || req.body.skyTitle || req.body.q || req.body.keyword || "") as string;
+
+      // Phase 1: Find direct search matches (exact / $text)
+      let directMatches: any[] = [];
+      let searchQuery: any = {};
+      try {
+        searchQuery = buildProductQuery(req.body);
+        const isTextSearch = !!searchQuery.$text;
+
+        if (isTextSearch) {
+          directMatches = await productModel
+            .find(searchQuery)
+            .select(selectFields)
+            .select({ score: { $meta: "textScore" } })
+            .sort({ score: { $meta: "textScore" } })
+            .lean();
+        } else {
+          directMatches = await productModel
+            .find(searchQuery)
+            .select(selectFields)
+            .lean();
+        }
+      } catch (_) {
+        // $text search may fail on some MongoDB versions — fall through to fuzzy
+        directMatches = [];
+      }
+
+      const directIds = new Set(directMatches.map((p: any) => String(p._id)));
+
+      // Phase 1.5: Fuzzy fallback — when exact results are insufficient
+      let fuzzyMatches: any[] = [];
+      if (directMatches.length < limit && search.length >= 2) {
+        const fuzzyQuery = buildFuzzyQuery(search);
+        // Exclude already-found products
+        fuzzyQuery._id = {
+          $nin: [...directIds].map((id) => new mongoose.Types.ObjectId(id)),
+        };
+
+        const fuzzyCandidates = await productModel
+          .find(fuzzyQuery)
+          .select(selectFields)
+          .limit(limit * 3)
+          .lean();
+
+        const scored = filterAndScoreFuzzy(fuzzyCandidates, search, 10);
+        fuzzyMatches = scored
+          .slice(0, limit - directMatches.length)
+          .map((item) => ({ ...item.product, _score: item.score }));
+      }
+
+      // Collect subcategory IDs from matched products (direct + fuzzy)
+      const allMatchIds = new Set([...directIds, ...fuzzyMatches.map((p: any) => String(p._id))]);
+      const relatedSubCatIds: any[] = [];
+      for (const p of [...directMatches, ...fuzzyMatches]) {
+        if (Array.isArray(p.subCategory)) {
+          for (const sc of p.subCategory) {
+            const scId = typeof sc === 'object' ? String(sc._id || sc) : String(sc);
+            if (!relatedSubCatIds.some((id) => String(id) === scId)) {
+              relatedSubCatIds.push(scId);
+            }
+          }
+        }
+      }
+
+      let relatedProducts: any[] = [];
+      if (relatedSubCatIds.length > 0) {
+        // Phase 2: Find related products from same subcategories (excluding all matches)
+        const relatedQuery: any = {
+          publish: true,
+          subCategory: { $in: relatedSubCatIds.map((id) => new mongoose.Types.ObjectId(id)) },
+          _id: { $nin: [...allMatchIds].map((id) => new mongoose.Types.ObjectId(id)) },
+        };
+
+        if (searchQuery.category) relatedQuery.category = searchQuery.category;
+        if (searchQuery.gender) relatedQuery.gender = searchQuery.gender;
+
+        relatedProducts = await productModel
+          .find(relatedQuery)
+          .select(selectFields)
+          .sort({ productRank: -1, ratings: -1 })
+          .limit(Math.ceil(limit / 2))
+          .populate("category subCategory", "name slug")
+          .lean();
+      }
+
+      // Populate category/subCategory on direct matches
+      const populatedDirect = await productModel
+        .find({ _id: { $in: [...directIds].map((id) => new mongoose.Types.ObjectId(id)) } })
+        .select(selectFields)
+        .sort(sort as any)
+        .populate("category subCategory", "name slug")
+        .lean();
+
+      // Populate category/subCategory on fuzzy matches
+      const populatedFuzzy = fuzzyMatches.length > 0
+        ? await productModel
+            .find({ _id: { $in: fuzzyMatches.map((p: any) => new mongoose.Types.ObjectId(p._id)) } })
+            .select(selectFields)
+            .populate("category subCategory", "name slug")
+            .lean()
+        : [];
+
+      // Merge: direct matches first, then fuzzy matches, then related products
+      const data = [...populatedDirect, ...populatedFuzzy, ...relatedProducts].slice(0, limit);
+      const totalCount = populatedDirect.length + populatedFuzzy.length + relatedProducts.length;
+
+      const response = {
+        message: "Product data retrieved successfully",
+        error: false,
+        success: true,
+        data,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        page,
+        limit,
+      };
+
+      res.set('Cache-Control', 'no-store');
+      res.json(response);
+      return;
+    }
+
+    // Non-search: normal paginated listing
+    const query = buildProductQuery(req.body);
+    const isQueryEmpty = Object.keys(query).length === 1 && query.publish === true;
 
     const [data, totalCount] = await Promise.all([
       productModel.find(query)
-        .sort({ createdAt: -1 })
+        .select(selectFields)
+        .sort(sort as any)
         .skip(skip)
         .limit(limit)
-        .populate("category subCategory"),
-      productModel.countDocuments(query),
+        .populate("category subCategory", "name slug")
+        .lean(),
+      isQueryEmpty ? productModel.estimatedDocumentCount() : productModel.countDocuments(query),
     ]);
 
-    res.json({
-      message: "Product data",
+    const response = {
+      message: "Product data retrieved successfully",
       error: false,
       success: true,
-      totalCount,
-      totalNoPage: Math.ceil(totalCount / limit),
       data,
-    });
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      page,
+      limit,
+    };
+
+    if (!skipCache) {
+      await cache.set(cacheKey, response, 60);
+      res.set('Cache-Control', 'public, max-age=10, must-revalidate');
+    }
+    res.json(response);
   } catch (error: any) {
     res.status(500).json({
-      message: error.message || error,
+      message: error.message || "Server Error",
       error: true,
       success: false,
     });
@@ -169,32 +503,37 @@ export const getProductByCategory = async (
 ): Promise<void> => {
   try {
     const { id } = req.body;
-
     if (!id) {
-      res.status(400).json({
-        message: "Provide category id",
-        error: true,
-        success: false,
-      });
+      res.status(400).json({ message: "Provide category id", error: true, success: false });
       return;
     }
 
-    const product = await productModel.find({
-      category: { $in: id },
-    }).limit(15);
+    const cacheKey = `products:category:${id}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', 'public, max-age=10, must-revalidate');
+      res.json(cached);
+      return;
+    }
 
-    res.json({
-      message: "Category product list",
-      data: product,
-      error: false,
-      success: true,
-    });
+    let finalId = id;
+    if (!isObjectId(finalId)) {
+      const category = await CategoryModel.findOne({ $or: [{ slug: finalId }, { name: finalId }] });
+      if (category) finalId = category._id.toString();
+    }
+
+    const data = await productModel.find({ category: { $in: [finalId] }, publish: true })
+      .select("productName description brand price dropshippingPrice productStock productRank discount ratings images")
+      .limit(15)
+      .populate("category subCategory", "name slug")
+      .lean();
+
+    const response = { message: "Category product list", data, error: false, success: true };
+    await cache.set(cacheKey, response, 120);
+    res.set('Cache-Control', 'public, max-age=10, must-revalidate');
+    res.json(response);
   } catch (error: any) {
-    res.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+    res.status(500).json({ message: error.message || error, error: true, success: false });
   }
 };
 
@@ -206,178 +545,342 @@ export const getProductByCategoryAndSubCategory = async (
   try {
     let { categoryId, subCategoryId, page, limit } = req.body;
     if (!categoryId || !subCategoryId) {
-      res.status(400).json({
-        message: "Provide categoryId and subCategoryId",
-        error: true,
-        success: false,
-      });
+      res.status(400).json({ message: "Provide categoryId and subCategoryId", error: true, success: false });
       return;
     }
-    page = page || 1;
-    limit = limit || 10;
+    page = Number(page) || 1;
+    limit = Number(limit) || 10;
 
-    const query = {
-      category: { $in: categoryId },
-      subCategory: { $in: subCategoryId },
-    };
+    const cacheKey = `products:cat:${categoryId}:sub:${subCategoryId}:p${page}:l${limit}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', 'public, max-age=10, must-revalidate');
+      res.json(cached);
+      return;
+    }
 
+    let finalCatId = categoryId;
+    if (!isObjectId(categoryId)) {
+      const cat = await CategoryModel.findOne({ $or: [{ slug: categoryId }, { name: categoryId }] });
+      if (cat) finalCatId = cat._id.toString();
+    }
+
+    let finalSubId = subCategoryId;
+    if (!isObjectId(subCategoryId)) {
+      const sub = await SubCategoryModel.findOne({ $or: [{ slug: subCategoryId }, { name: subCategoryId }] });
+      if (sub) finalSubId = sub._id.toString();
+    }
+
+    const query = { category: { $in: [finalCatId] }, subCategory: { $in: [finalSubId] }, publish: true };
     const skip = (page - 1) * limit;
 
-    const [data, dataCount] = await Promise.all([
+    const [data, totalCount] = await Promise.all([
       productModel.find(query)
+        .select("productName description brand price dropshippingPrice productStock productRank discount ratings images")
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .populate("category subCategory", "name slug")
+        .lean(),
       productModel.countDocuments(query),
     ]);
 
-    res.json({
-      message: "Product list",
+    const response = {
+      message: "Product list retrieved successfully",
       data,
-      totalCount: dataCount,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
       page,
       limit,
       success: true,
       error: false,
-    });
+    };
+
+    await cache.set(cacheKey, response, 120);
+    res.set('Cache-Control', 'public, max-age=10, must-revalidate');
+    res.json(response);
   } catch (error: any) {
-    res.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+    res.status(500).json({ message: error.message || error, error: true, success: false });
   }
 };
 
-// Get Product Details
-export const getProductDetails = async (req: PaginationRequest, res: Response) => {
+export const getProductDetails = async (req: Request, res: Response) => {
   try {
     const { productId } = req.params;
 
-    const product = await productModel.findOne({ _id: productId });
+    const cacheKey = `product:${productId}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', 'public, max-age=10, must-revalidate');
+      res.json(cached);
+      return;
+    }
 
-    res.json({
-      message: "Product details",
-      data: product,
-      error: false,
-      success: true,
-    });
+    const product = await productModel.findOne({ _id: productId })
+      .populate("category subCategory", "name slug")
+      .lean();
+
+    const response = { message: "Product details", data: product, error: false, success: true };
+    await cache.set(cacheKey, response, 300);
+    res.set('Cache-Control', 'public, max-age=10, must-revalidate');
+    res.json(response);
   } catch (error: any) {
-    res.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+    res.status(500).json({ message: error.message || error, error: true, success: false });
   }
 };
-
 
 // Update Product
 export const updateProductDetails = async (
-  req: PaginationRequest,
+  req: Request,
   res: Response
 ): Promise<void> => {
   try {
     const { _id } = req.body;
-
     if (!_id) {
-      res.status(400).json({
-        message: "Provide product _id",
-        error: true,
-        success: false,
-      });
+      res.status(400).json({ message: "Provide product _id", error: true, success: false });
       return;
     }
+    const normalizeArray = (val: any) => {
+      if (!val) return [];
+      if (Array.isArray(val)) return val;
+      return [val];
+    };
 
-    const updateProduct = await productModel.updateOne(
-      { _id },
-      { ...req.body }
-    );
+    const updateData = { ...req.body };
+    if (updateData.tags) updateData.tags = normalizeArray(updateData.tags);
+    if (updateData.category) updateData.category = normalizeArray(updateData.category);
+    if (updateData.subCategory) updateData.subCategory = normalizeArray(updateData.subCategory);
+    if (updateData.productWeight) updateData.productWeight = normalizeArray(updateData.productWeight);
+    if (updateData.productSize) updateData.productSize = normalizeArray(updateData.productSize);
+    if (updateData.color) updateData.color = normalizeArray(updateData.color);
+    if (updateData.dropshippingPrice !== undefined) {
+      updateData.dropshippingPrice =
+        updateData.dropshippingPrice === "" || updateData.dropshippingPrice === null
+          ? null
+          : parseFloat(updateData.dropshippingPrice);
+    }
+    if (updateData.price !== undefined && updateData.price !== "") {
+      updateData.price = parseFloat(updateData.price);
+    }
 
-    res.json({
-      message: "Updated successfully",
-      data: updateProduct,
-      error: false,
-      success: true,
-    });
+    const updateProduct = await productModel.findByIdAndUpdate(_id, { $set: updateData }, { new: true });
+
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("product:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    await revalidateFrontend();
+
+    res.json({ message: "Updated successfully", data: updateProduct, error: false, success: true });
   } catch (error: any) {
-    res.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+    res.status(500).json({ message: error.message || error, error: true, success: false });
   }
 };
 
-// Delete Product
 export const deleteProductDetails = async (
-  req: PaginationRequest,
+  req: Request,
   res: Response
 ): Promise<void> => {
   try {
     const { _id } = req.body;
-
     if (!_id) {
-      res.status(400).json({
-        message: "Provide _id",
-        error: true,
-        success: false,
-      });
+      res.status(400).json({ message: "Provide _id", error: true, success: false });
       return;
     }
+    await Promise.all([
+      CartModel.updateMany({ "products.productId": _id }, { $pull: { products: { productId: _id } } }),
+      WishlistModel.updateMany({ "products.productId": _id }, { $pull: { products: { productId: _id } } }),
+      Review.deleteMany({ productId: _id }),
+      productModel.deleteOne({ _id })
+    ]);
 
-    const deleteProduct = await productModel.deleteOne({ _id });
+    await cache.delByPrefix("products:");
+    await cache.delByPrefix("product:");
+    await cache.delByPrefix("homepage");
+    await cache.delByPrefix("popular-products");
+    await revalidateFrontend();
 
-    res.json({
-      message: "Delete successfully",
-      error: false,
-      success: true,
-      data: deleteProduct,
-    });
+    res.json({ message: "Delete successfully", error: false, success: true });
   } catch (error: any) {
-    res.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+    res.status(500).json({ message: error.message || error, error: true, success: false });
   }
 };
 
-// Search Product
+// Search Product (text / sky-title search)
 export const searchProduct = async (
   req: PaginationRequest,
   res: Response
 ): Promise<void> => {
+  // Support 'skyTitle' as an alias for 'search'
+  if (req.body.skyTitle && !req.body.search) {
+    req.body.search = req.body.skyTitle;
+  }
+  return getProductController(req, res);
+};
+
+// ─── Helpers for image search ────────────────────────────────────────────────
+
+/**
+ * Map an average RGB value to a human-readable color name.
+ * This list mirrors common values stored in the product `color` array.
+ */
+const rgbToColorName = (r: number, g: number, b: number): string => {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lightness = (max + min) / 2;
+  const saturation = max === min ? 0 : (max - min) / (lightness > 127 ? 510 - max - min : max + min);
+
+  if (saturation < 0.12) {
+    if (lightness > 220) return "white";
+    if (lightness < 45)  return "black";
+    return "gray";
+  }
+
+  // Hue
+  const rn = (r - min) / (max - min + 1e-6);
+  const gn = (g - min) / (max - min + 1e-6);
+  const bn = (b - min) / (max - min + 1e-6);
+
+  let hue: number;
+  if (max === r)       hue = 60 * ((gn - bn) % 6);
+  else if (max === g)  hue = 60 * ((bn - rn) + 2);
+  else                 hue = 60 * ((rn - gn) + 4);
+  if (hue < 0) hue += 360;
+
+  if (hue < 15 || hue >= 345)   return "red";
+  if (hue < 40)                  return "orange";
+  if (hue < 70)                  return "yellow";
+  if (hue < 155)                 return "green";
+  if (hue < 200)                 return "cyan";
+  if (hue < 260)                 return "blue";
+  if (hue < 290)                 return "purple";
+  if (hue < 345)                 return "pink";
+  return "red";
+};
+
+/** Return 1-3 candidate color names (primary + secondary) from image stats */
+const extractColorsFromBuffer = async (buffer: Buffer): Promise<string[]> => {
+  const metadata = await sharp(buffer).metadata();
+  const width = metadata.width || 100;
+  const height = metadata.height || 100;
+
+  // Crop the center 50% of the image to avoid white backgrounds dominating the color average
+  const { channels } = await sharp(buffer)
+    .extract({
+      left: Math.floor(width * 0.25),
+      top: Math.floor(height * 0.25),
+      width: Math.floor(width * 0.5),
+      height: Math.floor(height * 0.5),
+    })
+    .resize(50, 50, { fit: "fill" })
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+    .then(({ data, info }) => {
+      const pixelCount = info.width * info.height;
+      const ch = info.channels;
+      let sumR = 0, sumG = 0, sumB = 0;
+      for (let i = 0; i < pixelCount; i++) {
+        sumR += data[i * ch];
+        sumG += data[i * ch + 1];
+        sumB += data[i * ch + 2];
+      }
+      return {
+        channels: {
+          r: sumR / pixelCount,
+          g: sumG / pixelCount,
+          b: sumB / pixelCount,
+        },
+      };
+    });
+
+  const primary = rgbToColorName(channels.r, channels.g, channels.b);
+
+  // Derive a rough secondary by boosting the dominant channel
+  const boosted = {
+    r: Math.min(255, channels.r * 1.3),
+    g: Math.min(255, channels.g * 1.3),
+    b: Math.min(255, channels.b * 1.3),
+  };
+  const secondary = rgbToColorName(boosted.r, boosted.g, boosted.b);
+
+  const colors = [primary];
+  if (secondary !== primary) colors.push(secondary);
+  return colors;
+};
+
+// Image Search Product
+export const imageSearchProduct = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
-    let { search, page, limit } = req.body;
-    page = page || 1;
-    limit = limit || 10;
+    const file = req.file as Express.Multer.File | undefined;
+    if (!file || !file.buffer) {
+      res.status(400).json({
+        message: "Please upload an image file (field: searchImage)",
+        error: true,
+        success: false,
+      });
+      return;
+    }
 
-    const query = search ? { $text: { $search: search } } : {};
-    const skip = (page - 1) * limit;
+    // Extract dominant colors from the uploaded image buffer
+    const colorNames = await extractColorsFromBuffer(file.buffer);
 
-    const [data, dataCount] = await Promise.all([
-      productModel.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate("category subCategory"),
-      productModel.countDocuments(query),
+    // Build MongoDB query: products whose color, tags, or name matches the detected colors
+    const regexColors = colorNames.map((c) => new RegExp(c, "i"));
+    const colorQuery = {
+      publish: true,
+      $or: [
+        { color: { $in: regexColors } },
+        { tags: { $in: regexColors } },
+        { productName: { $in: regexColors } }
+      ]
+    };
+
+    const [colorMatches, totalByColor] = await Promise.all([
+      productModel
+        .find(colorQuery)
+        .select(
+          "productName description brand price dropshippingPrice productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory color tags"
+        )
+        .sort({ productRank: -1, ratings: -1 })
+        .limit(30)
+        .populate("category subCategory", "name slug")
+        .lean(),
+      productModel.countDocuments(colorQuery),
     ]);
 
+    // If we got fewer than 5 results, also run a broad fallback (recent products)
+    let results = colorMatches;
+    if (colorMatches.length < 5) {
+      const fallback = await productModel
+        .find({ publish: true })
+        .select(
+          "productName description brand price dropshippingPrice productStock productRank discount ratings images publish isBoost createdAt gender sku category subCategory color tags"
+        )
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .populate("category subCategory", "name slug")
+        .lean();
+
+      // Merge without duplicates
+      const seenIds = new Set(colorMatches.map((p: any) => String(p._id)));
+      const extra = fallback.filter((p: any) => !seenIds.has(String(p._id)));
+      results = [...colorMatches, ...extra].slice(0, 30);
+    }
+
     res.json({
-      message: "Product data",
+      message: "Image search results",
+      detectedColors: colorNames,
+      data: results,
+      totalCount: results.length,
       error: false,
       success: true,
-      data,
-      totalCount: dataCount,
-      totalPage: Math.ceil(dataCount / limit),
-      page,
-      limit,
     });
   } catch (error: any) {
     res.status(500).json({
-      message: error.message || error,
+      message: error.message || "Image search failed",
       error: true,
       success: false,
     });

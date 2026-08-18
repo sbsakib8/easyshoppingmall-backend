@@ -4,8 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteAddressController = exports.updateAddressController = exports.getAddressController = exports.addAddressController = void 0;
-const address_model_1 = __importDefault(require("../address/address.model"));
-const address_model_2 = __importDefault(require("../address/address.model"));
+const address_model_1 = __importDefault(require("./address.model"));
+const user_model_1 = __importDefault(require("../user/user.model"));
 // Add Address
 const addAddressController = async (request, response) => {
     try {
@@ -17,18 +17,19 @@ const addAddressController = async (request, response) => {
                 success: false,
             });
         }
-        const { address_line, city, state, pincode, country, mobile } = request.body;
+        const { address_line, district, division, upazila_thana, pincode, country, mobile } = request.body;
         const createAddress = new address_model_1.default({
             address_line,
-            city,
-            state,
+            district,
+            division,
+            upazila_thana,
             country,
             pincode,
             mobile,
             userId,
         });
         const saveAddress = await createAddress.save();
-        await address_model_2.default.findByIdAndUpdate(userId, {
+        await user_model_1.default.findByIdAndUpdate(userId, {
             $push: { address_details: saveAddress._id },
         });
         return response.json({
@@ -86,20 +87,28 @@ const updateAddressController = async (request, response) => {
                 success: false,
             });
         }
-        const { _id, address_line, city, state, country, pincode, mobile } = request.body;
-        const updateAddress = await address_model_1.default.updateOne({ _id, userId }, {
+        const { _id, address_line, district, division, upazila_thana, country, pincode, mobile } = request.body;
+        const updatedAddress = await address_model_1.default.findOneAndUpdate({ _id, userId }, {
             address_line,
-            city,
-            state,
+            district,
+            division,
+            upazila_thana,
             country,
             mobile,
             pincode,
-        });
+        }, { new: true });
+        if (!updatedAddress) {
+            return response.status(404).json({
+                message: "Address not found",
+                error: true,
+                success: false,
+            });
+        }
         return response.json({
             message: "Address Updated",
             error: false,
             success: true,
-            data: updateAddress,
+            data: updatedAddress,
         });
     }
     catch (error) {

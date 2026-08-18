@@ -56,5 +56,6 @@ const rightBannerSchema = new mongoose_1.Schema({
         default: 'active'
     }
 }, { timestamps: true });
+rightBannerSchema.index({ status: 1 });
 exports.default = mongoose_1.default.models.RightBanner ||
     mongoose_1.default.model("RightBanner", rightBannerSchema);

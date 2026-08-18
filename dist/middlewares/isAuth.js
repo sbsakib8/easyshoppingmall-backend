@@ -6,7 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isAuth = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const config_1 = __importDefault(require("../config"));
-const isAuth = (req, res, next) => {
+const user_model_1 = __importDefault(require("../models/user/user.model"));
+const isAuth = async (req, res, next) => {
     try {
         const token = req.cookies?.token;
         if (!token) {
@@ -18,11 +19,42 @@ const isAuth = (req, res, next) => {
             res.status(401).json({ message: "Unauthorized: Invalid token" });
             return;
         }
+        const user = await user_model_1.default.findById(decoded.userId).maxTimeMS(5000);
+        if (!user) {
+            res.status(401).json({ message: "Unauthorized: User not found" });
+            return;
+        }
+        if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
+            res.status(401).json({ message: "Session invalidated. Please login again." });
+            return;
+        }
         req.userId = decoded.userId;
+        req.user = {
+            _id: user._id.toString(),
+            name: user.name,
+            email: user.email,
+            role: user.role || "USER",
+            roles: user.roles || [user.role],
+            mobile: user.mobile || undefined,
+            balance: user.balance || 0,
+        };
         next();
     }
     catch (error) {
-        res.status(401).json({ message: "Unauthorized: Invalid token" });
+        if (error.name === "TokenExpiredError") {
+            res.status(401).json({ message: "Unauthorized: Token expired" });
+        }
+        else if (error.name === "JsonWebTokenError") {
+            res.status(401).json({ message: "Unauthorized: Invalid token" });
+        }
+        else if (error.name === "MongooseError" || error.name === "MongoTimeoutError") {
+            console.error("Database error in isAuth:", error.message);
+            res.status(500).json({ message: "Internal Server Error: Database timeout" });
+        }
+        else {
+            console.error("Auth error:", error.message);
+            res.status(401).json({ message: "Unauthorized: Authentication failed" });
+        }
     }
 };
 exports.isAuth = isAuth;

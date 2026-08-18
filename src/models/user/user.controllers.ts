@@ -1,23 +1,44 @@
 import type { CookieOptions, Request, Response } from "express";
-import User from "../user/user.model";
-import type { IUser } from "../user/user.model";
-import generateToken from "../../utils/genaretetoken";
-import { sendEmail } from "../../utils/nodemailer";
+import mongoose from "mongoose";
 import { AuthRequest } from "../../middlewares/isAuth";
-import uploadClouinary from "../../utils/cloudinary";
+import uploadCloudinary from "../../utils/cloudinary";
+import generateToken from "../../utils/generatetoken";
+import { sendEmail } from "../../utils/nodemailer";
+import AddressModel from "../address/address.model";
+import { CartModel } from "../cart/cart.model";
+import OrderModel from "../order/order.model";
+import { Review } from "../review/review.model";
+import type { IUser } from "../user/user.model";
+import User from "../user/user.model";
+import { WishlistModel } from "../wishlist/wishlist.model";
 
 // Cookie 
-const cookieOptions:CookieOptions = {
-  httpOnly: true, 
-  secure: true, 
-  sameSite: "none",
-  maxAge: 30 * 24 * 60 * 60 * 1000, 
+const cookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  maxAge: 30 * 24 * 60 * 60 * 1000,
+  path: "/",
+  // Only set domain in production for the actual live site
+  ...(process.env.NODE_ENV === "production" && { domain: ".easyshoppingmallbd.com" })
+};
+
+// Generate unique referral code
+const generateReferralCode = async (): Promise<string> => {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  const exists = await User.findOne({ referralCode: result });
+  if (exists) return generateReferralCode();
+  return result;
 };
 
 // Register User
 export const signUp = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, password , role } = req.body;
+    const { name, email, password, role, referralCode } = req.body;
 
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -25,24 +46,40 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const user: IUser = await User.create({ name, email, password , role });
-    const token = generateToken(user._id.toString());
+    let referredBy = null;
+    if (referralCode) {
+      const referrer = await User.findOne({ referralCode });
+      if (referrer) {
+        referredBy = referrer._id;
+      }
+    }
+
+    // Generate own referral code
+    const ownReferralCode = await generateReferralCode();
+
+    const user: IUser = await User.create({
+      name,
+      email,
+      password,
+      role,
+      referralCode: ownReferralCode,
+      referredBy
+    });
+
+    // Increment referrer's count after successful user creation
+    if (referredBy) {
+      await User.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
+    }
+
+    const token = generateToken(user._id.toString(), user.tokenVersion ?? 0);
     //  cookie
-     res.cookie("token", token,{
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production", 
-    sameSite: "lax", 
-    maxAge: 30 * 24 * 60 * 60 * 1000, 
-  });;
+    res.cookie("token", token, cookieOptions);
 
 
     res.status(201).json({
-       success: true,       
-        message: "User registered successfully",
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
+      success: true,
+      message: "User registered successfully",
+      user,
     },);
   } catch (error: any) {
     res.status(500).json({ message: error.message });
@@ -55,46 +92,91 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-    if(!user){
+
+    if (!user) {
       res.status(401).json({ message: "user does not exist" });
       return;
     }
+
+    await user.populate([
+      {
+        path: "address_details",
+        match: { userId: user._id },
+      },
+      {
+        path: "shopping_cart",
+        populate: {
+          path: "products.productId",
+          model: "Product",
+          populate: {
+            path: "category",
+            select: "name"
+          }
+        },
+      },
+      {
+        path: "orderHistory",
+        populate: [
+          {
+            path: "products.productId",
+            model: "Product",
+            populate: {
+              path: "category",
+              select: "name"
+            }
+          },
+          {
+            path: "cart",
+            model: "Cart",
+            populate: {
+              path: "products.productId",
+              model: "Product",
+              populate: {
+                path: "category",
+                select: "name"
+              }
+            }
+          },
+        ],
+      }
+    ]);
     const ismatch = await user.comparePassword(password);
-    if(!ismatch){
+    if (!ismatch) {
       res.status(401).json({ message: "incorrect password" });
       return;
-    }   
-      const token = generateToken(user._id.toString());
+    }
 
-      res.cookie("token", token,{
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production", 
-    sameSite: "lax", 
-    maxAge: 30 * 24 * 60 * 60 * 1000, 
-  });;
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      { $inc: { tokenVersion: 1 } },
+      { new: true }
+    );
 
-      res.json({
-        success: true,       
-        message: "User Signin successfully",
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      });
-    
+    const token = generateToken(user._id.toString(), updatedUser!.tokenVersion!);
+
+    res.cookie("token", token, cookieOptions);
+
+    res.json({
+      success: true,
+      message: "User Signin successfully",
+      user: updatedUser,
+    });
+
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }
 };
 
 // Sign out user
-export const signOut = async (req: Request, res: Response): Promise<void> => {
+export const signOut = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    if (req.userId) {
+      await User.findByIdAndUpdate(req.userId, { $inc: { tokenVersion: 1 } });
+    }
+
     res.clearCookie("token", {
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
-      path: "/", 
+      ...cookieOptions,
+      path: "/",
     });
 
     res.status(200).json({
@@ -119,14 +201,14 @@ export const sendotp = async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ success: false, message: "User not found" });
       return;
     }
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.forgot_password_otp = otp;
     user.forgot_password_expiry = new Date(Date.now() + 5 * 60 * 1000);
     await user.save();
     // Send OTP via email
     await sendEmail(user.email, parseInt(otp), user.name);
-    res.status(200).json({ success: true, message: "OTP sent to email", otp }); 
-    
+    res.status(200).json({ success: true, message: "OTP sent to email", otp });
+
   } catch (error: any) {
     res.status(500).json({
       success: false,
@@ -144,7 +226,7 @@ export const verifyotp = async (req: Request, res: Response): Promise<void> => {
     if (!user) {
       res.status(404).json({ success: false, message: "User not found" });
       return;
-    } 
+    }
     if (user.forgot_password_otp !== otp) {
       res.status(400).json({ success: false, message: "Invalid OTP" });
       return;
@@ -164,7 +246,7 @@ export const verifyotp = async (req: Request, res: Response): Promise<void> => {
       success: false,
       message: (error as Error).message,
     });
-      
+
   }
 }
 
@@ -173,7 +255,7 @@ export const resetpassword = async (req: Request, res: Response): Promise<void> 
   try {
     const { email, newpassword } = req.body;
 
-    
+
     const user = await User.findOne({ email });
     if (!user) {
       res.status(404).json({ success: false, message: "User not found" });
@@ -184,12 +266,14 @@ export const resetpassword = async (req: Request, res: Response): Promise<void> 
       res.status(400).json({ success: false, message: "OTP not verified" });
       return;
     }
-  
+
     user.password = newpassword;
     user.forgot_password_otp = undefined;
     user.forgot_password_expiry = undefined;
-    user.isotpverified = false; 
+    user.isotpverified = false;
     await user.save();
+
+    await User.findByIdAndUpdate(user._id, { $inc: { tokenVersion: 1 } });
 
     res.status(200).json({ success: true, message: "Password reset successfully" });
 
@@ -204,48 +288,141 @@ export const resetpassword = async (req: Request, res: Response): Promise<void> 
 // google login
 export const googleAuth = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, mobile , image } = req.body;
+    const { name, email, mobile, image, referralCode } = req.body;
     let user = await User.findOne({ email });
     if (!user) {
-      user = new User({ name, email, mobile ,image });
+      let referredBy = null;
+      if (referralCode) {
+        const referrer = await User.findOne({ referralCode });
+        if (referrer) {
+          referredBy = referrer._id;
+        }
+      }
+
+      const ownReferralCode = await generateReferralCode();
+      user = new User({
+        name,
+        email,
+        mobile,
+        image,
+        referralCode: ownReferralCode,
+        referredBy
+      });
       await user.save();
+
+      // Increment referrer's count
+      if (referredBy) {
+        await User.findByIdAndUpdate(referredBy, { $inc: { referralCount: 1 } });
+      }
     }
-    const token = generateToken(user._id.toString());
+
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      { $inc: { tokenVersion: 1 } },
+      { new: true }
+    );
+
+    const token = generateToken(user._id.toString(), updatedUser!.tokenVersion!);
     res.cookie("token", token, cookieOptions);
     res.status(200).json({
       success: true,
       message: "User logged in with Google successfully",
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      mobile: user.mobile,
-      image: user.image,
-      role: user.role,
-    }); 
+      id: updatedUser!._id,
+      name: updatedUser!.name,
+      email: updatedUser!.email,
+      mobile: updatedUser!.mobile,
+      image: updatedUser!.image,
+      role: updatedUser!.role,
+    });
 
-    
+
   } catch (error) {
     res.status(500).json({
       success: false,
       message: (error as Error).message,
-    }); 
+    });
   }
 }
 
 
 // user controller 
 
-export const getUserProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getUserProfile = async (req: AuthRequest, res: Response) => {
+  const userId = (req as any).userId;
+
   try {
-    const userId = req.userId;
-    if (!userId) {
-      res.status(401).json({ success: false, message: "Unauthorized" });
-      return;
+    if (!req.userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const user = await User.findById(userId).select(
-      "-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified"
-    );
+    const user = await User.findById(userId)
+      .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+      .populate("address_details");
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Auto-generate missing referral code if not present
+    if (!user.referralCode) {
+      user.referralCode = await generateReferralCode();
+      await user.save();
+    }
+
+    // Fetch referral statistics for DROPSHIPPING role
+    let referrals: {
+      count: number;
+      users: any[];
+      orders: any[];
+    } = {
+      count: user.referralCount || 0,
+      users: [],
+      orders: []
+    };
+
+    if (user.role === "DROPSHIPPING" || user.roles.includes("DROPSHIPPING")) {
+      const referredUsers = await User.find({ referredBy: userId })
+        .select("name email image createdAt")
+        .sort({ createdAt: -1 });
+
+      const referredUserIds = referredUsers.map(u => u._id);
+
+      const referredOrders = await OrderModel.find({ userId: { $in: referredUserIds } })
+        .select("orderId totalAmt subTotalAmt deliveryCharge order_status payment_status payment_method payment_type referralBonusAmount referralPercentage profitAmount createdAt userId products address")
+        .populate("userId", "name email image")
+        .sort({ createdAt: -1 })
+        .limit(50);
+
+      referrals = {
+        count: referredUsers.length,
+        users: referredUsers,
+        orders: referredOrders
+      };
+
+      // Sync referralCount if it's out of date
+      if (user.referralCount !== referredUsers.length) {
+        user.referralCount = referredUsers.length;
+        await user.save();
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      user,
+      referrals
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+// get single user by ID (admin only)
+export const getUserById = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+      .populate("address_details");
 
     if (!user) {
       res.status(404).json({ success: false, message: "User not found" });
@@ -254,21 +431,84 @@ export const getUserProfile = async (req: AuthRequest, res: Response): Promise<v
 
     res.status(200).json({ success: true, user });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: (error as Error).message,
-    });
+    res.status(500).json({ success: false, message: (error as Error).message });
   }
 };
 
-//  get all users
+
+//  get all users (paginated with search)
 export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const users = await User.find().select( 
-      "-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified"
-    );
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limitParam = parseInt(req.query.limit as string);
+    const limit = limitParam ? Math.min(500, Math.max(1, limitParam)) : 0; // 0 = no limit (return all)
+    const skip = limit > 0 ? (page - 1) * limit : 0;
 
-    res.status(200).json({ success: true, users });
+    // Build filter
+    const filter: any = {};
+    const conditions: any[] = [];
+
+    // Search by name, email, or mobile
+    if (req.query.search) {
+      const search = (req.query.search as string).trim();
+      conditions.push({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { mobile: { $regex: search, $options: "i" } },
+        ],
+      });
+    }
+
+    // Filter by role - search both role field and roles array
+    if (req.query.role) {
+      const roleValue = (req.query.role as string).toUpperCase();
+      conditions.push({
+        $or: [{ role: roleValue }, { roles: roleValue }],
+      });
+    }
+
+    // Combine conditions with $and if multiple
+    if (conditions.length > 1) {
+      filter.$and = conditions;
+    } else if (conditions.length === 1) {
+      Object.assign(filter, conditions[0]);
+    }
+
+    // Filter by status
+    if (req.query.status) {
+      filter.status = req.query.status;
+    }
+
+    // Filter by customerstatus
+    if (req.query.customerstatus) {
+      filter.customerstatus = req.query.customerstatus;
+    }
+
+    let userQuery = User.find(filter)
+      .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+      .populate("address_details")
+      .sort({ createdAt: -1 });
+
+    if (limit > 0) {
+      userQuery = userQuery.skip(skip).limit(limit);
+    }
+
+    const [users, totalCount] = await Promise.all([
+      userQuery,
+      User.countDocuments(filter),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      users,
+      pagination: {
+        currentPage: limit > 0 ? page : 1,
+        totalPages: limit > 0 ? Math.ceil(totalCount / limit) : 1,
+        totalCount,
+        limit: limit > 0 ? limit : totalCount,
+      },
+    });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -277,50 +517,185 @@ export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
-// user imge push 
-export const userImage = async (req: Request, res: Response) => {
+/**
+ * @desc    Get customers (users with orders) - aggregated with order stats
+ * @route   GET /api/users/customers
+ * @access  Private (Admin/Manager)
+ */
+export const getCustomers = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.params.id;
-    if (!userId) {
-      return res.status(400).json({ message: "User ID is required" });
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limitParam = parseInt(req.query.limit as string);
+    const limit = limitParam ? Math.min(500, Math.max(1, limitParam)) : 20;
+    const skip = (page - 1) * limit;
+    const search = (req.query.search as string || "").trim();
+    const status = req.query.status as string;
+
+    // Build user match conditions
+    const userMatch: any = {};
+
+    if (search) {
+      userMatch.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { mobile: { $regex: search, $options: "i" } },
+      ];
     }
 
-    let imageUrl: string | undefined;
-    if (req.file) {
-      imageUrl = await uploadClouinary(req.file.path);
-    } else {
+    if (status) {
+      userMatch.status = status;
+    }
+
+    const pipeline: any[] = [
+      { $match: userMatch },
+      {
+        $lookup: {
+          from: "orders",
+          localField: "_id",
+          foreignField: "userId",
+          as: "orders",
+        },
+      },
+      { $match: { "orders.0": { $exists: true } } },
+      {
+        $addFields: {
+          orderStats: {
+            orderCount: { $size: "$orders" },
+            totalSpent: { $sum: "$orders.totalAmt" },
+            lastOrderDate: { $max: "$orders.createdAt" },
+          },
+        },
+      },
+      {
+        $project: {
+          password: 0,
+          refresh_token: 0,
+          forgot_password_otp: 0,
+          forgot_password_expiry: 0,
+          isotpverified: 0,
+          orders: 0,
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    const countPipeline: any[] = [
+      { $match: userMatch },
+      {
+        $lookup: {
+          from: "orders",
+          localField: "_id",
+          foreignField: "userId",
+          as: "orders",
+        },
+      },
+      { $match: { "orders.0": { $exists: true } } },
+      { $count: "total" },
+    ];
+
+    const [customers, countResult] = await Promise.all([
+      User.aggregate(pipeline),
+      User.aggregate(countPipeline),
+    ]);
+
+    const totalCount = countResult[0]?.total || 0;
+
+    res.status(200).json({
+      success: true,
+      customers,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+        limit,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
+// user imge push
+export const userImage = async (req: AuthRequest, res: Response) => {
+  try {
+    if (req.userId !== req.params.id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (!req.file) {
       return res.status(400).json({ message: "No image file provided" });
     }
 
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { image: imageUrl },
-      { new: true }
-    );
+    const imageUrl = await uploadCloudinary(req.file.buffer);
 
-    if (!updatedUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    const updateData = req.query.type === 'shopLogo' ? { shopLogo: imageUrl } : { image: imageUrl };
+
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      updateData,
+      { new: true }
+    )
+      .select("-password")
+      .populate({
+        path: "address_details",
+        match: { userId: req.userId },
+      })
+      .populate({
+        path: "shopping_cart",
+        populate: {
+          path: "products.productId",
+          model: "Product",
+          populate: {
+            path: "category",
+            select: "name"
+          }
+        },
+      })
+      .populate({
+        path: "orderHistory",
+        populate: [
+          {
+            path: "products.productId",
+            model: "Product",
+            populate: {
+              path: "category",
+              select: "name"
+            }
+          },
+          {
+            path: "cart",
+            model: "Cart",
+            populate: {
+              path: "products.productId",
+              model: "Product",
+              populate: {
+                path: "category",
+                select: "name"
+              }
+            }
+          },
+        ],
+      });
 
     res.status(200).json({
-      message: "Profile image updated successfully ✅",
       success: true,
-      image: imageUrl,
-      user: updatedUser,
+      message: "Profile image updated successfully",
+      user,
     });
   } catch (error: any) {
-    console.error(error);
-    res.status(500).json({
-      message: error.message || "Server error",
-      success: false,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 // user update profile
 export const updateUserProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.params.id; 
+    const userId = req.params.id;
 
     const {
       name,
@@ -331,7 +706,42 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       status,
       verify_email,
       role,
+      date_of_birth,
+      gender,
+      shopName,
+      shopLogo,
+      facebookPage,
+      whatsappNumber,
+      paymentDetails,
+      address_data, // New: address information (object)
+      address_details, // Alternative: address information (array)
     } = req.body;
+
+    if (role !== undefined && req.user?.role !== "ADMIN") {
+      res.status(403).json({
+        success: false,
+        message: "Permission denied: Only admins can update user roles",
+      });
+      return;
+    }
+
+    // Validate enum fields
+    const VALID_ROLES = ["ADMIN", "USER", "INVESTMENT", "SELLERPROGRAM", "BOXLEADER", "DROPSHIPPING", "MANAGER", "CPO"];
+    const VALID_STATUSES = ["Active", "Inactive", "Blocked"];
+    const VALID_CUSTOMER_STATUSES = ["NewCustomer", "TopCustomer", "ReturningCustomer", "VIPCustomer", "WholesaleCustomer", "Reseller", "3starCustomer", "4starCustomer", "5starCustomer"];
+
+    if (role !== undefined && !VALID_ROLES.includes(role.toUpperCase())) {
+      res.status(400).json({ success: false, message: `Invalid role. Allowed: ${VALID_ROLES.join(", ")}` });
+      return;
+    }
+    if (status !== undefined && !VALID_STATUSES.includes(status)) {
+      res.status(400).json({ success: false, message: `Invalid status. Allowed: ${VALID_STATUSES.join(", ")}` });
+      return;
+    }
+    if (customerstatus !== undefined && !VALID_CUSTOMER_STATUSES.includes(customerstatus)) {
+      res.status(400).json({ success: false, message: `Invalid customerstatus. Allowed: ${VALID_CUSTOMER_STATUSES.join(", ")}` });
+      return;
+    }
 
     const user = await User.findById(userId);
     if (!user) {
@@ -339,6 +749,7 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
+    // Update user profile fields
     if (name !== undefined) user.name = name;
     if (email !== undefined) user.email = email;
     if (mobile !== undefined) user.mobile = mobile;
@@ -346,14 +757,162 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     if (image !== undefined) user.image = image;
     if (status !== undefined) user.status = status;
     if (verify_email !== undefined) user.verify_email = verify_email;
-    if (role !== undefined) user.role = role;
+    if (role !== undefined) {
+      user.role = role.toUpperCase();
+      // Sync roles array: replace entirely to prevent stale roles from lingering
+      user.roles = [role.toUpperCase()];
+    }
+
+    // Dropshipping Shop Details
+    if (shopName !== undefined) user.shopName = shopName;
+    if (shopLogo !== undefined) user.shopLogo = shopLogo;
+    if (facebookPage !== undefined) user.facebookPage = facebookPage;
+    if (whatsappNumber !== undefined) user.whatsappNumber = whatsappNumber;
+
+    if (paymentDetails !== undefined) {
+      user.paymentDetails = {
+        bkash: paymentDetails.bkash !== undefined ? paymentDetails.bkash : (user.paymentDetails?.bkash || null),
+        nagad: paymentDetails.nagad !== undefined ? paymentDetails.nagad : (user.paymentDetails?.nagad || null),
+        rocket: paymentDetails.rocket !== undefined ? paymentDetails.rocket : (user.paymentDetails?.rocket || null),
+        bank: paymentDetails.bank !== undefined ? paymentDetails.bank : (user.paymentDetails?.bank || null),
+      };
+    }
+
+    // Ensure user has a referral code (especially if becoming DROPSHIPPING)
+    if (!user.referralCode) {
+      user.referralCode = await generateReferralCode();
+    }
+    if (date_of_birth !== undefined) {
+      // Handle both "MM/DD/YYYY" and "YYYY-MM-DD" formats
+      let parsedDate: Date;
+
+      if (typeof date_of_birth === 'string') {
+        if (date_of_birth.includes('/')) {
+          // Format: "MM/DD/YYYY"
+          const [month, day, year] = date_of_birth.split('/').map(Number);
+          parsedDate = new Date(Date.UTC(year, month - 1, day));
+        } else if (date_of_birth.includes('-')) {
+          // Format: "YYYY-MM-DD"
+          const [year, month, day] = date_of_birth.split('-').map(Number);
+          parsedDate = new Date(Date.UTC(year, month - 1, day));
+        } else {
+          // Try to parse as-is
+          parsedDate = new Date(date_of_birth);
+        }
+      } else {
+        parsedDate = new Date(date_of_birth);
+      }
+
+      // Only set if valid date
+      if (!isNaN(parsedDate.getTime())) {
+        user.date_of_birth = parsedDate;
+      }
+    }
+    if (gender !== undefined) user.gender = gender;
 
     await user.save();
+
+    // Handle address creation/update if address_data or address_details is provided
+    // Support both formats: address_data (object) or address_details (array)
+    let addressToProcess = address_data;
+
+    // If address_details array is provided, use the first item
+    if (!addressToProcess && address_details && Array.isArray(address_details) && address_details.length > 0) {
+      addressToProcess = address_details[0];
+    }
+
+    if (addressToProcess) {
+      const {
+        _id: addressId,
+        address_line,
+        district,
+        division,
+        upazila_thana,
+        country,
+        pincode,
+        mobile: addressMobile,
+      } = addressToProcess;
+
+      let savedAddress;
+
+      // Determine the address ID to update
+      // 1. Use provided ID if available
+      // 2. OR fallback to the user's first existing address (prevent duplicates)
+      let targetAddressId = addressId;
+
+      if (!targetAddressId && user.address_details && user.address_details.length > 0) {
+        targetAddressId = user.address_details[0];
+      }
+
+      if (targetAddressId) {
+        // Try to update existing address
+        savedAddress = await AddressModel.findOneAndUpdate(
+          { _id: targetAddressId, userId: user._id },
+          {
+            address_line: address_line || "",
+            district: district || "",
+            division: division || "",
+            upazila_thana: upazila_thana || "",
+            country: country || "Bangladesh",
+            pincode: pincode || "",
+            mobile: addressMobile || mobile || null,
+          },
+          { new: true }
+        );
+
+        // If address not found (wrong ID or belongs to different user), create new one
+        if (!savedAddress) {
+          const newAddress = new AddressModel({
+            address_line: address_line || "",
+            district: district || "",
+            division: division || "",
+            upazila_thana: upazila_thana || "",
+            country: country || "Bangladesh",
+            pincode: pincode || "",
+            mobile: addressMobile || mobile || null,
+            userId: user._id,
+          });
+
+          savedAddress = await newAddress.save();
+
+          // Add address reference to user's address_details array
+          if (!user.address_details.includes(savedAddress._id)) {
+            user.address_details.push(savedAddress._id);
+            await user.save();
+          }
+        }
+      } else {
+        // Create new address
+        const newAddress = new AddressModel({
+          address_line: address_line || "",
+          district: district || "",
+          division: division || "",
+          upazila_thana: upazila_thana || "",
+          country: country || "Bangladesh",
+          pincode: pincode || "",
+          mobile: addressMobile || mobile || null,
+          userId: user._id,
+        });
+
+        savedAddress = await newAddress.save();
+
+        // Add address reference to user's address_details array if not already present
+        if (!user.address_details.includes(savedAddress._id)) {
+          user.address_details.push(savedAddress._id);
+          await user.save();
+        }
+      }
+    }
+
+    // Populate user data before sending response
+    const populatedUser = await User.findById(userId)
+      .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+      .populate("address_details");
 
     res.status(200).json({
       success: true,
       message: "Profile updated successfully",
-      user,
+      user: populatedUser,
     });
   } catch (error) {
     res.status(500).json({
@@ -363,16 +922,161 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
   }
 };
 
+
+
 // delete user
 export const deleteUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const userId = req.params.id;
-    const user = await User.findByIdAndDelete(userId);
+    const user = await User.findById(userId).session(session);
     if (!user) {
+      await session.abortTransaction();
+      session.endSession();
       res.status(404).json({ success: false, message: "User not found" });
       return;
     }
+
+    // Delete associated data
+    await AddressModel.deleteMany({ userId: user._id }).session(session);
+    await CartModel.deleteMany({ userId: user._id }).session(session);
+    await OrderModel.deleteMany({ userId: user._id }).session(session);
+    await WishlistModel.deleteMany({ userId: user._id }).session(session);
+    await Review.deleteMany({ userId: user._id }).session(session);
+
+    // Delete the user
+    await User.findByIdAndDelete(userId, { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
     res.status(200).json({ success: true, message: "User deleted successfully" });
+  } catch (error: any) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+
+// Export users as CSV
+export const exportUsers = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const filter: any = {};
+    const conditions: any[] = [];
+
+    // Search by name, email, or mobile
+    if (req.query.search) {
+      const search = (req.query.search as string).trim();
+      conditions.push({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { mobile: { $regex: search, $options: "i" } },
+        ],
+      });
+    }
+
+    // Filter by role - search both role field and roles array
+    if (req.query.role) {
+      const roleValue = (req.query.role as string).toUpperCase();
+      conditions.push({
+        $or: [{ role: roleValue }, { roles: roleValue }],
+      });
+    }
+
+    // Combine conditions with $and if multiple
+    if (conditions.length > 1) {
+      filter.$and = conditions;
+    } else if (conditions.length === 1) {
+      Object.assign(filter, conditions[0]);
+    }
+
+    // Filter by status
+    if (req.query.status) {
+      filter.status = req.query.status;
+    }
+
+    // Filter by customerstatus
+    if (req.query.customerstatus) {
+      filter.customerstatus = req.query.customerstatus;
+    }
+
+    const users = await User.find(filter)
+      .select("-password -refresh_token -forgot_password_otp -forgot_password_expiry -isotpverified")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // CSV headers
+    const headers = [
+      "Name",
+      "Email",
+      "Mobile",
+      "Role",
+      "Roles",
+      "Status",
+      "Customer Status",
+      "Verify Email",
+      "Referral Code",
+      "Balance",
+      "Shop Name",
+      "Shop Logo",
+      "Facebook Page",
+      "WhatsApp Number",
+      "Shop Address",
+      "Shop Website",
+      "Payment BKash",
+      "Payment Nagad",
+      "Payment Rocket",
+      "Payment Bank",
+      "Created At",
+      "Updated At",
+    ];
+
+    // Build CSV rows
+    const escapeCSV = (value: any): string => {
+      if (value === null || value === undefined) return "";
+      const str = String(value);
+      if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = users.map((user) => [
+      escapeCSV(user.name),
+      escapeCSV(user.email),
+      escapeCSV(user.mobile),
+      escapeCSV(user.role),
+      escapeCSV(Array.isArray(user.roles) ? user.roles.join("; ") : user.roles),
+      escapeCSV(user.status),
+      escapeCSV(user.customerstatus),
+      escapeCSV(user.verify_email),
+      escapeCSV(user.referralCode),
+      escapeCSV(user.balance),
+      escapeCSV(user.shopName),
+      escapeCSV(user.shopLogo),
+      escapeCSV(user.facebookPage),
+      escapeCSV(user.whatsappNumber),
+      escapeCSV(user.shopAddress),
+      escapeCSV(user.shopWebsite),
+      escapeCSV(user.paymentDetails?.bkash),
+      escapeCSV(user.paymentDetails?.nagad),
+      escapeCSV(user.paymentDetails?.rocket),
+      escapeCSV(user.paymentDetails?.bank),
+      escapeCSV(user.createdAt),
+      escapeCSV(user.updatedAt),
+    ].join(","));
+
+    const csv = [headers.join(","), ...rows].join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="users.csv"');
+    res.status(200).send(csv);
   } catch (error) {
     res.status(500).json({
       success: false,

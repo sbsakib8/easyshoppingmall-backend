@@ -11,6 +11,10 @@
 
 # testing
 /coverage
+/__tests__
+src/__tests__
+jest.config.ts
+/test-referral-flow.sh
 
 # next.js
 /.next/
@@ -18,10 +22,18 @@
 
 # production
 /build
+/dist
+/docs
+/scratch
+/scripts
 
 # misc
 .DS_Store
 *.pem
+
+# openspec
+/openspec
+/.opencode
 
 # debug
 npm-debug.log*

@@ -1,24 +1,29 @@
 import app from "./index";
-const PORT = process.env.PORT || 5001;
 import http from "http";
 import { Server } from "socket.io";
 import connectDB from "./config/db.connect";
+import { startCronJobs } from "./cron";
+import { warmHomepageCache, warmPopularProductsCache } from "./models/homepage/homepage.controller";
 
+const PORT = process.env.PORT || 5004;
 
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
     origin: ["http://localhost:3000",
-    "https://easyshoppingmallbd.com",
-    "https://easyshoppingmallbd.vercel.app"],
+      "https://easyshoppingmallbd.com",
+      "https://www.easyshoppingmallbd.com",
+      "https://easyshoppingmallbd.vercel.app"],
     methods: ["GET", "POST"],
     credentials: true,
+
   },
 });
 
-//  Socket.io 
+//  Socket.io  connection
 app.set("io", io);
+
 
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
@@ -30,14 +35,36 @@ io.on("connection", (socket) => {
   socket.on("subscribe", (room) => {
     socket.join(room);
   });
+
+  socket.on("subscribe:user", (userId) => {
+    socket.join(`user:${userId}`);
+  });
 });
 
-//  Server start
-server.listen(PORT,async () => {
-    // mongodb 
-    await connectDB()
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+//  Database connection and Server start
+async function startServer() {
+  try {
+    // 1. First, wait for database to be ready
+    await connectDB();
 
-});
+    // 2. Start cron jobs
+    startCronJobs();
+
+    // 3. Warm caches
+    warmHomepageCache();
+    warmPopularProductsCache();
+
+    // 4. Then, start the server
+    server.listen(PORT, () => {
+      console.log(`✅ Server running at http://localhost:${PORT}`);
+    });
+
+  } catch (error) {
+    console.error("❌ Failed to start server:", error);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 export { io };

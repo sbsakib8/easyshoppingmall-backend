@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import RightBanner from "./rightBanner.model";
 import uploadClouinary from "../../../utils/cloudinary"; 
+import { cache } from "../../../utils/cache";
+import { revalidateFrontend } from "../../../utils/revalidate";
 import fs from "fs";
 
 // Create Home Banner
@@ -13,8 +15,7 @@ export const createRightBanner = async (req: Request, res: Response) => {
 
     if (files && files.length > 0) {
       const uploadPromises = files.map(async (file) => {
-        const imageUrl = await uploadClouinary(file.path);
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        const imageUrl = await uploadClouinary(file.buffer);
         return imageUrl;
       });
 
@@ -28,6 +29,10 @@ export const createRightBanner = async (req: Request, res: Response) => {
       status,
       images: imageUrls,
     });
+
+    await cache.delByPrefix("banners:right");
+    await cache.delByPrefix("homepage");
+    revalidateFrontend();
 
     return res.status(201).json({
       success: true,
@@ -43,8 +48,24 @@ export const createRightBanner = async (req: Request, res: Response) => {
 //  Get All Banners
 export const getAllRightBanners = async (req: Request, res: Response) => {
   try {
-    const banners = await RightBanner.find().sort({ createdAt: -1 });
-    return res.status(200).json({ success: true, data: banners });
+    const status = (req.query.status as string) || "active";
+    const cacheKey = `banners:right:${status}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      res.set("Cache-Control", "private, no-cache");
+      return res.status(200).json(cached);
+    }
+
+    const filter: any = {};
+    if (status !== "all") {
+      filter.status = status;
+    }
+
+    const banners = await RightBanner.find(filter).sort({ createdAt: -1 }).lean();
+    const response = { success: true, data: banners };
+    await cache.set(cacheKey, response, 300);
+    res.set("Cache-Control", "private, no-cache");
+    return res.status(200).json(response);
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -73,8 +94,7 @@ export const updateRightBanner = async (req: Request, res: Response) => {
 
     if (files && files.length > 0) {
       const uploadPromises = files.map(async (file) => {
-        const imageUrl = await uploadClouinary(file.path);
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        const imageUrl = await uploadClouinary(file.buffer);
         return imageUrl;
       });
 
@@ -97,6 +117,10 @@ export const updateRightBanner = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
+    await cache.delByPrefix("banners:right");
+    await cache.delByPrefix("homepage");
+    revalidateFrontend();
+
     return res.status(200).json({
       success: true,
       message: "Right banner updated successfully",
@@ -108,6 +132,32 @@ export const updateRightBanner = async (req: Request, res: Response) => {
   }
 };
 
+// Toggle Right Banner Status
+export const toggleRightBannerStatus = async (req: Request, res: Response) => {
+  try {
+    const banner = await RightBanner.findById(req.params.id);
+    if (!banner) {
+      return res.status(404).json({ success: false, message: "Banner not found" });
+    }
+
+    banner.status = banner.status === "active" ? "inactive" : "active";
+    await banner.save();
+
+    await cache.delByPrefix("banners:right");
+    await cache.delByPrefix("homepage");
+    revalidateFrontend();
+
+    return res.status(200).json({
+      success: true,
+      message: `Right banner ${banner.status === "active" ? "activated" : "deactivated"} successfully`,
+      data: banner,
+    });
+  } catch (error: any) {
+    console.error("Toggle RightBanner error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 //  Delete Banner
 export const deleteRightBanner = async (req: Request, res: Response) => {
   try {
@@ -115,6 +165,11 @@ export const deleteRightBanner = async (req: Request, res: Response) => {
     if (!banner) {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
+
+    await cache.delByPrefix("banners:right");
+    await cache.delByPrefix("homepage");
+    revalidateFrontend();
+
     return res.status(200).json({ success: true, message: "Banner deleted successfully" });
   } catch (error: any) {
     console.error("Delete RightBanner error:", error);

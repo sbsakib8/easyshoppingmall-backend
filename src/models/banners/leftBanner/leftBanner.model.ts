@@ -29,5 +29,7 @@ const leftBannerSchema = new Schema<ILeftBanner>(
   { timestamps: true }
 );
 
+leftBannerSchema.index({ status: 1 });
+
 export default mongoose.models.LeftBanner ||
   mongoose.model<ILeftBanner>("LeftBanner", leftBannerSchema);
