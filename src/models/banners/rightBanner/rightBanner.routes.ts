@@ -1,6 +1,6 @@
 import express from "express";
 import {upload} from "../../../middlewares/multer";
-import { createRightBanner, deleteRightBanner, getAllRightBanners, getSingleRightBanner, updateRightBanner } from "./rightBanner.controllers";
+import { createRightBanner, deleteRightBanner, getAllRightBanners, getSingleRightBanner, updateRightBanner, toggleRightBannerStatus } from "./rightBanner.controllers";
 import { isAuth } from "../../../middlewares/isAuth";
 import { isDashboardAccess } from "../../../middlewares/isDashboardAccess";
 
@@ -10,6 +10,7 @@ router.post("/create",isAuth, isDashboardAccess("banner"), upload.array("images"
 router.get("/get", getAllRightBanners);
 router.get("/:id", getSingleRightBanner);
 router.put("/:id",isAuth, isDashboardAccess("banner"), upload.array("images" , 4), updateRightBanner);
+router.patch("/:id/toggle-active", isAuth, isDashboardAccess("banner"), toggleRightBannerStatus);
 router.delete("/:id",isAuth, isDashboardAccess("banner"), deleteRightBanner);
 
 export default router;

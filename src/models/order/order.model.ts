@@ -153,6 +153,16 @@ const orderSchema = new Schema<IOrder>(
       default: 0,
     },
 
+    // Courier cost tracking
+    courierCharge: {
+      type: Number,
+      default: 0,
+    },
+    actualCourierCharge: {
+      type: Number,
+      default: 0,
+    },
+
     // Dropshipping status history - tracks all status changes with metadata
     dropshippingStatusHistory: [
       {

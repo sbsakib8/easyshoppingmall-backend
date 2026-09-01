@@ -85,6 +85,10 @@ export interface IOrder {
   deliveryChargeDeductedAt?: Date | null;
   deliveryChargeDeductedAmount?: number;
 
+  // Courier cost tracking (admin input after delivery)
+  courierCharge?: number;        // actual courier cost
+  actualCourierCharge?: number;  // courier charge billed to customer
+
   // Dropshipping status history - tracks all status changes with metadata
   dropshippingStatusHistory?: {
     type?: "status" | "message";

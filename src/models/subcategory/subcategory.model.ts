@@ -19,7 +19,7 @@ const subCategorySchema = new Schema<ISubCategory>(
     },
     image: {
       type: String,
-      default: "",
+      default: null,
     },
     icon: {
       type: String,

@@ -126,6 +126,7 @@ export const updateHomeBanner = async (req: Request, res: Response) => {
 
     await cache.delByPrefix("banners:home:");
     await cache.delByPrefix("homepage");
+    revalidateFrontend();
     return res.status(200).json({
       success: true,
       message: "Home banner updated successfully",
@@ -133,6 +134,32 @@ export const updateHomeBanner = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error("Update HomeBanner error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Toggle Home Banner Active Status
+export const toggleHomeBannerActive = async (req: Request, res: Response) => {
+  try {
+    const banner = await HomeBanner.findById(req.params.id);
+    if (!banner) {
+      return res.status(404).json({ success: false, message: "Banner not found" });
+    }
+
+    banner.active = !banner.active;
+    await banner.save();
+
+    await cache.delByPrefix("banners:home:");
+    await cache.delByPrefix("homepage");
+    revalidateFrontend();
+
+    return res.status(200).json({
+      success: true,
+      message: `Home banner ${banner.active ? "activated" : "deactivated"} successfully`,
+      data: banner,
+    });
+  } catch (error: any) {
+    console.error("Toggle HomeBanner error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };

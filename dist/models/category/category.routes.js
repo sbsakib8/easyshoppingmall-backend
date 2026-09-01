@@ -19,6 +19,8 @@ router.get("/get-tree", category_controllers_1.getCategoryTree);
 router.get("/:id", category_controllers_1.getCategoryById);
 // Update Category
 router.put("/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("products"), multer_1.upload.single("image"), category_controllers_1.updateCategory);
+// Toggle Category Active Status
+router.patch("/:id/toggle-active", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("products"), category_controllers_1.toggleCategoryActive);
 // Delete Category
 router.delete("/:id", isAuth_1.isAuth, (0, isDashboardAccess_1.isDashboardAccess)("products"), category_controllers_1.deleteCategory);
 exports.default = router;

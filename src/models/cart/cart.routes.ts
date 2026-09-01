@@ -1,13 +1,12 @@
 import express from "express";
-import { isAdmin } from "../../middlewares/isAdmin";
-import { isAuth } from "../../middlewares/isAuth";
 import {
   addToCart,
-  clearCart,
   getCart,
   removeFromCart,
   updateCartItem,
+  clearCart
 } from "../cart/cartController";
+import { isAuth } from "../../middlewares/isAuth";
 const router = express.Router();
 
 // 🛒 Cart

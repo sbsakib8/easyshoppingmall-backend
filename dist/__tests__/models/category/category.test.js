@@ -47,6 +47,37 @@ beforeEach(async () => {
     }
 });
 describe("Category Controllers", () => {
+    describe("POST /api/categories/create", () => {
+        it("should create a category with image", async () => {
+            const res = await (0, supertest_1.default)(app)
+                .post("/api/categories/create")
+                .set("Cookie", [`token=${adminToken}`])
+                .field("name", "Electronics")
+                .attach("image", Buffer.from("fake-image-data"), "test.jpg");
+            expect(res.status).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data.name).toBe("Electronics");
+            expect(res.body.data.image).toBeDefined();
+        });
+        it("should return 400 if category name already exists", async () => {
+            await category_model_1.default.create({ name: "Electronics", image: "http://example.com/cat.jpg" });
+            const res = await (0, supertest_1.default)(app)
+                .post("/api/categories/create")
+                .set("Cookie", [`token=${adminToken}`])
+                .field("name", "Electronics")
+                .attach("image", Buffer.from("fake-image-data"), "test.jpg");
+            expect(res.status).toBe(400);
+            expect(res.body.success).toBe(false);
+        });
+        it("should return 400 if no image is provided", async () => {
+            const res = await (0, supertest_1.default)(app)
+                .post("/api/categories/create")
+                .set("Cookie", [`token=${adminToken}`])
+                .field("name", "Clothing");
+            expect(res.status).toBe(400);
+            expect(res.body.success).toBe(false);
+        });
+    });
     describe("GET /api/categories/", () => {
         it("should return all categories", async () => {
             await category_model_1.default.create({ name: "Electronics", image: "http://example.com/cat.jpg" });
@@ -103,6 +134,53 @@ describe("Category Controllers", () => {
                 .send({ name: "Updated" });
             expect(res.status).toBe(404);
             expect(res.body.success).toBe(false);
+        });
+    });
+    describe("PATCH /api/categories/:id/toggle-active", () => {
+        it("should toggle category isActive from true to false", async () => {
+            const category = await category_model_1.default.create({
+                name: "Electronics",
+                image: "http://example.com/cat.jpg",
+                isActive: true,
+            });
+            const res = await (0, supertest_1.default)(app)
+                .patch(`/api/categories/${category._id}/toggle-active`)
+                .set("Cookie", [`token=${adminToken}`]);
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data.isActive).toBe(false);
+            expect(res.body.message).toContain("deactivated");
+        });
+        it("should toggle category isActive from false to true", async () => {
+            const category = await category_model_1.default.create({
+                name: "Electronics",
+                image: "http://example.com/cat.jpg",
+                isActive: false,
+            });
+            const res = await (0, supertest_1.default)(app)
+                .patch(`/api/categories/${category._id}/toggle-active`)
+                .set("Cookie", [`token=${adminToken}`]);
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data.isActive).toBe(true);
+            expect(res.body.message).toContain("activated");
+        });
+        it("should return 404 for non-existent category", async () => {
+            const fakeId = new mongoose_1.default.Types.ObjectId().toString();
+            const res = await (0, supertest_1.default)(app)
+                .patch(`/api/categories/${fakeId}/toggle-active`)
+                .set("Cookie", [`token=${adminToken}`]);
+            expect(res.status).toBe(404);
+            expect(res.body.success).toBe(false);
+        });
+        it("should return 401 without auth token", async () => {
+            const category = await category_model_1.default.create({
+                name: "Electronics",
+                image: "http://example.com/cat.jpg",
+            });
+            const res = await (0, supertest_1.default)(app)
+                .patch(`/api/categories/${category._id}/toggle-active`);
+            expect(res.status).toBe(401);
         });
     });
     describe("DELETE /api/categories/:id", () => {

@@ -12,7 +12,7 @@ const categorySchema = new Schema<ICategory>(
     },
     image: {
       type: String,
-      default: "",
+      default: null,
     },
     slug: {
       type: String,

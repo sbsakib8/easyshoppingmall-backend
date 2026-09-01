@@ -2,6 +2,8 @@ import app from "./index";
 import http from "http";
 import { Server } from "socket.io";
 import connectDB from "./config/db.connect";
+import { startCronJobs } from "./cron";
+import { warmHomepageCache, warmPopularProductsCache } from "./models/homepage/homepage.controller";
 
 const PORT = process.env.PORT || 5004;
 
@@ -15,11 +17,13 @@ const io = new Server(server, {
       "https://easyshoppingmallbd.vercel.app"],
     methods: ["GET", "POST"],
     credentials: true,
+
   },
 });
 
-//  Socket.io 
+//  Socket.io  connection
 app.set("io", io);
+
 
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
@@ -43,7 +47,14 @@ async function startServer() {
     // 1. First, wait for database to be ready
     await connectDB();
 
-    // 2. Then, start the server
+    // 2. Start cron jobs
+    startCronJobs();
+
+    // 3. Warm caches
+    warmHomepageCache();
+    warmPopularProductsCache();
+
+    // 4. Then, start the server
     server.listen(PORT, () => {
       console.log(`✅ Server running at http://localhost:${PORT}`);
     });

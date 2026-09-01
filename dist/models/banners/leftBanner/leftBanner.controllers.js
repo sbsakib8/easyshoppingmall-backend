@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteLeftBanner = exports.updateLeftBanner = exports.getSingleLeftBanner = exports.getAllLeftBanners = exports.createLeftBanner = void 0;
+exports.deleteLeftBanner = exports.toggleLeftBannerStatus = exports.updateLeftBanner = exports.getSingleLeftBanner = exports.getAllLeftBanners = exports.createLeftBanner = void 0;
 const leftBanner_model_1 = __importDefault(require("./leftBanner.model"));
 const cloudinary_1 = __importDefault(require("../../../utils/cloudinary"));
 const cache_1 = require("../../../utils/cache");
@@ -28,7 +28,7 @@ const createLeftBanner = async (req, res) => {
             status,
             images: imageUrls,
         });
-        await cache_1.cache.del("banners:left");
+        await cache_1.cache.delByPrefix("banners:left");
         await cache_1.cache.delByPrefix("homepage");
         (0, revalidate_1.revalidateFrontend)();
         return res.status(201).json({
@@ -46,13 +46,18 @@ exports.createLeftBanner = createLeftBanner;
 //  Get All Banners
 const getAllLeftBanners = async (req, res) => {
     try {
-        const cacheKey = "banners:left";
+        const status = req.query.status || "active";
+        const cacheKey = `banners:left:${status}`;
         const cached = await cache_1.cache.get(cacheKey);
         if (cached) {
             res.set("Cache-Control", "private, no-cache");
             return res.status(200).json(cached);
         }
-        const banners = await leftBanner_model_1.default.find().sort({ createdAt: -1 }).lean();
+        const filter = {};
+        if (status !== "all") {
+            filter.status = status;
+        }
+        const banners = await leftBanner_model_1.default.find(filter).sort({ createdAt: -1 }).lean();
         const response = { success: true, data: banners };
         await cache_1.cache.set(cacheKey, response, 300);
         res.set("Cache-Control", "private, no-cache");
@@ -100,7 +105,7 @@ const updateLeftBanner = async (req, res) => {
         if (!updatedBanner) {
             return res.status(404).json({ success: false, message: "Banner not found" });
         }
-        await cache_1.cache.del("banners:left");
+        await cache_1.cache.delByPrefix("banners:left");
         await cache_1.cache.delByPrefix("homepage");
         (0, revalidate_1.revalidateFrontend)();
         return res.status(200).json({
@@ -115,6 +120,30 @@ const updateLeftBanner = async (req, res) => {
     }
 };
 exports.updateLeftBanner = updateLeftBanner;
+// Toggle Left Banner Status
+const toggleLeftBannerStatus = async (req, res) => {
+    try {
+        const banner = await leftBanner_model_1.default.findById(req.params.id);
+        if (!banner) {
+            return res.status(404).json({ success: false, message: "Banner not found" });
+        }
+        banner.status = banner.status === "active" ? "inactive" : "active";
+        await banner.save();
+        await cache_1.cache.delByPrefix("banners:left");
+        await cache_1.cache.delByPrefix("homepage");
+        (0, revalidate_1.revalidateFrontend)();
+        return res.status(200).json({
+            success: true,
+            message: `Left banner ${banner.status === "active" ? "activated" : "deactivated"} successfully`,
+            data: banner,
+        });
+    }
+    catch (error) {
+        console.error("Toggle LeftBanner error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.toggleLeftBannerStatus = toggleLeftBannerStatus;
 //  Delete Banner
 const deleteLeftBanner = async (req, res) => {
     try {
@@ -122,7 +151,7 @@ const deleteLeftBanner = async (req, res) => {
         if (!banner) {
             return res.status(404).json({ success: false, message: "Banner not found" });
         }
-        await cache_1.cache.del("banners:left");
+        await cache_1.cache.delByPrefix("banners:left");
         await cache_1.cache.delByPrefix("homepage");
         (0, revalidate_1.revalidateFrontend)();
         return res.status(200).json({ success: true, message: "Banner deleted successfully" });

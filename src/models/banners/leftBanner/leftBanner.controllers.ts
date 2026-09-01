@@ -29,7 +29,7 @@ export const createLeftBanner = async (req: Request, res: Response) => {
       images: imageUrls,
     });
 
-    await cache.del("banners:left");
+    await cache.delByPrefix("banners:left");
     await cache.delByPrefix("homepage");
     revalidateFrontend();
 
@@ -47,14 +47,20 @@ export const createLeftBanner = async (req: Request, res: Response) => {
 //  Get All Banners
 export const getAllLeftBanners = async (req: Request, res: Response) => {
   try {
-    const cacheKey = "banners:left";
+    const status = (req.query.status as string) || "active";
+    const cacheKey = `banners:left:${status}`;
     const cached = await cache.get(cacheKey);
     if (cached) {
       res.set("Cache-Control", "private, no-cache");
       return res.status(200).json(cached);
     }
 
-    const banners = await LeftBanner.find().sort({ createdAt: -1 }).lean();
+    const filter: any = {};
+    if (status !== "all") {
+      filter.status = status;
+    }
+
+    const banners = await LeftBanner.find(filter).sort({ createdAt: -1 }).lean();
     const response = { success: true, data: banners };
     await cache.set(cacheKey, response, 300);
     res.set("Cache-Control", "private, no-cache");
@@ -110,7 +116,7 @@ export const updateLeftBanner = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
-    await cache.del("banners:left");
+    await cache.delByPrefix("banners:left");
     await cache.delByPrefix("homepage");
     revalidateFrontend();
 
@@ -125,6 +131,32 @@ export const updateLeftBanner = async (req: Request, res: Response) => {
   }
 };
 
+// Toggle Left Banner Status
+export const toggleLeftBannerStatus = async (req: Request, res: Response) => {
+  try {
+    const banner = await LeftBanner.findById(req.params.id);
+    if (!banner) {
+      return res.status(404).json({ success: false, message: "Banner not found" });
+    }
+
+    banner.status = banner.status === "active" ? "inactive" : "active";
+    await banner.save();
+
+    await cache.delByPrefix("banners:left");
+    await cache.delByPrefix("homepage");
+    revalidateFrontend();
+
+    return res.status(200).json({
+      success: true,
+      message: `Left banner ${banner.status === "active" ? "activated" : "deactivated"} successfully`,
+      data: banner,
+    });
+  } catch (error: any) {
+    console.error("Toggle LeftBanner error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 //  Delete Banner
 export const deleteLeftBanner = async (req: Request, res: Response) => {
   try {
@@ -133,7 +165,7 @@ export const deleteLeftBanner = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
-    await cache.del("banners:left");
+    await cache.delByPrefix("banners:left");
     await cache.delByPrefix("homepage");
     revalidateFrontend();
 

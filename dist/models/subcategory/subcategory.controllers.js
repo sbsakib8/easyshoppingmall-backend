@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteSubCategory = exports.updateSubCategory = exports.getSubCategoryById = exports.getSubCategories = exports.createSubCategory = void 0;
+exports.deleteSubCategory = exports.toggleSubCategoryActive = exports.updateSubCategory = exports.getSubCategoryById = exports.getSubCategories = exports.createSubCategory = void 0;
 const product_model_1 = __importDefault(require("../product/product.model"));
 const subcategory_model_1 = __importDefault(require("./subcategory.model"));
 const category_model_1 = __importDefault(require("../category/category.model"));
@@ -49,6 +49,7 @@ const createSubCategory = async (req, res) => {
         await cache_1.cache.del("category_tree");
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("homepage");
+        await cache_1.cache.delByPrefix("popular-products");
         (0, revalidate_1.revalidateFrontend)();
         res.status(201).json({
             success: true,
@@ -119,7 +120,7 @@ const updateSubCategory = async (req, res) => {
             res.status(400).json({ success: false, message: "No data provided for update" });
             return;
         }
-        const { _id, slug, ...updateData } = req.body;
+        const { _id, slug, image: _image, ...updateData } = req.body;
         if (req.file) {
             const imageUrl = await (0, cloudinary_1.default)(req.file.buffer);
             updateData.image = imageUrl;
@@ -142,6 +143,7 @@ const updateSubCategory = async (req, res) => {
         await cache_1.cache.del("category_tree");
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("homepage");
+        await cache_1.cache.delByPrefix("popular-products");
         (0, revalidate_1.revalidateFrontend)();
     }
     catch (error) {
@@ -149,6 +151,35 @@ const updateSubCategory = async (req, res) => {
     }
 };
 exports.updateSubCategory = updateSubCategory;
+// Toggle SubCategory Active Status
+const toggleSubCategoryActive = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const subCategory = await subcategory_model_1.default.findById(id);
+        if (!subCategory) {
+            res.status(404).json({ success: false, message: "SubCategory not found" });
+            return;
+        }
+        subCategory.isActive = !subCategory.isActive;
+        await subCategory.save();
+        await cache_1.cache.delByPrefix("subcategories:");
+        await cache_1.cache.del("all_categories");
+        await cache_1.cache.del("category_tree");
+        await cache_1.cache.delByPrefix("products:");
+        await cache_1.cache.delByPrefix("homepage");
+        await cache_1.cache.delByPrefix("popular-products");
+        (0, revalidate_1.revalidateFrontend)();
+        res.status(200).json({
+            success: true,
+            message: `SubCategory ${subCategory.isActive ? "activated" : "deactivated"} successfully`,
+            data: subCategory,
+        });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.toggleSubCategoryActive = toggleSubCategoryActive;
 const deleteSubCategory = async (req, res) => {
     try {
         const { id } = req.params;
@@ -165,6 +196,7 @@ const deleteSubCategory = async (req, res) => {
         await cache_1.cache.del("category_tree");
         await cache_1.cache.delByPrefix("products:");
         await cache_1.cache.delByPrefix("homepage");
+        await cache_1.cache.delByPrefix("popular-products");
         (0, revalidate_1.revalidateFrontend)();
     }
     catch (error) {

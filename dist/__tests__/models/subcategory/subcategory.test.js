@@ -53,6 +53,55 @@ beforeEach(async () => {
     }
 });
 describe("SubCategory Controllers", () => {
+    describe("POST /api/subcategories/create", () => {
+        it("should create a subcategory with image", async () => {
+            const res = await (0, supertest_1.default)(app)
+                .post("/api/subcategories/create")
+                .set("Cookie", [`token=${adminToken}`])
+                .field("name", "Phones")
+                .field("category", testCategory._id.toString())
+                .attach("image", Buffer.from("fake-image-data"), "test.jpg");
+            expect(res.status).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data.name).toBe("Phones");
+            expect(res.body.data.image).toBeDefined();
+        });
+        it("should return 400 for invalid category ID", async () => {
+            const fakeId = new mongoose_1.default.Types.ObjectId().toString();
+            const res = await (0, supertest_1.default)(app)
+                .post("/api/subcategories/create")
+                .set("Cookie", [`token=${adminToken}`])
+                .field("name", "Phones")
+                .field("category", fakeId)
+                .attach("image", Buffer.from("fake-image-data"), "test.jpg");
+            expect(res.status).toBe(400);
+            expect(res.body.success).toBe(false);
+        });
+        it("should return 400 if subcategory name already exists", async () => {
+            await subcategory_model_1.default.create({
+                name: "Phones",
+                image: "http://example.com/sub.jpg",
+                category: testCategory._id,
+            });
+            const res = await (0, supertest_1.default)(app)
+                .post("/api/subcategories/create")
+                .set("Cookie", [`token=${adminToken}`])
+                .field("name", "Phones")
+                .field("category", testCategory._id.toString())
+                .attach("image", Buffer.from("fake-image-data"), "test.jpg");
+            expect(res.status).toBe(400);
+            expect(res.body.success).toBe(false);
+        });
+        it("should return 400 if no image is provided", async () => {
+            const res = await (0, supertest_1.default)(app)
+                .post("/api/subcategories/create")
+                .set("Cookie", [`token=${adminToken}`])
+                .field("name", "Phones")
+                .field("category", testCategory._id.toString());
+            expect(res.status).toBe(400);
+            expect(res.body.success).toBe(false);
+        });
+    });
     describe("GET /api/subcategories/", () => {
         it("should return all subcategories", async () => {
             await subcategory_model_1.default.create({
@@ -117,6 +166,56 @@ describe("SubCategory Controllers", () => {
                 .set("Cookie", [`token=${adminToken}`])
                 .send({ name: "Updated" });
             expect(res.status).toBe(404);
+        });
+    });
+    describe("PATCH /api/subcategories/:id/toggle-active", () => {
+        it("should toggle subcategory isActive from true to false", async () => {
+            const subCategory = await subcategory_model_1.default.create({
+                name: "Phones",
+                image: "http://example.com/sub.jpg",
+                category: testCategory._id,
+                isActive: true,
+            });
+            const res = await (0, supertest_1.default)(app)
+                .patch(`/api/subcategories/${subCategory._id}/toggle-active`)
+                .set("Cookie", [`token=${adminToken}`]);
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data.isActive).toBe(false);
+            expect(res.body.message).toContain("deactivated");
+        });
+        it("should toggle subcategory isActive from false to true", async () => {
+            const subCategory = await subcategory_model_1.default.create({
+                name: "Phones",
+                image: "http://example.com/sub.jpg",
+                category: testCategory._id,
+                isActive: false,
+            });
+            const res = await (0, supertest_1.default)(app)
+                .patch(`/api/subcategories/${subCategory._id}/toggle-active`)
+                .set("Cookie", [`token=${adminToken}`]);
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data.isActive).toBe(true);
+            expect(res.body.message).toContain("activated");
+        });
+        it("should return 404 for non-existent subcategory", async () => {
+            const fakeId = new mongoose_1.default.Types.ObjectId().toString();
+            const res = await (0, supertest_1.default)(app)
+                .patch(`/api/subcategories/${fakeId}/toggle-active`)
+                .set("Cookie", [`token=${adminToken}`]);
+            expect(res.status).toBe(404);
+            expect(res.body.success).toBe(false);
+        });
+        it("should return 401 without auth token", async () => {
+            const subCategory = await subcategory_model_1.default.create({
+                name: "Phones",
+                image: "http://example.com/sub.jpg",
+                category: testCategory._id,
+            });
+            const res = await (0, supertest_1.default)(app)
+                .patch(`/api/subcategories/${subCategory._id}/toggle-active`);
+            expect(res.status).toBe(401);
         });
     });
     describe("DELETE /api/subcategories/:id", () => {
