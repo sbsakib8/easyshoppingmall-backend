@@ -4,8 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const isAuth_1 = require("../../middlewares/isAuth");
 const cartController_1 = require("../cart/cartController");
+const isAuth_1 = require("../../middlewares/isAuth");
 const router = express_1.default.Router();
 // 🛒 Cart
 router.post("/add", isAuth_1.isAuth, cartController_1.addToCart);
