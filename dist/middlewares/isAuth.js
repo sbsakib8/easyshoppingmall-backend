@@ -9,7 +9,15 @@ const config_1 = __importDefault(require("../config"));
 const user_model_1 = __importDefault(require("../models/user/user.model"));
 const isAuth = async (req, res, next) => {
     try {
-        const token = req.cookies?.token;
+        let token = req.cookies?.token;
+        if (!token && req.headers.authorization) {
+            if (req.headers.authorization.startsWith("Bearer ")) {
+                token = req.headers.authorization.split(" ")[1];
+            }
+            else {
+                token = req.headers.authorization;
+            }
+        }
         if (!token) {
             res.status(401).json({ message: "Unauthorized: No token provided" });
             return;
