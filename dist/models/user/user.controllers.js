@@ -131,7 +131,16 @@ const signIn = async (req, res) => {
                 ],
             }
         ]);
-        const ismatch = await user.comparePassword(password);
+        const candidatePassword = typeof password === "string"
+            ? password
+            : typeof password === "number" && Number.isFinite(password)
+                ? String(password)
+                : null;
+        if (candidatePassword === null) {
+            res.status(401).json({ message: "incorrect password" });
+            return;
+        }
+        const ismatch = await user.comparePassword(candidatePassword);
         if (!ismatch) {
             res.status(401).json({ message: "incorrect password" });
             return;
