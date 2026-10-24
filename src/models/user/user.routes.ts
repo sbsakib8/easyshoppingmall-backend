@@ -24,9 +24,9 @@ router.get("/userprofile", isAuth, getUserProfile);
 router.get("/getallusers", isAuth, isDashboardAccess("customers"), getAllUsers);
 router.get("/customers", isAuth, isDashboardAccess("customers"), getCustomers);
 router.get("/export", isAuth, isDashboardAccess("customers"), exportUsers);
-router.get("/userprofile/:id", isAuth, isDashboardAccess("settings"), getUserById);
+router.get("/userprofile/:id", isAuth, getUserById);
 router.delete("/userdelete/:id", isAuth, isDashboardAccess("customers"), deleteUser);
-router.put("/userupdate/:id", isAuth, isDashboardAccess("settings"), decryptBody, updateUserProfile);
+router.put("/userupdate/:id", isAuth, decryptBody, updateUserProfile);
 router.put("/user-image/:id", isAuth, upload.single("image"), userImage);
 
 

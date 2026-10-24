@@ -724,6 +724,8 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       shopLogo,
       facebookPage,
       whatsappNumber,
+      shopWebsite,
+      shopAddress,
       paymentDetails,
       address_data, // New: address information (object)
       address_details, // Alternative: address information (array)
@@ -780,6 +782,8 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     if (shopLogo !== undefined) user.shopLogo = shopLogo;
     if (facebookPage !== undefined) user.facebookPage = facebookPage;
     if (whatsappNumber !== undefined) user.whatsappNumber = whatsappNumber;
+    if (shopAddress !== undefined) user.shopAddress = shopAddress;
+    if (shopWebsite !== undefined) user.shopWebsite = shopWebsite;
 
     if (paymentDetails !== undefined) {
       user.paymentDetails = {

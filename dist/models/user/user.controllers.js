@@ -627,7 +627,7 @@ exports.userImage = userImage;
 const updateUserProfile = async (req, res) => {
     try {
         const userId = req.params.id;
-        const { name, email, mobile, customerstatus, image, status, verify_email, role, date_of_birth, gender, shopName, shopLogo, facebookPage, whatsappNumber, paymentDetails, address_data, // New: address information (object)
+        const { name, email, mobile, customerstatus, image, status, verify_email, role, date_of_birth, gender, shopName, shopLogo, facebookPage, whatsappNumber, shopWebsite, shopAddress, paymentDetails, address_data, // New: address information (object)
         address_details, // Alternative: address information (array)
          } = req.body;
         if (role !== undefined && req.user?.role !== "ADMIN") {
@@ -687,6 +687,10 @@ const updateUserProfile = async (req, res) => {
             user.facebookPage = facebookPage;
         if (whatsappNumber !== undefined)
             user.whatsappNumber = whatsappNumber;
+        if (shopAddress !== undefined)
+            user.shopAddress = shopAddress;
+        if (shopWebsite !== undefined)
+            user.shopWebsite = shopWebsite;
         if (paymentDetails !== undefined) {
             user.paymentDetails = {
                 bkash: paymentDetails.bkash !== undefined ? paymentDetails.bkash : (user.paymentDetails?.bkash || null),
